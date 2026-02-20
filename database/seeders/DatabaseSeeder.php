@@ -17,11 +17,30 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // --- Admin User ---
+        // --- Users with Roles ---
         User::create([
-            'name' => 'Administrator',
+            'name' => 'Super Admin',
             'email' => 'admin@mmac.edu.ph',
             'password' => Hash::make('password'),
+            'role' => 'super_admin',
+        ]);
+        User::create([
+            'name' => 'Disbursement Officer',
+            'email' => 'disbursement@mmac.edu.ph',
+            'password' => Hash::make('password'),
+            'role' => 'disbursement_officer',
+        ]);
+        User::create([
+            'name' => 'Budget Officer',
+            'email' => 'budget@mmac.edu.ph',
+            'password' => Hash::make('password'),
+            'role' => 'budget_officer',
+        ]);
+        User::create([
+            'name' => 'Auditor',
+            'email' => 'auditor@mmac.edu.ph',
+            'password' => Hash::make('password'),
+            'role' => 'auditor',
         ]);
 
         // --- Departments ---

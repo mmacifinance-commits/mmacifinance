@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AnnualBudget extends Model
 {
-    protected $fillable = ['year'];
+    protected $fillable = ['year', 'semester'];
 
     public function items(): HasMany
     {

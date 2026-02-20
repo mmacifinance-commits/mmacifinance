@@ -1,0 +1,1 @@
+App\Models\User::where('email','admin@mmac.edu.ph')-; 

@@ -1,8 +1,10 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
-import { Head, useForm, router } from '@inertiajs/vue3'
-import { ref } from 'vue'
+import { Head, useForm, router, usePage } from '@inertiajs/vue3'
+import { ref, computed } from 'vue'
+
+const perms = computed(() => usePage().props.permissions || {})
 
 const props = defineProps({ disbursements: Array })
 const showModal = ref(false)
@@ -31,7 +33,7 @@ const methodLabels = { check:'Check', cash:'Cash', bank_transfer:'Bank Transfer'
 <AppLayout>
     <div class="flex items-center justify-between mb-6">
         <div><h2 class="text-xl font-bold text-gray-900">Disbursements</h2><p class="text-sm text-gray-500">Manage fund disbursements</p></div>
-        <button @click="openCreate" class="flex items-center gap-2 rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition">+ Add Disbursement</button>
+        <button v-if="perms.canManageDisbursements" @click="openCreate" class="flex items-center gap-2 rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition">+ Add Disbursement</button>
     </div>
     <div class="rounded-lg bg-white shadow-sm border overflow-hidden overflow-x-auto">
         <table class="w-full text-sm">
@@ -54,7 +56,7 @@ const methodLabels = { check:'Check', cash:'Cash', bank_transfer:'Bank Transfer'
                     <td class="px-5 py-3 text-center text-xs">{{ methodLabels[d.method] }}</td>
                     <td class="px-5 py-3 text-center"><span :class="[statusColors[d.status],'rounded-full px-3 py-1 text-xs font-semibold uppercase']">{{ d.status }}</span></td>
                     <td class="px-5 py-3 text-center text-xs">{{ fmtDate(d.date_encoded) }}</td>
-                    <td class="px-5 py-3 text-center">
+                    <td v-if="perms.canManageDisbursements" class="px-5 py-3 text-center">
                         <button @click="openEdit(d)" class="text-gray-500 hover:text-blue-600 mr-2">✏️</button>
                         <button @click="remove(d.id)" class="text-gray-400 hover:text-red-500">🗑️</button>
                     </td>

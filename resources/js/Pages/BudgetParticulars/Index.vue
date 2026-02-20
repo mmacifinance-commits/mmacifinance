@@ -1,8 +1,10 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
-import { Head, useForm, router } from '@inertiajs/vue3'
-import { ref } from 'vue'
+import { Head, useForm, router, usePage } from '@inertiajs/vue3'
+import { ref, computed } from 'vue'
+
+const perms = computed(() => usePage().props.permissions || {})
 
 const props = defineProps({ particulars: Array, categories: Array, departments: Array })
 const showModal = ref(false)
@@ -26,7 +28,7 @@ function remove(id) { if (confirm('Delete?')) router.delete(`/budget-particulars
 <AppLayout>
     <div class="flex items-center justify-between mb-6">
         <div><h2 class="text-xl font-bold text-gray-900">Budget Particulars</h2><p class="text-sm text-gray-500">Manage budget line items and accounts</p></div>
-        <button @click="openCreate" class="flex items-center gap-2 rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition">+ Add Particular</button>
+        <button v-if="perms.canManageBudget" @click="openCreate" class="flex items-center gap-2 rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition">+ Add Particular</button>
     </div>
     <div class="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden overflow-x-auto">
         <table class="w-full text-sm">
@@ -43,7 +45,7 @@ function remove(id) { if (confirm('Delete?')) router.delete(`/budget-particulars
                     <td class="px-5 py-3 font-medium text-gray-800">{{ p.particular }}</td>
                     <td class="px-5 py-3 text-gray-500 text-xs">{{ p.category?.name }}</td>
                     <td class="px-5 py-3"><span class="rounded bg-navy/10 px-2.5 py-1 text-xs font-semibold text-navy">{{ p.department?.code }}</span></td>
-                    <td class="px-5 py-3 text-center">
+                    <td v-if="perms.canManageBudget" class="px-5 py-3 text-center">
                         <button @click="openEdit(p)" class="text-gray-500 hover:text-blue-600 mr-2">✏️</button>
                         <button @click="remove(p.id)" class="text-gray-400 hover:text-red-500">🗑️</button>
                     </td>

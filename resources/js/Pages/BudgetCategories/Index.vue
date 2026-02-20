@@ -1,8 +1,10 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
-import { Head, useForm, router } from '@inertiajs/vue3'
-import { ref } from 'vue'
+import { Head, useForm, router, usePage } from '@inertiajs/vue3'
+import { ref, computed } from 'vue'
+
+const perms = computed(() => usePage().props.permissions || {})
 
 const props = defineProps({ categories: Array })
 const showModal = ref(false)
@@ -23,7 +25,7 @@ function remove(id) { if (confirm('Delete?')) router.delete(`/budget-categories/
 <AppLayout>
     <div class="flex items-center justify-between mb-6">
         <div><h2 class="text-xl font-bold text-gray-900">Budget Categories</h2><p class="text-sm text-gray-500">Manage budget classification categories</p></div>
-        <button @click="openCreate" class="flex items-center gap-2 rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition">+ Add Category</button>
+        <button v-if="perms.canManageBudget" @click="openCreate" class="flex items-center gap-2 rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition">+ Add Category</button>
     </div>
     <div class="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden">
         <table class="w-full text-sm">
@@ -38,7 +40,7 @@ function remove(id) { if (confirm('Delete?')) router.delete(`/budget-categories/
                     <td class="px-5 py-3 font-medium text-gray-800">{{ c.name }}</td>
                     <td class="px-5 py-3 text-gray-500 text-xs">{{ c.description }}</td>
                     <td class="px-5 py-3 text-center text-gray-600">{{ c.particulars_count }}</td>
-                    <td class="px-5 py-3 text-center">
+                    <td v-if="perms.canManageBudget" class="px-5 py-3 text-center">
                         <button @click="openEdit(c)" class="text-gray-500 hover:text-blue-600 mr-2">✏️</button>
                         <button @click="remove(c.id)" class="text-gray-400 hover:text-red-500">🗑️</button>
                     </td>

@@ -1,8 +1,10 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
-import { Head, useForm, router } from '@inertiajs/vue3'
-import { ref } from 'vue'
+import { Head, useForm, router, usePage } from '@inertiajs/vue3'
+import { ref, computed } from 'vue'
+
+const perms = computed(() => usePage().props.permissions || {})
 
 const props = defineProps({ expenses: Array, categories: Array, particulars: Array })
 const showModal = ref(false)
@@ -30,7 +32,7 @@ const statusColors = { pending:'bg-yellow-100 text-yellow-800', approved:'bg-gre
 <AppLayout>
     <div class="flex items-center justify-between mb-6">
         <div><h2 class="text-xl font-bold text-gray-900">Expenditures</h2><p class="text-sm text-gray-500">Track and manage expenses</p></div>
-        <button @click="openCreate" class="flex items-center gap-2 rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition">+ Add Expense</button>
+        <button v-if="perms.canManageExpenses" @click="openCreate" class="flex items-center gap-2 rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition">+ Add Expense</button>
     </div>
     <div class="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden overflow-x-auto">
         <table class="w-full text-sm">
@@ -53,7 +55,7 @@ const statusColors = { pending:'bg-yellow-100 text-yellow-800', approved:'bg-gre
                     <td class="px-5 py-3 text-right font-medium">{{ fmt(e.paid) }}</td>
                     <td class="px-5 py-3 text-center"><span :class="[statusColors[e.status],'rounded-full px-3 py-1 text-xs font-semibold uppercase']">{{ e.status }}</span></td>
                     <td class="px-5 py-3 text-center text-xs text-gray-500">{{ fmtDate(e.date_encoded) }}</td>
-                    <td class="px-5 py-3 text-center">
+                    <td v-if="perms.canManageExpenses" class="px-5 py-3 text-center">
                         <button @click="openEdit(e)" class="text-gray-500 hover:text-blue-600 mr-2">✏️</button>
                         <button @click="remove(e.id)" class="text-gray-400 hover:text-red-500">🗑️</button>
                     </td>

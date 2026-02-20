@@ -73,7 +73,7 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
                 <div class="flex items-center gap-3">
                     <div class="hidden md:flex items-center gap-2 rounded-md bg-white/10 px-3 py-1.5">
                         <span class="text-mustard text-sm">👤</span>
-                        <span class="text-sm font-medium text-white">{{ auth.user?.name || 'Super Admin' }}</span>
+                        <span class="text-sm font-medium text-white">{{ auth.user?.role_label || auth.user?.name }}</span>
                     </div>
                     <button @click="logout" class="rounded-md bg-red-500/20 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/30 transition hidden md:block">
                         Logout

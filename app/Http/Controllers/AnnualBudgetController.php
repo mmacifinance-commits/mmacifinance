@@ -19,6 +19,7 @@ class AnnualBudgetController extends Controller
                 ->get(),
             'categories' => BudgetCategory::all(),
             'particulars' => BudgetParticular::with('category', 'department')->get(),
+            'availableYears' => AnnualBudget::distinct()->orderByDesc('year')->pluck('year'),
         ]);
     }
 
@@ -28,13 +29,16 @@ class AnnualBudgetController extends Controller
             'budget' => $annualBudget->load('items.category', 'items.particular.department'),
             'categories' => BudgetCategory::all(),
             'particulars' => BudgetParticular::with('category', 'department')->get(),
+            'availableYears' => AnnualBudget::distinct()->orderByDesc('year')->pluck('year'),
+            'allBudgets' => AnnualBudget::select('id', 'year', 'semester')->orderByDesc('year')->get(),
         ]);
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'year' => 'required|integer|min:2000|max:2100|unique:annual_budgets,year',
+            'year' => 'required|integer|min:2000|max:2100',
+            'semester' => 'nullable|string|max:20',
         ]);
 
         AnnualBudget::create($validated);
