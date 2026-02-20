@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    --color-navy: #243352;
+    --color-navy-dark: #1a2744;
+    --color-navy-light: #2c3e5e;
+    --color-mustard: #d4a843;
+    --color-mustard-light: #e0be6a;
+}
+
+body {
+    background-color: #f8f9fa;
+    color: #1a1a2e;
+}
+
+/* Force square corners globally — no border-radius anywhere */
+*,
+*::before,
+*::after {
+    border-radius: 0 !important;
+}
+
+/* Tabular numbers in table cells for proper alignment */
+td {
+    font-variant-numeric: tabular-nums;
+    font-family: 'Roboto Mono', ui-monospace, monospace;
+    font-size: 0.8125rem;
+}
