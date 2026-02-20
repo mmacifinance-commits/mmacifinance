@@ -28,25 +28,27 @@ function remove(id) { if (confirm('Delete this department?')) router.delete(`/de
         <button v-if="perms.canManageBudget" @click="openCreate" class="flex items-center gap-2 rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition">+ Add Department</button>
     </div>
     <div class="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden">
-        <table class="w-full text-sm">
-            <thead><tr class="bg-navy-dark text-white">
-                <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-mustard">Name</th>
-                <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-mustard">Code</th>
-                <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Particulars</th>
-                <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Actions</th>
-            </tr></thead>
-            <tbody>
-                <tr v-for="d in departments" :key="d.id" class="border-b border-gray-100 hover:bg-gray-50/50">
-                    <td class="px-5 py-3 font-medium text-gray-800">{{ d.name }}</td>
-                    <td class="px-5 py-3"><span class="rounded bg-navy/10 px-2.5 py-1 text-xs font-semibold text-navy">{{ d.code }}</span></td>
-                    <td class="px-5 py-3 text-center text-gray-600">{{ d.particulars_count }}</td>
-                    <td v-if="perms.canManageBudget" class="px-5 py-3 text-center">
-                        <button @click="openEdit(d)" class="text-gray-500 hover:text-blue-600 mr-2">✏️</button>
-                        <button @click="remove(d.id)" class="text-gray-400 hover:text-red-500">🗑️</button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+        <div class="overflow-x-auto w-full pb-4">
+            <table class="w-full text-sm min-w-max whitespace-nowrap">
+                <thead><tr class="bg-navy-dark text-white">
+                    <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-mustard">Name</th>
+                    <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-mustard">Code</th>
+                    <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Particulars</th>
+                    <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Actions</th>
+                </tr></thead>
+                <tbody>
+                    <tr v-for="d in departments" :key="d.id" class="border-b border-gray-100 hover:bg-gray-50/50">
+                        <td class="px-5 py-3 font-medium text-gray-800">{{ d.name }}</td>
+                        <td class="px-5 py-3"><span class="rounded bg-navy/10 px-2.5 py-1 text-xs font-semibold text-navy">{{ d.code }}</span></td>
+                        <td class="px-5 py-3 text-center text-gray-600">{{ d.particulars_count }}</td>
+                        <td v-if="perms.canManageBudget" class="px-5 py-3 text-center">
+                            <button @click="openEdit(d)" class="text-gray-500 hover:text-blue-600 mr-2">✏️</button>
+                            <button @click="remove(d.id)" class="text-gray-400 hover:text-red-500">🗑️</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
         <div class="px-5 py-2.5 bg-gray-50 text-xs text-gray-500 border-t">Total Records: {{ departments.length }}</div>
     </div>
     <Modal :show="showModal" :title="editing ? 'Edit Department' : 'Add Department'" :subtitle="editing ? 'Update department details.' : 'Create a new department.'" @close="showModal = false">

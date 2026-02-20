@@ -28,25 +28,27 @@ function remove(id) { if (confirm('Delete?')) router.delete(`/budget-categories/
         <button v-if="perms.canManageBudget" @click="openCreate" class="flex items-center gap-2 rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition">+ Add Category</button>
     </div>
     <div class="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden">
-        <table class="w-full text-sm">
-            <thead><tr class="bg-navy-dark text-white">
-                <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-mustard">Name</th>
-                <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-mustard">Description</th>
-                <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Particulars</th>
-                <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Actions</th>
-            </tr></thead>
-            <tbody>
-                <tr v-for="c in categories" :key="c.id" class="border-b border-gray-100 hover:bg-gray-50/50">
-                    <td class="px-5 py-3 font-medium text-gray-800">{{ c.name }}</td>
-                    <td class="px-5 py-3 text-gray-500 text-xs">{{ c.description }}</td>
-                    <td class="px-5 py-3 text-center text-gray-600">{{ c.particulars_count }}</td>
-                    <td v-if="perms.canManageBudget" class="px-5 py-3 text-center">
-                        <button @click="openEdit(c)" class="text-gray-500 hover:text-blue-600 mr-2">✏️</button>
-                        <button @click="remove(c.id)" class="text-gray-400 hover:text-red-500">🗑️</button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+        <div class="overflow-x-auto w-full pb-4">
+            <table class="w-full text-sm min-w-max whitespace-nowrap">
+                <thead><tr class="bg-navy-dark text-white">
+                    <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-mustard">Name</th>
+                    <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-mustard">Description</th>
+                    <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Particulars</th>
+                    <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Actions</th>
+                </tr></thead>
+                <tbody>
+                    <tr v-for="c in categories" :key="c.id" class="border-b border-gray-100 hover:bg-gray-50/50">
+                        <td class="px-5 py-3 font-medium text-gray-800">{{ c.name }}</td>
+                        <td class="px-5 py-3 text-gray-500 text-xs">{{ c.description }}</td>
+                        <td class="px-5 py-3 text-center text-gray-600">{{ c.particulars_count }}</td>
+                        <td v-if="perms.canManageBudget" class="px-5 py-3 text-center">
+                            <button @click="openEdit(c)" class="text-gray-500 hover:text-blue-600 mr-2">✏️</button>
+                            <button @click="remove(c.id)" class="text-gray-400 hover:text-red-500">🗑️</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
         <div class="px-5 py-2.5 bg-gray-50 text-xs text-gray-500 border-t">Total Records: {{ categories.length }}</div>
     </div>
     <Modal :show="showModal" :title="editing ? 'Edit Category' : 'Add Category'" :subtitle="editing ? 'Update category details.' : 'Create a new budget category.'" @close="showModal = false">

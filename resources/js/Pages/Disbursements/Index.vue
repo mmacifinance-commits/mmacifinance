@@ -35,34 +35,36 @@ const methodLabels = { check:'Check', cash:'Cash', bank_transfer:'Bank Transfer'
         <div><h2 class="text-xl font-bold text-gray-900">Disbursements</h2><p class="text-sm text-gray-500">Manage fund disbursements</p></div>
         <button v-if="perms.canManageDisbursements" @click="openCreate" class="flex items-center gap-2 rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition">+ Add Disbursement</button>
     </div>
-    <div class="rounded-lg bg-white shadow-sm border overflow-hidden overflow-x-auto">
-        <table class="w-full text-sm">
-            <thead><tr class="bg-navy-dark text-white">
-                <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-mustard">DSB No</th>
-                <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-mustard">Description</th>
-                <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-mustard">Pay To</th>
-                <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-wider text-mustard">Amount</th>
-                <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Method</th>
-                <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Status</th>
-                <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Date</th>
-                <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Actions</th>
-            </tr></thead>
-            <tbody>
-                <tr v-for="d in disbursements" :key="d.id" class="border-b hover:bg-gray-50/50">
-                    <td class="px-5 py-3 font-mono text-xs">{{ d.disbursement_no }}</td>
-                    <td class="px-5 py-3 font-medium text-gray-800">{{ d.description }}</td>
-                    <td class="px-5 py-3 text-gray-600">{{ d.pay_to }}</td>
-                    <td class="px-5 py-3 text-right font-medium">{{ fmt(d.amount) }}</td>
-                    <td class="px-5 py-3 text-center text-xs">{{ methodLabels[d.method] }}</td>
-                    <td class="px-5 py-3 text-center"><span :class="[statusColors[d.status],'rounded-full px-3 py-1 text-xs font-semibold uppercase']">{{ d.status }}</span></td>
-                    <td class="px-5 py-3 text-center text-xs">{{ fmtDate(d.date_encoded) }}</td>
-                    <td v-if="perms.canManageDisbursements" class="px-5 py-3 text-center">
-                        <button @click="openEdit(d)" class="text-gray-500 hover:text-blue-600 mr-2">✏️</button>
-                        <button @click="remove(d.id)" class="text-gray-400 hover:text-red-500">🗑️</button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+    <div class="rounded-lg bg-white shadow-sm border overflow-hidden">
+        <div class="overflow-x-auto w-full pb-4">
+            <table class="w-full text-sm min-w-max whitespace-nowrap">
+                <thead><tr class="bg-navy-dark text-white">
+                    <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-mustard">DSB No</th>
+                    <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-mustard">Description</th>
+                    <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-mustard">Pay To</th>
+                    <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-wider text-mustard">Amount</th>
+                    <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Method</th>
+                    <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Status</th>
+                    <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Date</th>
+                    <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Actions</th>
+                </tr></thead>
+                <tbody>
+                    <tr v-for="d in disbursements" :key="d.id" class="border-b hover:bg-gray-50/50">
+                        <td class="px-5 py-3 font-mono text-xs">{{ d.disbursement_no }}</td>
+                        <td class="px-5 py-3 font-medium text-gray-800">{{ d.description }}</td>
+                        <td class="px-5 py-3 text-gray-600">{{ d.pay_to }}</td>
+                        <td class="px-5 py-3 text-right font-medium">{{ fmt(d.amount) }}</td>
+                        <td class="px-5 py-3 text-center text-xs">{{ methodLabels[d.method] }}</td>
+                        <td class="px-5 py-3 text-center"><span :class="[statusColors[d.status],'rounded-full px-3 py-1 text-xs font-semibold uppercase']">{{ d.status }}</span></td>
+                        <td class="px-5 py-3 text-center text-xs">{{ fmtDate(d.date_encoded) }}</td>
+                        <td v-if="perms.canManageDisbursements" class="px-5 py-3 text-center">
+                            <button @click="openEdit(d)" class="text-gray-500 hover:text-blue-600 mr-2">✏️</button>
+                            <button @click="remove(d.id)" class="text-gray-400 hover:text-red-500">🗑️</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
         <div class="px-5 py-2.5 bg-gray-50 text-xs text-gray-500 border-t">Total Records: {{ disbursements.length }}</div>
     </div>
     <Modal :show="showModal" :title="editing ? 'Edit Disbursement' : 'Add Disbursement'" :subtitle="editing ? 'Update disbursement.' : 'Record a new disbursement.'" max-width="lg" @close="showModal = false">
