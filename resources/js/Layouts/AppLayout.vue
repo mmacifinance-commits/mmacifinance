@@ -138,7 +138,7 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
         <!-- Body: Sidebar + Content -->
         <div class="flex flex-1">
             <!-- Sidebar -->
-            <aside v-if="hasSidebar" class="hidden md:block w-40 bg-white border-r border-gray-200 flex-shrink-0">
+            <aside v-if="hasSidebar" class="hidden px-4 mt-2 md:block w-64 bg-white border-r border-gray-200 flex-shrink-0">
                 <div class="border-t-4 border-mustard bg-navy-dark px-4 py-2">
                     <h3 class="text-[11px] font-bold uppercase tracking-widest text-white">Sub Menu</h3>
                 </div>
