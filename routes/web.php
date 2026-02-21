@@ -9,12 +9,17 @@ use App\Http\Controllers\AnnualBudgetController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\DisbursementController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\Auth\TwoFactorController;
 use Illuminate\Support\Facades\Route;
 
 // --- Guest Routes ---
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
     Route::post('/login', [LoginController::class, 'login']);
+
+    Route::get('/2fa/verify', [TwoFactorController::class, 'index'])->name('2fa.index');
+    Route::post('/2fa/verify', [TwoFactorController::class, 'verify'])->name('2fa.verify');
+    Route::post('/2fa/resend', [TwoFactorController::class, 'resend'])->name('2fa.resend');
 });
 
 // --- Authenticated Routes ---
