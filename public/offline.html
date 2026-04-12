@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Offline — Budget Fund Utilization & Tracking</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #1a2744;
+      font-family: Inter, system-ui, sans-serif;
+      color: white;
+    }
+    .card {
+      text-align: center;
+      padding: 3rem 2rem;
+      max-width: 420px;
+    }
+    .icon { font-size: 4rem; margin-bottom: 1rem; }
+    h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; color: #d4a843; }
+    p { color: rgba(255,255,255,0.7); font-size: 0.95rem; line-height: 1.6; margin-bottom: 1.5rem; }
+    button {
+      background: #d4a843;
+      color: #1a2744;
+      border: none;
+      padding: 0.7rem 2rem;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    button:hover { background: #e0be6a; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">📡</div>
+    <h1>You're Offline</h1>
+    <p>This page isn't cached yet. Please check your internet connection and try again.<br><br>
+       Any actions you perform while offline will be saved and synced when you reconnect.</p>
+    <button onclick="location.reload()">Try Again</button>
+  </div>
+</body>
+</html>

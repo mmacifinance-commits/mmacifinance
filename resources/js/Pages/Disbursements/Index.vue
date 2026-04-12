@@ -3,15 +3,23 @@ import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
+import { useOfflineQueue } from '@/composables/useOfflineQueue'
 
 const perms = computed(() => usePage().props.permissions || {})
+const { isOnline, offlinePost, offlinePut, offlineDelete } = useOfflineQueue()
 
 const props = defineProps({ disbursements: Array })
 const showModal = ref(false)
 const editing = ref(null)
 const form = useForm({ description:'', source:'Expenditure', pay_to:'', amount:0, method:'check', date_encoded:'', date_approved:'', status:'pending', notes:'' })
 
-function fmt(v) { return new Intl.NumberFormat('en-PH', { minimumFractionDigits:2 }).format(v) }
+// Optimistic local rows for offline-queued items
+const offlineRows = ref([])
+
+// Combined list: server data + offline local rows
+const allDisbursements = computed(() => [...(props.disbursements || []), ...offlineRows.value])
+
+function fmt(v) { return new Intl.NumberFormat('en-PH', { minimumFractionDigits:2 }).format(v || 0) }
 function fmtDate(d) { return d ? new Date(d).toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' }) : '—' }
 
 function openCreate() { form.reset(); form.source='Expenditure'; form.date_encoded=new Date().toISOString().slice(0,10); editing.value=null; showModal.value=true }
@@ -19,11 +27,75 @@ function openEdit(d) {
     Object.assign(form, { description:d.description, source:d.source, pay_to:d.pay_to, amount:d.amount, method:d.method, status:d.status, notes:d.notes||'', date_encoded:d.date_encoded?.slice(0,10)||'', date_approved:d.date_approved?.slice(0,10)||'' })
     editing.value=d.id; showModal.value=true
 }
-function save() {
-    if(editing.value) form.put(`/disbursements/${editing.value}`, { onSuccess:()=>{showModal.value=false} })
-    else form.post('/disbursements', { onSuccess:()=>{showModal.value=false} })
+
+async function save() {
+    const data = {
+        description: form.description,
+        source: form.source,
+        pay_to: form.pay_to,
+        amount: form.amount,
+        method: form.method,
+        status: form.status,
+        notes: form.notes,
+        date_encoded: form.date_encoded,
+        date_approved: form.date_approved,
+    }
+
+    if (editing.value) {
+        const { queued } = await offlinePut(
+            `/disbursements/${editing.value}`,
+            data,
+            `Edit Disbursement: '${form.description}'`
+        )
+        if (queued) {
+            const idx = offlineRows.value.findIndex(r => r.id === editing.value)
+            if (idx !== -1) offlineRows.value[idx] = { ...offlineRows.value[idx], ...data }
+            showModal.value = false
+        } else {
+            form.put(`/disbursements/${editing.value}`, { onSuccess:()=>{ showModal.value=false } })
+        }
+    } else {
+        const { queued, item } = await offlinePost(
+            '/disbursements',
+            data,
+            `Add Disbursement: '${form.description}' → ${form.pay_to}`
+        )
+        if (queued) {
+            offlineRows.value.unshift({
+                id: `offline-${item.id}`,
+                disbursement_no: '(pending)',
+                description: form.description,
+                source: form.source,
+                pay_to: form.pay_to,
+                amount: form.amount,
+                method: form.method,
+                status: form.status,
+                date_encoded: form.date_encoded,
+                date_approved: form.date_approved,
+                notes: form.notes,
+                _offline: true,
+            })
+            showModal.value = false
+        } else {
+            form.post('/disbursements', { onSuccess:()=>{ showModal.value=false } })
+        }
+    }
 }
-function remove(id) { if(confirm('Delete?')) router.delete(`/disbursements/${id}`) }
+
+async function remove(id) {
+    if (!confirm('Delete?')) return
+    if (String(id).startsWith('offline-')) {
+        offlineRows.value = offlineRows.value.filter(r => r.id !== id)
+        return
+    }
+    const { queued } = await offlineDelete(`/disbursements/${id}`, `Delete Disbursement #${id}`)
+    if (queued) {
+        offlineRows.value = offlineRows.value.filter(r => r.id !== id)
+    } else {
+        router.delete(`/disbursements/${id}`)
+    }
+}
+
 const statusColors = { pending:'bg-yellow-100 text-yellow-800', approved:'bg-blue-100 text-blue-800', posted:'bg-green-100 text-green-800', cancelled:'bg-red-100 text-red-800' }
 const methodLabels = { check:'Check', cash:'Cash', bank_transfer:'Bank Transfer' }
 </script>
@@ -49,23 +121,34 @@ const methodLabels = { check:'Check', cash:'Cash', bank_transfer:'Bank Transfer'
                     <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Actions</th>
                 </tr></thead>
                 <tbody>
-                    <tr v-for="d in disbursements" :key="d.id" class="border-b hover:bg-gray-50/50">
-                        <td class="px-5 py-3 font-mono text-xs">{{ d.disbursement_no }}</td>
+                    <tr
+                        v-for="d in allDisbursements"
+                        :key="d.id"
+                        :class="['border-b hover:bg-gray-50/50', d._offline ? 'bg-amber-50/60' : '']"
+                    >
+                        <td class="px-5 py-3 font-mono text-xs">
+                            {{ d.disbursement_no }}
+                            <span v-if="d._offline" class="ml-1 inline-block bg-amber-100 text-amber-700 border border-amber-200 rounded px-1 py-0.5 text-[9px] font-bold uppercase leading-none">⏳ Queued</span>
+                        </td>
                         <td class="px-5 py-3 font-medium text-gray-800">{{ d.description }}</td>
                         <td class="px-5 py-3 text-gray-600">{{ d.pay_to }}</td>
                         <td class="px-5 py-3 text-right font-medium">{{ fmt(d.amount) }}</td>
                         <td class="px-5 py-3 text-center text-xs">{{ methodLabels[d.method] }}</td>
-                        <td class="px-5 py-3 text-center"><span :class="[statusColors[d.status],'rounded-full px-3 py-1 text-xs font-semibold uppercase']">{{ d.status }}</span></td>
+                        <td class="px-5 py-3 text-center">
+                            <!-- Offline queued badge overrides status -->
+                            <span v-if="d._offline" class="rounded-full px-3 py-1 text-xs font-semibold uppercase bg-amber-100 text-amber-800 border border-amber-200">⏳ Queued</span>
+                            <span v-else :class="[statusColors[d.status],'rounded-full px-3 py-1 text-xs font-semibold uppercase']">{{ d.status }}</span>
+                        </td>
                         <td class="px-5 py-3 text-center text-xs">{{ fmtDate(d.date_encoded) }}</td>
                         <td v-if="perms.canManageDisbursements" class="px-5 py-3 text-center">
-                            <button @click="openEdit(d)" class="text-gray-500 hover:text-blue-600 mr-2">✏️</button>
+                            <button @click="openEdit(d)" class="text-gray-500 hover:text-blue-600 mr-2" :disabled="d._offline" :class="{ 'opacity-40 cursor-not-allowed': d._offline }">✏️</button>
                             <button @click="remove(d.id)" class="text-gray-400 hover:text-red-500">🗑️</button>
                         </td>
                     </tr>
                 </tbody>
             </table>
         </div>
-        <div class="px-5 py-2.5 bg-gray-50 text-xs text-gray-500 border-t">Total Records: {{ disbursements.length }}</div>
+        <div class="px-5 py-2.5 bg-gray-50 text-xs text-gray-500 border-t">Total Records: {{ allDisbursements.length }}</div>
     </div>
     <Modal :show="showModal" :title="editing ? 'Edit Disbursement' : 'Add Disbursement'" :subtitle="editing ? 'Update disbursement.' : 'Record a new disbursement.'" max-width="lg" @close="showModal = false">
         <form @submit.prevent="save">

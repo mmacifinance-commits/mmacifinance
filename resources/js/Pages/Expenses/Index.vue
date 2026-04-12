@@ -3,24 +3,30 @@ import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
+import { useOfflineQueue } from '@/composables/useOfflineQueue'
 
 const perms = computed(() => usePage().props.permissions || {})
+const { isOnline, offlinePost, offlinePut, offlineDelete } = useOfflineQueue()
 
 const props = defineProps({ expenses: Array, categories: Array, particulars: Array })
 const showModal = ref(false)
 const editing = ref(null)
 const form = useForm({ description: '', category_id: '', particular_id: '', amount: 0, paid: 0, date_encoded: '', date_approved: '', status: 'pending', notes: '' })
 
+// Local optimistic list for offline-queued items
+const offlineRows = ref([])
+
 const filterSearch = ref('')
 const filterCategory = ref('')
 const filterStatus = ref('')
 
 const filteredExpenses = computed(() => {
-    return props.expenses.filter(e => {
-        const matchSearch = filterSearch.value ? 
-            (e.ref_no.toLowerCase().includes(filterSearch.value.toLowerCase()) || 
-             e.description.toLowerCase().includes(filterSearch.value.toLowerCase())) : true
-        const matchCategory = filterCategory.value ? e.category_id === filterCategory.value : true
+    const all = [...props.expenses, ...offlineRows.value]
+    return all.filter(e => {
+        const matchSearch = filterSearch.value ?
+            ((e.ref_no || '').toLowerCase().includes(filterSearch.value.toLowerCase()) ||
+             (e.description || '').toLowerCase().includes(filterSearch.value.toLowerCase())) : true
+        const matchCategory = filterCategory.value ? String(e.category_id) === String(filterCategory.value) : true
         const matchStatus = filterStatus.value ? e.status === filterStatus.value : true
         return matchSearch && matchCategory && matchStatus
     })
@@ -40,21 +46,93 @@ function openEdit(e) {
     Object.assign(form, { description: e.description, category_id: e.category_id, particular_id: e.particular_id, amount: e.amount, paid: e.paid, status: e.status, notes: e.notes||'', date_encoded: e.date_encoded?.slice(0,10)||'', date_approved: e.date_approved?.slice(0,10)||'' })
     editing.value = e.id; showModal.value = true
 }
-function save() {
-    if (editing.value) form.put(`/expenses/${editing.value}`, { onSuccess: () => { showModal.value = false } })
-    else form.post('/expenses', { onSuccess: () => { showModal.value = false } })
+
+async function save() {
+    const data = {
+        description: form.description,
+        category_id: form.category_id,
+        particular_id: form.particular_id,
+        amount: form.amount,
+        paid: form.paid,
+        status: form.status,
+        notes: form.notes,
+        date_encoded: form.date_encoded,
+        date_approved: form.date_approved,
+    }
+
+    if (editing.value) {
+        // ── Update ──
+        const { queued } = await offlinePut(
+            `/expenses/${editing.value}`,
+            data,
+            `Edit Expense: '${form.description}'`
+        )
+        if (queued) {
+            // Optimistically update the offline row if it exists, else mark it
+            const idx = offlineRows.value.findIndex(r => r.id === editing.value)
+            if (idx !== -1) offlineRows.value[idx] = { ...offlineRows.value[idx], ...data }
+            showModal.value = false
+        } else {
+            form.put(`/expenses/${editing.value}`, { onSuccess: () => { showModal.value = false } })
+        }
+    } else {
+        // ── Create ──
+        const { queued, item } = await offlinePost(
+            '/expenses',
+            data,
+            `Add Expense: '${form.description}'`
+        )
+        if (queued) {
+            // Build an optimistic local row so the user sees it immediately
+            offlineRows.value.unshift({
+                id: `offline-${item.id}`,
+                ref_no: '(pending)',
+                description: form.description,
+                category_id: form.category_id,
+                category: props.categories?.find(c => String(c.id) === String(form.category_id)),
+                particular_id: form.particular_id,
+                particular: props.particulars?.find(p => String(p.id) === String(form.particular_id)),
+                amount: form.amount,
+                paid: form.paid,
+                status: form.status,
+                date_encoded: form.date_encoded,
+                date_approved: form.date_approved,
+                notes: form.notes,
+                _offline: true,
+            })
+            showModal.value = false
+        } else {
+            form.post('/expenses', { onSuccess: () => { showModal.value = false } })
+        }
+    }
 }
-function remove(id) { if (confirm('Delete?')) router.delete(`/expenses/${id}`) }
+
+async function remove(id) {
+    if (!confirm('Delete?')) return
+    // If it's a local offline row, just remove from offlineRows
+    if (String(id).startsWith('offline-')) {
+        offlineRows.value = offlineRows.value.filter(r => r.id !== id)
+        return
+    }
+    const { queued } = await offlineDelete(`/expenses/${id}`, `Delete Expense #${id}`)
+    if (queued) {
+        // Optimistically hide the row
+        offlineRows.value = offlineRows.value.filter(r => r.id !== id)
+    } else {
+        router.delete(`/expenses/${id}`)
+    }
+}
+
 const statusColors = { pending:'bg-yellow-100 text-yellow-800 border border-yellow-200', approved:'bg-green-100 text-green-800 border border-green-200', cancelled:'bg-red-100 text-red-800 border border-red-200' }
-const statusIcons = { 
-    pending: '<svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>', 
-    approved: '<svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>', 
-    cancelled: '<svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>' 
+const statusIcons = {
+    pending: '<svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
+    approved: '<svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>',
+    cancelled: '<svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>'
 }
 
 function splitDate(d) {
     if (!d) return { top: '—', bottom: '' }
-    const dateOnly = d.split('T')[0] // extract just the YYYY-MM-DD part from ISO timestamp
+    const dateOnly = d.split('T')[0]
     const parts = dateOnly.split('-')
     if (parts.length === 3) return { top: parts[0] + '-', bottom: parts[1] + '-' + parts[2] }
     return { top: dateOnly, bottom: '' }
@@ -100,8 +178,18 @@ function splitDate(d) {
                     <th class="px-5 py-4 text-center font-bold text-xs tracking-wide">Actions</th>
                 </tr></thead>
                 <tbody>
-                    <tr v-for="e in filteredExpenses" :key="e.id" class="border-b border-gray-100 hover:bg-gray-50/50">
-                        <td class="px-5 py-5 font-mono text-xs text-gray-600 align-middle">{{ e.ref_no }}</td>
+                    <tr
+                        v-for="e in filteredExpenses"
+                        :key="e.id"
+                        :class="[
+                            'border-b border-gray-100 hover:bg-gray-50/50',
+                            e._offline ? 'bg-amber-50/60' : ''
+                        ]"
+                    >
+                        <td class="px-5 py-5 font-mono text-xs text-gray-600 align-middle">
+                            {{ e.ref_no }}
+                            <span v-if="e._offline" class="ml-1 inline-block bg-amber-100 text-amber-700 border border-amber-200 rounded px-1 py-0.5 text-[9px] font-bold uppercase leading-none">⏳ Queued</span>
+                        </td>
                         <td class="px-5 py-5 text-gray-800 text-sm align-middle">{{ e.description }}</td>
                         <td class="px-5 py-5 text-gray-500 text-xs uppercase align-middle">{{ e.category?.name }}</td>
                         <td class="px-5 py-5 text-gray-500 text-xs align-middle w-40 max-w-[160px] whitespace-normal">
@@ -121,13 +209,17 @@ function splitDate(d) {
                             <div v-else>—</div>
                         </td>
                         <td class="px-5 py-5 text-center align-middle">
-                            <span :class="[statusColors[e.status], 'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium capitalize']">
+                            <!-- Offline queued badge overrides status -->
+                            <span v-if="e._offline" class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
+                                ⏳ Queued
+                            </span>
+                            <span v-else :class="[statusColors[e.status], 'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium capitalize']">
                                 <span v-html="statusIcons[e.status]"></span>
                                 {{ e.status }}
                             </span>
                         </td>
                         <td v-if="perms.canManageExpenses" class="px-5 py-5 text-center align-middle">
-                            <button @click="openEdit(e)" class="text-gray-500 hover:text-blue-600 mr-2">
+                            <button @click="openEdit(e)" class="text-gray-500 hover:text-blue-600 mr-2" :disabled="e._offline" :class="{ 'opacity-40 cursor-not-allowed': e._offline }">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
                             </button>
                             <button @click="remove(e.id)" class="text-red-400 hover:text-red-500">
