@@ -57,7 +57,7 @@ const maxBarVal = computed(() => {
             <div class="p-4">
                 <div class="flex items-center justify-between mb-1">
                     <p class="text-[11px] font-bold uppercase tracking-wider text-gray-500">Total Appropriation</p>
-                    <span class="text-gray-400">📋</span>
+                    <span class="text-gray-400"></span>
                 </div>
                 <p class="text-xl font-bold text-gray-900">{{ fmt(stats?.totalAppropriation) }}</p>
                 <p class="text-[11px] text-gray-400 mt-0.5">FY {{ latestYear }} Budget</p>
@@ -68,7 +68,7 @@ const maxBarVal = computed(() => {
             <div class="p-4">
                 <div class="flex items-center justify-between mb-1">
                     <p class="text-[11px] font-bold uppercase tracking-wider text-gray-500">Total Expenditure</p>
-                    <span class="text-gray-400">📉</span>
+                    <span class="text-gray-400"></span>
                 </div>
                 <p class="text-xl font-bold text-gray-900">{{ fmt(stats?.totalExpenditure) }}</p>
                 <p class="text-[11px] text-red-400 mt-0.5">{{ overallUtil }}% utilized</p>
@@ -79,7 +79,7 @@ const maxBarVal = computed(() => {
             <div class="p-4">
                 <div class="flex items-center justify-between mb-1">
                     <p class="text-[11px] font-bold uppercase tracking-wider text-gray-500">Remaining Balance</p>
-                    <span class="text-gray-400">🛡️</span>
+                    <span class="text-gray-400"></span>
                 </div>
                 <p class="text-xl font-bold text-gray-900">{{ fmt(stats?.balance) }}</p>
                 <p class="text-[11px] text-green-500 mt-0.5">{{ (100 - overallUtil).toFixed(1) }}% remaining</p>
@@ -90,7 +90,7 @@ const maxBarVal = computed(() => {
             <div class="p-4">
                 <div class="flex items-center justify-between mb-1">
                     <p class="text-[11px] font-bold uppercase tracking-wider text-gray-500">Pending Approvals</p>
-                    <span class="text-gray-400">📝</span>
+                    <span class="text-gray-400"></span>
                 </div>
                 <p class="text-xl font-bold text-gray-900">{{ pendingTotal }}</p>
                 <p class="text-[11px] text-gray-400 mt-0.5">{{ stats?.pendingExpenses }} expenses, {{ stats?.pendingDisbursements }} disbursements</p>

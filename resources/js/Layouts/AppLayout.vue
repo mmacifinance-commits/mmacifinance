@@ -1,24 +1,25 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { Link, usePage, router } from '@inertiajs/vue3'
+import OfflineBanner from '@/Components/OfflineBanner.vue'
 
 const page = usePage()
 const auth = computed(() => page.props.auth)
 const flash = computed(() => page.props.flash)
 
 const mainNavItems = [
-    { href: '/', label: 'DASHBOARD', icon: '📊', section: 'dashboard' },
-    { href: '/annual-budgets', label: 'BUDGET', icon: '💰', section: 'budget' },
-    { href: '/expenses', label: 'EXPENDITURES', icon: '🧾', section: 'expenditures' },
-    { href: '/disbursements', label: 'DISBURSEMENTS', icon: '💳', section: 'disbursements' },
-    { href: '/reports', label: 'FINANCIAL REPORTS', icon: '📈', section: 'reports' },
+    { href: '/', label: 'DASHBOARD', icon: '', section: 'dashboard' },
+    { href: '/annual-budgets', label: 'BUDGET', icon: '', section: 'budget' },
+    { href: '/expenses', label: 'EXPENDITURES', icon: '', section: 'expenditures' },
+    { href: '/disbursements', label: 'DISBURSEMENTS', icon: '', section: 'disbursements' },
+    { href: '/reports', label: 'FINANCIAL REPORTS', icon: '', section: 'reports' },
 ]
 
 const sidebarMenus = {
     budget: [
-        { href: '/annual-budgets', label: 'Annual Budget', icon: '📋' },
-        { href: '/budget-categories', label: 'Budget Categories', icon: '🏷️' },
-        { href: '/budget-particulars', label: 'Budget Particulars', icon: '📄' },
+        { href: '/annual-budgets', label: 'Annual Budget', icon: '' },
+        { href: '/budget-categories', label: 'Budget Categories', icon: '' },
+        { href: '/budget-particulars', label: 'Budget Particulars', icon: '' },
     ],
 }
 
@@ -60,6 +61,9 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
 
 <template>
     <div class="flex min-h-screen flex-col bg-gray-100">
+        <!-- Offline / Sync Banner -->
+        <OfflineBanner />
+
         <!-- Header -->
         <header class="bg-navy-dark">
             <div class="flex items-center justify-between px-4 py-3 md:px-6">
@@ -72,7 +76,7 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
                 </div>
                 <div class="flex items-center gap-3">
                     <div class="hidden md:flex items-center gap-2 rounded-md bg-white/10 px-3 py-1.5">
-                        <span class="text-mustard text-sm">👤</span>
+                        <span class="text-mustard text-sm"></span>
                         <span class="text-sm font-medium text-white">{{ auth.user?.role_label || auth.user?.name }}</span>
                     </div>
                     <button @click="logout" class="rounded-md bg-red-500/20 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/30 transition hidden md:block">
