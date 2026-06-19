@@ -18,54 +18,70 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // --- Users with Roles ---
-        User::create([
-            'name' => 'Super Admin',
-            'email' => 'admin@mmac.edu.ph',
-            'password' => Hash::make('password'),
-            'role' => 'super_admin',
-        ]);
-        User::create([
-            'name' => 'Disbursement Officer',
-            'email' => 'disbursement@mmac.edu.ph',
-            'password' => Hash::make('password'),
-            'role' => 'disbursement_officer',
-        ]);
-        User::create([
-            'name' => 'Budget Officer',
-            'email' => 'budget@mmac.edu.ph',
-            'password' => Hash::make('password'),
-            'role' => 'budget_officer',
-        ]);
-        User::create([
-            'name' => 'Auditor',
-            'email' => 'auditor@mmac.edu.ph',
-            'password' => Hash::make('password'),
-            'role' => 'auditor',
-        ]);
+        User::updateOrCreate(
+            ['email' => 'admin@mmac.edu.ph'],
+            [
+                'name' => 'Admin',
+                'password' => Hash::make('password'),
+                'role' => 'super_admin',
+            ]
+        );
+        User::updateOrCreate(
+            ['email' => 'disbursement@mmac.edu.ph'],
+            [
+                'name' => 'Disbursement Officer',
+                'password' => Hash::make('password'),
+                'role' => 'disbursement_officer',
+            ]
+        );
+        User::updateOrCreate(
+            ['email' => 'budget@mmac.edu.ph'],
+            [
+                'name' => 'Budget Officer',
+                'password' => Hash::make('password'),
+                'role' => 'budget_officer',
+            ]
+        );
+        User::updateOrCreate(
+            ['email' => 'auditor@mmac.edu.ph'],
+            [
+                'name' => 'Auditor',
+                'password' => Hash::make('password'),
+                'role' => 'auditor',
+            ]
+        );
 
         // --- Departments ---
         $departments = [];
-        foreach ([
+        $deptData = [
             ['name' => 'College - Marine Transportation', 'code' => 'MT'],
             ['name' => 'College - Marine Engineering', 'code' => 'ME'],
             ['name' => 'College - Information System', 'code' => 'IS'],
             ['name' => 'Senior High School', 'code' => 'SHS'],
             ['name' => 'Basic Education', 'code' => 'BASED'],
             ['name' => 'Administration', 'code' => 'ADMIN'],
-        ] as $dept) {
-            $departments[$dept['code']] = Department::create($dept);
+        ];
+        foreach ($deptData as $dept) {
+            $departments[$dept['code']] = Department::updateOrCreate(
+                ['code' => $dept['code']],
+                ['name' => $dept['name']]
+            );
         }
 
         // --- Budget Categories ---
         $categories = [];
-        foreach ([
+        $catData = [
             ['name' => 'AUXILIARY FUND', 'description' => 'Income Generating Projects and Other Income'],
             ['name' => 'TRUST FUND', 'description' => 'Trust Liabilities'],
             ['name' => 'TUITION AND OTHER FEES', 'description' => 'Tuition Fee, Miscellaneous, and Laboratory Fees'],
             ['name' => 'LABORATORY FEES', 'description' => 'College Laboratory and Driving Fees'],
             ['name' => 'MISCELLANEOUS INCOME', 'description' => 'Energy Fee, Testing Fee, Registration, and Other Fees'],
-        ] as $i => $cat) {
-            $categories[$i + 1] = BudgetCategory::create($cat);
+        ];
+        foreach ($catData as $i => $cat) {
+            $categories[$i + 1] = BudgetCategory::updateOrCreate(
+                ['name' => $cat['name']],
+                ['description' => $cat['description']]
+            );
         }
 
         // --- Budget Particulars ---
@@ -86,18 +102,20 @@ class DatabaseSeeder extends Seeder
         ];
 
         foreach ($particularData as $i => $p) {
-            $particulars[$i + 1] = BudgetParticular::create([
-                'category_id' => $categories[$p['cat']]->id,
-                'department_id' => $departments[$p['dept']]->id,
-                'account_code' => $p['account_code'],
-                'account_name' => $p['account_name'],
-                'particular' => $p['particular'],
-                'description' => $p['description'],
-            ]);
+            $particulars[$i + 1] = BudgetParticular::updateOrCreate(
+                ['account_code' => $p['account_code']],
+                [
+                    'category_id' => $categories[$p['cat']]->id,
+                    'department_id' => $departments[$p['dept']]->id,
+                    'account_name' => $p['account_name'],
+                    'particular' => $p['particular'],
+                    'description' => $p['description'],
+                ]
+            );
         }
 
         // --- Annual Budgets & Items ---
-        $budget2025 = AnnualBudget::create(['year' => 2025]);
+        $budget2025 = AnnualBudget::updateOrCreate(['year' => 2025]);
         $budget2025Items = [
             ['cat' => 1, 'par' => 1, 'appropriation' => 2000000, 'expenditure' => 450000],
             ['cat' => 1, 'par' => 2, 'appropriation' => 1500000, 'expenditure' => 380000],
@@ -113,16 +131,20 @@ class DatabaseSeeder extends Seeder
             ['cat' => 5, 'par' => 12, 'appropriation' => 1441000, 'expenditure' => 720000],
         ];
         foreach ($budget2025Items as $item) {
-            BudgetItem::create([
-                'budget_id' => $budget2025->id,
-                'category_id' => $categories[$item['cat']]->id,
-                'particular_id' => $particulars[$item['par']]->id,
-                'appropriation' => $item['appropriation'],
-                'expenditure' => $item['expenditure'],
-            ]);
+            BudgetItem::updateOrCreate(
+                [
+                    'budget_id' => $budget2025->id,
+                    'particular_id' => $particulars[$item['par']]->id,
+                ],
+                [
+                    'category_id' => $categories[$item['cat']]->id,
+                    'appropriation' => $item['appropriation'],
+                    'expenditure' => $item['expenditure'],
+                ]
+            );
         }
 
-        $budget2026 = AnnualBudget::create(['year' => 2026]);
+        $budget2026 = AnnualBudget::updateOrCreate(['year' => 2026]);
         $budget2026Items = [
             ['cat' => 1, 'par' => 1, 'appropriation' => 2200000, 'expenditure' => 0],
             ['cat' => 1, 'par' => 2, 'appropriation' => 1650000, 'expenditure' => 0],
@@ -133,13 +155,17 @@ class DatabaseSeeder extends Seeder
             ['cat' => 3, 'par' => 7, 'appropriation' => 5500000, 'expenditure' => 0],
         ];
         foreach ($budget2026Items as $item) {
-            BudgetItem::create([
-                'budget_id' => $budget2026->id,
-                'category_id' => $categories[$item['cat']]->id,
-                'particular_id' => $particulars[$item['par']]->id,
-                'appropriation' => $item['appropriation'],
-                'expenditure' => $item['expenditure'],
-            ]);
+            BudgetItem::updateOrCreate(
+                [
+                    'budget_id' => $budget2026->id,
+                    'particular_id' => $particulars[$item['par']]->id,
+                ],
+                [
+                    'category_id' => $categories[$item['cat']]->id,
+                    'appropriation' => $item['appropriation'],
+                    'expenditure' => $item['expenditure'],
+                ]
+            );
         }
 
         // --- Expenses ---
@@ -151,18 +177,20 @@ class DatabaseSeeder extends Seeder
             ['ref_no' => 'EXP25000005', 'description' => 'Laboratory Supplies', 'cat' => 4, 'par' => 8, 'amount' => 980000, 'paid' => 500000, 'date_encoded' => '2025-04-01', 'date_approved' => null, 'status' => 'pending', 'notes' => 'Lab equipment purchase'],
         ];
         foreach ($expenseData as $exp) {
-            Expense::create([
-                'ref_no' => $exp['ref_no'],
-                'description' => $exp['description'],
-                'category_id' => $categories[$exp['cat']]->id,
-                'particular_id' => $particulars[$exp['par']]->id,
-                'amount' => $exp['amount'],
-                'paid' => $exp['paid'],
-                'date_encoded' => $exp['date_encoded'],
-                'date_approved' => $exp['date_approved'],
-                'status' => $exp['status'],
-                'notes' => $exp['notes'],
-            ]);
+            Expense::updateOrCreate(
+                ['ref_no' => $exp['ref_no']],
+                [
+                    'description' => $exp['description'],
+                    'category_id' => $categories[$exp['cat']]->id,
+                    'particular_id' => $particulars[$exp['par']]->id,
+                    'amount' => $exp['amount'],
+                    'paid' => $exp['paid'],
+                    'date_encoded' => $exp['date_encoded'],
+                    'date_approved' => $exp['date_approved'],
+                    'status' => $exp['status'],
+                    'notes' => $exp['notes'],
+                ]
+            );
         }
 
         // --- Disbursements ---
@@ -173,7 +201,20 @@ class DatabaseSeeder extends Seeder
             ['disbursement_no' => 'DSB25000004', 'description' => 'Electricity Bill', 'source' => 'Expenditure', 'pay_to' => 'BOHECO', 'amount' => 750000, 'method' => 'bank_transfer', 'date_encoded' => '2025-03-28', 'date_approved' => '2025-04-02', 'status' => 'posted', 'notes' => 'Electricity bill Jan-Mar 2025'],
         ];
         foreach ($disbursementData as $dsb) {
-            Disbursement::create($dsb);
+            Disbursement::updateOrCreate(
+                ['disbursement_no' => $dsb['disbursement_no']],
+                [
+                    'description' => $dsb['description'],
+                    'source' => $dsb['source'],
+                    'pay_to' => $dsb['pay_to'],
+                    'amount' => $dsb['amount'],
+                    'method' => $dsb['method'],
+                    'date_encoded' => $dsb['date_encoded'],
+                    'date_approved' => $dsb['date_approved'],
+                    'status' => $dsb['status'],
+                    'notes' => $dsb['notes'],
+                ]
+            );
         }
     }
 }

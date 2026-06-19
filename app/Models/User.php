@@ -62,7 +62,7 @@ class User extends Authenticatable
     public function getRoleLabelAttribute(): string
     {
         return match ($this->role) {
-            self::ROLE_SUPER_ADMIN => 'Super Admin',
+            self::ROLE_SUPER_ADMIN => 'Admin',
             self::ROLE_DISBURSEMENT_OFFICER => 'Disbursement Officer',
             self::ROLE_BUDGET_OFFICER => 'Budget Monitoring Officer',
             self::ROLE_AUDITOR => 'Auditor',
