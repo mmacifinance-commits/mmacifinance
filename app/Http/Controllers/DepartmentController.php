@@ -11,7 +11,7 @@ class DepartmentController extends Controller
     public function index()
     {
         return Inertia::render('Departments/Index', [
-            'departments' => Department::withCount('particulars')->latest()->get(),
+            'departments' => Department::with('particulars')->withCount('particulars')->latest()->get(),
         ]);
     }
 

@@ -11,7 +11,7 @@ class BudgetCategoryController extends Controller
     public function index()
     {
         return Inertia::render('BudgetCategories/Index', [
-            'categories' => BudgetCategory::withCount('particulars', 'budgetItems')->latest()->get(),
+            'categories' => BudgetCategory::with('particulars')->withCount('particulars', 'budgetItems')->latest()->get(),
         ]);
     }
 
