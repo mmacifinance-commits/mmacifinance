@@ -163,8 +163,8 @@ function catBalancePercent(group) {
                         </span>
                     </td>
                     <td v-if="perms.canManageBudget" class="px-5 py-3 text-center">
-                        <button @click="openEditItem(item)" class="text-gray-500 hover:text-blue-600 mr-1" title="Edit">✏️</button>
-                        <button @click="removeItem(item.id)" class="text-gray-400 hover:text-red-500" title="Delete">🗑️</button>
+                        <button @click="openEditItem(item)" class="text-blue-600 hover:text-blue-800 font-medium mr-3 transition" title="Update">Update</button>
+                        <button @click="removeItem(item.id)" class="text-red-600 hover:text-red-800 font-medium transition" title="Delete">Delete</button>
                     </td>
                 </tr>
             </tbody>

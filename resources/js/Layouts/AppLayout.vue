@@ -68,7 +68,7 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
         <header class="bg-navy-dark">
             <div class="flex items-center justify-between px-4 py-3 md:px-6">
                 <div class="flex items-center gap-3">
-                    <img src="/images/logo.jpg" alt="MMAC Logo" class="h-11 w-11 rounded-full object-cover border-2 border-mustard/60 shadow" />
+                    <img src="/images/logo.png" alt="MMAC Logo" class="h-11 w-11 object-contain" />
                     <div>
                         <h1 class="text-base font-bold text-white leading-tight tracking-wide">ACCOUNTING INFORMATION SYSTEM</h1>
                         <p class="text-xs text-mustard mt-0.5">Merchant Marine Academy of Caraga, Inc.</p>

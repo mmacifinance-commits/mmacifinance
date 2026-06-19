@@ -42,8 +42,8 @@ function remove(id) { if (confirm('Delete this department?')) router.delete(`/de
                         <td class="px-5 py-3"><span class="rounded bg-navy/10 px-2.5 py-1 text-xs font-semibold text-navy">{{ d.code }}</span></td>
                         <td class="px-5 py-3 text-center text-gray-600">{{ d.particulars_count }}</td>
                         <td v-if="perms.canManageBudget" class="px-5 py-3 text-center">
-                            <button @click="openEdit(d)" class="text-gray-500 hover:text-blue-600 mr-2">✏️</button>
-                            <button @click="remove(d.id)" class="text-gray-400 hover:text-red-500">🗑️</button>
+                            <button @click="openEdit(d)" class="text-blue-600 hover:text-blue-800 font-medium mr-3 transition">Update</button>
+                            <button @click="remove(d.id)" class="text-red-600 hover:text-red-800 font-medium transition">Delete</button>
                         </td>
                     </tr>
                 </tbody>

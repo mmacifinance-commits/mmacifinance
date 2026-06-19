@@ -43,7 +43,7 @@ const maxBarVal = computed(() => {
 <AppLayout>
     <!-- Page Header -->
     <div class="flex items-center gap-3 mb-6">
-        <img src="/images/logo.jpg" alt="" class="h-10 w-10 object-cover border border-mustard/40" />
+        <img src="/images/logo.png" alt="" class="h-10 w-10 object-contain" />
         <div>
             <h2 class="text-xl font-bold text-gray-900">Dashboard</h2>
             <p class="text-sm text-gray-500">Budget & Funds Utilization Overview — FY {{ latestYear || new Date().getFullYear() }}</p>
