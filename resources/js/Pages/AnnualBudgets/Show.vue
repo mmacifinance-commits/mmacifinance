@@ -138,22 +138,22 @@ function catBalancePercent(group) {
             <h3 class="text-sm font-bold text-white uppercase tracking-wide">{{ group.name }}</h3>
         </div>
         <!-- Table Header -->
-        <table class="w-full text-sm">
+        <table class="w-full text-sm table-fixed">
             <thead>
                 <tr class="bg-navy/90 text-white">
-                    <th class="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-mustard">Responsibility Center</th>
-                    <th class="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-mustard">Particular</th>
-                    <th class="px-5 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-mustard">Appropriation</th>
-                    <th class="px-5 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-mustard">Expenditure</th>
-                    <th class="px-5 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-mustard">Balance</th>
-                    <th class="px-5 py-2.5 text-center text-xs font-bold uppercase tracking-wider text-mustard">%</th>
-                    <th class="px-5 py-2.5 text-center text-xs font-bold uppercase tracking-wider text-mustard w-20"></th>
+                    <th class="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-mustard w-[28%]">Responsibility Center</th>
+                    <th class="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-mustard w-[20%]">Particular</th>
+                    <th class="px-5 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-mustard w-[13%]">Appropriation</th>
+                    <th class="px-5 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-mustard w-[13%]">Expenditure</th>
+                    <th class="px-5 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-mustard w-[13%]">Balance</th>
+                    <th class="px-5 py-2.5 text-center text-xs font-bold uppercase tracking-wider text-mustard w-[5%]">%</th>
+                    <th class="px-5 py-2.5 text-center text-xs font-bold uppercase tracking-wider text-mustard w-[8%]"></th>
                 </tr>
             </thead>
             <tbody>
                 <tr v-for="item in group.items" :key="item.id" class="border-b border-gray-100 hover:bg-gray-50/50">
-                    <td class="px-5 py-3 text-gray-700 text-xs">{{ item.particular?.department?.name || '—' }}</td>
-                    <td class="px-5 py-3 text-mustard-light font-medium text-sm" style="font-family: Inter, sans-serif;">{{ item.particular?.particular || 'N/A' }}</td>
+                    <td class="px-5 py-3 text-gray-700 text-xs truncate" :title="item.particular?.department?.name">{{ item.particular?.department?.name || '—' }}</td>
+                    <td class="px-5 py-3 text-mustard-light font-medium text-sm truncate" :title="item.particular?.particular" style="font-family: Inter, sans-serif;">{{ item.particular?.particular || 'N/A' }}</td>
                     <td class="px-5 py-3 text-right font-medium">{{ fmt(item.appropriation) }}</td>
                     <td class="px-5 py-3 text-right font-medium">{{ fmt(item.expenditure) }}</td>
                     <td class="px-5 py-3 text-right font-medium">{{ fmt(Number(item.appropriation || 0) - Number(item.expenditure || 0)) }}</td>
@@ -162,9 +162,11 @@ function catBalancePercent(group) {
                             {{ Number(item.appropriation) > 0 ? ((Number(item.appropriation) - Number(item.expenditure)) / Number(item.appropriation) * 100).toFixed(0) : 0 }}%
                         </span>
                     </td>
-                    <td v-if="perms.canManageBudget" class="px-5 py-3 text-center">
-                        <button @click="openEditItem(item)" class="text-blue-600 hover:text-blue-800 font-medium mr-3 transition" title="Update">Update</button>
-                        <button @click="removeItem(item.id)" class="text-red-600 hover:text-red-800 font-medium transition" title="Delete">Delete</button>
+                    <td class="px-5 py-3 text-center text-xs">
+                        <template v-if="perms.canManageBudget">
+                            <button @click="openEditItem(item)" class="text-blue-600 hover:text-blue-800 font-medium mr-3 transition" title="Update">Update</button>
+                            <button @click="removeItem(item.id)" class="text-red-600 hover:text-red-800 font-medium transition" title="Delete">Delete</button>
+                        </template>
                     </td>
                 </tr>
             </tbody>
@@ -189,15 +191,15 @@ function catBalancePercent(group) {
 
     <!-- Grand Total -->
     <div v-if="groupedItems.length" class="bg-white border border-gray-200 overflow-hidden mt-2">
-        <table class="w-full text-sm">
+        <table class="w-full text-sm table-fixed">
             <tfoot>
                 <tr class="bg-navy-dark text-white">
-                    <td colspan="2" class="px-5 py-3 font-bold text-mustard text-xs uppercase tracking-wider">Grand Total:</td>
-                    <td class="px-5 py-3 text-right font-bold text-white">{{ fmt(grandTotals.appropriation) }}</td>
-                    <td class="px-5 py-3 text-right font-bold text-white">{{ fmt(grandTotals.expenditure) }}</td>
-                    <td class="px-5 py-3 text-right font-bold text-white">{{ fmt(grandTotals.balance) }}</td>
-                    <td class="px-5 py-3 text-center font-bold text-mustard text-xs">{{ utilRate }}%</td>
-                    <td class="w-20"></td>
+                    <td colspan="2" class="px-5 py-3 font-bold text-mustard text-xs uppercase tracking-wider w-[48%]">Grand Total:</td>
+                    <td class="px-5 py-3 text-right font-bold text-white w-[13%]">{{ fmt(grandTotals.appropriation) }}</td>
+                    <td class="px-5 py-3 text-right font-bold text-white w-[13%]">{{ fmt(grandTotals.expenditure) }}</td>
+                    <td class="px-5 py-3 text-right font-bold text-white w-[13%]">{{ fmt(grandTotals.balance) }}</td>
+                    <td class="px-5 py-3 text-center font-bold text-mustard text-xs w-[5%]">{{ utilRate }}%</td>
+                    <td class="w-[8%]"></td>
                 </tr>
             </tfoot>
         </table>

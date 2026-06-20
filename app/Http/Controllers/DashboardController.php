@@ -7,24 +7,39 @@ use App\Models\BudgetCategory;
 use App\Models\BudgetItem;
 use App\Models\Disbursement;
 use App\Models\Expense;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class DashboardController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $budgets = AnnualBudget::with('items.category', 'items.particular.department')
             ->latest('year')
             ->get();
 
-        $totalAppropriation = BudgetItem::sum('appropriation');
-        $totalExpenditure = BudgetItem::sum('expenditure');
+        $availableYears = $budgets->pluck('year')->unique()->values();
 
-        // Category-level utilization for the latest budget
-        $latestBudget = $budgets->first();
+        $selectedYear = $request->query('year');
+        if (!$selectedYear) {
+            if ($availableYears->contains(2026)) {
+                $selectedYear = 2026;
+            } elseif ($budgets->isNotEmpty()) {
+                $selectedYear = $budgets->first()->year;
+            }
+        }
+
+        $selectedBudget = $budgets->firstWhere('year', $selectedYear);
+
+        $totalAppropriation = 0;
+        $totalExpenditure = 0;
         $categoryStats = [];
-        if ($latestBudget) {
-            $grouped = $latestBudget->items->groupBy(fn($item) => $item->category?->name ?? 'Uncategorized');
+
+        if ($selectedBudget) {
+            $totalAppropriation = $selectedBudget->items->sum('appropriation');
+            $totalExpenditure = $selectedBudget->items->sum('expenditure');
+
+            $grouped = $selectedBudget->items->groupBy(fn($item) => $item->category?->name ?? 'Uncategorized');
             foreach ($grouped as $catName => $items) {
                 $catAppr = $items->sum('appropriation');
                 $catExp = $items->sum('expenditure');
@@ -50,6 +65,8 @@ class DashboardController extends Controller
 
         return Inertia::render('Dashboard', [
             'budgets' => $budgets,
+            'availableYears' => $availableYears,
+            'selectedYear' => $selectedYear ? (int)$selectedYear : null,
             'stats' => [
                 'totalAppropriation' => (float) $totalAppropriation,
                 'totalExpenditure' => (float) $totalExpenditure,
@@ -60,7 +77,8 @@ class DashboardController extends Controller
             'categoryStats' => $categoryStats,
             'recentExpenses' => $recentExpenses,
             'recentDisbursements' => $recentDisbursements,
-            'latestYear' => $latestBudget?->year,
+            'latestYear' => $selectedYear ? (int)$selectedYear : null,
         ]);
     }
 }
+

@@ -1,6 +1,6 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
-import { Head } from '@inertiajs/vue3'
+import { Head, router } from '@inertiajs/vue3'
 import { computed } from 'vue'
 
 const props = defineProps({
@@ -10,7 +10,13 @@ const props = defineProps({
     recentExpenses: Array,
     recentDisbursements: Array,
     latestYear: Number,
+    availableYears: Array,
 })
+
+function changeYear(event) {
+    router.get('/', { year: event.target.value })
+}
+
 
 function fmt(v) { return new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(v || 0) }
 function fmtDate(d) { return d ? new Date(d).toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' }) : '—' }
@@ -42,11 +48,27 @@ const maxBarVal = computed(() => {
 <Head title="Dashboard" />
 <AppLayout>
     <!-- Page Header -->
-    <div class="flex items-center gap-3 mb-6">
-        <img src="/images/logo.png" alt="" class="h-10 w-10 object-contain" />
-        <div>
-            <h2 class="text-xl font-bold text-gray-900">Dashboard</h2>
-            <p class="text-sm text-gray-500">Budget & Funds Utilization Overview — FY {{ latestYear || new Date().getFullYear() }}</p>
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div class="flex items-center gap-3">
+            <img src="/images/logo.png" alt="" class="h-10 w-10 object-contain" />
+            <div>
+                <h2 class="text-xl font-bold text-gray-900">Dashboard</h2>
+                <p class="text-sm text-gray-500">Budget & Funds Utilization Overview — FY {{ latestYear || new Date().getFullYear() }}</p>
+            </div>
+        </div>
+        <!-- Year Selector Dropdown -->
+        <div class="flex items-center gap-2" v-if="availableYears && availableYears.length >= 1">
+            <label for="year-select" class="text-xs font-bold uppercase tracking-wider text-gray-500">Fiscal Year:</label>
+            <select
+                id="year-select"
+                :value="latestYear"
+                @change="changeYear"
+                class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 shadow-sm focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy transition cursor-pointer"
+            >
+                <option v-for="yr in availableYears" :key="yr" :value="yr">
+                    FY {{ yr }}
+                </option>
+            </select>
         </div>
     </div>
 
