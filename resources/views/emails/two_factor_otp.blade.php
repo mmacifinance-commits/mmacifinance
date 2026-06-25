@@ -98,7 +98,7 @@
 
         <div class="content">
             <div class="greeting">
-                Hello <strong>Admin</strong>,
+                Hello <strong>{{ $userName }}</strong>,
             </div>
 
             <div class="message-text">

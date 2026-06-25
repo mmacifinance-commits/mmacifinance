@@ -14,13 +14,15 @@ class TwoFactorOtpMail extends Mailable
     use Queueable, SerializesModels;
 
     public $otp;
+    public $userName;
 
     /**
      * Create a new message instance.
      */
-    public function __construct($otp)
+    public function __construct($otp, $userName = 'User')
     {
         $this->otp = $otp;
+        $this->userName = $userName;
     }
 
     /**

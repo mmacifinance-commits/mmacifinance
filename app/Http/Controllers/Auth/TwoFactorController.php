@@ -72,7 +72,7 @@ class TwoFactorController extends Controller
             $user->save();
 
             // Send new OTP Email
-            \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\TwoFactorOtpMail($otp));
+            \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\TwoFactorOtpMail($otp, $user->name));
         }
 
         return back()->with('message', 'Verification code resent successfully.');

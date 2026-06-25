@@ -21,7 +21,7 @@ class DatabaseSeeder extends Seeder
         User::updateOrCreate(
             ['email' => 'admin@mmac.edu.ph'],
             [
-                'name' => 'Admin',
+                'name' => 'Head of Finance',
                 'password' => Hash::make('password'),
                 'role' => 'super_admin',
             ]

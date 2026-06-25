@@ -37,7 +37,7 @@ class LoginController extends Controller
             $user->save();
 
             // Send OTP Email
-            Mail::to($user->email)->send(new TwoFactorOtpMail($otp));
+            Mail::to($user->email)->send(new TwoFactorOtpMail($otp, $user->name));
 
             // Store user id in session to maintain state before full login
             $request->session()->put('2fa_user_id', $user->id);
