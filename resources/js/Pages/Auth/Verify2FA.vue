@@ -1,6 +1,13 @@
 <script setup>
 import { useForm, Head } from '@inertiajs/vue3'
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
+
+const props = defineProps({
+    cooldownSeconds: {
+        type: Number,
+        default: 0
+    }
+})
 
 const form = useForm({
     otp: '',
@@ -8,12 +15,45 @@ const form = useForm({
 
 const digits = ref(['', '', '', '', '', ''])
 const inputs = ref([])
+const timeLeft = ref(props.cooldownSeconds)
+let timerInterval = null
+
+const startTimer = () => {
+    if (timerInterval) clearInterval(timerInterval)
+    timerInterval = setInterval(() => {
+        if (timeLeft.value > 0) {
+            timeLeft.value--
+        } else {
+            clearInterval(timerInterval)
+        }
+    }, 1000)
+}
 
 onMounted(() => {
     if (inputs.value[0]) {
         inputs.value[0].focus()
     }
+    if (timeLeft.value > 0) {
+        startTimer()
+    }
 })
+
+onUnmounted(() => {
+    if (timerInterval) clearInterval(timerInterval)
+})
+
+watch(() => props.cooldownSeconds, (newVal) => {
+    timeLeft.value = newVal
+    if (newVal > 0) {
+        startTimer()
+    }
+})
+
+const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+}
 
 const handleInput = (index, event) => {
     let val = event.target.value.replace(/[^0-9]/g, '')
@@ -127,8 +167,13 @@ function resendCode() {
                     
                     <div class="mt-8 text-center text-[0.95rem]">
                         <span class="text-gray-400 font-light">Didn't receive the code? </span><br class="sm:hidden">
-                        <button type="button" @click="resendCode" :disabled="resendForm.processing" class="text-mustard font-semibold hover:text-mustard-dark transition ml-1 tracking-wide">
-                            Resend Code
+                        <button 
+                            type="button" 
+                            @click="resendCode" 
+                            :disabled="resendForm.processing || timeLeft > 0" 
+                            class="text-mustard font-semibold hover:text-mustard-dark transition ml-1 tracking-wide disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {{ timeLeft > 0 ? `Resend Code (${formatTime(timeLeft)})` : 'Resend Code' }}
                         </button>
                     </div>
 

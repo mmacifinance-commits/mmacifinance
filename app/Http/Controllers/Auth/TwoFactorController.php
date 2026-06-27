@@ -16,7 +16,20 @@ class TwoFactorController extends Controller
             return redirect()->route('login');
         }
 
-        return Inertia::render('Auth/Verify2FA');
+        $userId = $request->session()->get('2fa_user_id');
+        $user = User::find($userId);
+
+        $cooldownSeconds = 0;
+        if ($user && $user->otp_sent_at) {
+            $elapsed = abs(now()->diffInSeconds($user->otp_sent_at, false));
+            if ($elapsed < 180) {
+                $cooldownSeconds = 180 - $elapsed;
+            }
+        }
+
+        return Inertia::render('Auth/Verify2FA', [
+            'cooldownSeconds' => $cooldownSeconds,
+        ]);
     }
 
     public function verify(Request $request)
@@ -45,6 +58,12 @@ class TwoFactorController extends Controller
         $request->session()->forget(['2fa_user_id', '2fa_remember']);
         $user->otp_code = null;
         $user->otp_expires_at = null;
+        
+        // Reset lockout levels and attempts
+        $user->failed_login_attempts = 0;
+        $user->lockout_level = 0;
+        $user->locked_until = null;
+        
         $user->save();
 
         $request->session()->regenerate();
@@ -63,12 +82,24 @@ class TwoFactorController extends Controller
         $user = User::find($userId);
 
         if ($user) {
+            if ($user->otp_sent_at) {
+                $elapsed = abs(now()->diffInSeconds($user->otp_sent_at, false));
+                if ($elapsed < 180) {
+                    $remaining = 180 - $elapsed;
+                    $minutes = ceil($remaining / 60);
+                    return back()->withErrors([
+                        'otp' => "Please wait at least {$minutes} minute(s) before requesting another code."
+                    ]);
+                }
+            }
+
             // Generate new OTP
             $otp = rand(100000, 999999);
 
-            // Save new OTP and expiration
+            // Save new OTP, expiration, and update otp_sent_at
             $user->otp_code = $otp;
             $user->otp_expires_at = now()->addMinutes(10);
+            $user->otp_sent_at = now();
             $user->save();
 
             // Send new OTP Email

@@ -17,6 +17,10 @@ class User extends Authenticatable
         'role',
         'otp_code',
         'otp_expires_at',
+        'failed_login_attempts',
+        'lockout_level',
+        'locked_until',
+        'otp_sent_at',
     ];
 
     protected $hidden = [
@@ -30,6 +34,8 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'otp_expires_at' => 'datetime',
+            'locked_until' => 'datetime',
+            'otp_sent_at' => 'datetime',
         ];
     }
 

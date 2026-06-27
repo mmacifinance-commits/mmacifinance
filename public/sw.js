@@ -45,6 +45,9 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
 
+  // Only intercept HTTP/HTTPS requests (ignores chrome-extension://, data:, etc.)
+  if (!url.protocol.startsWith('http')) return
+
   // Never intercept non-GET requests (POST, PUT, DELETE go through fetch normally)
   if (request.method !== 'GET') return
 
@@ -66,7 +69,7 @@ self.addEventListener('fetch', (event) => {
             caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
           }
           return response
-        }).catch(() => cached || new Response('', { status: 503 }))
+        }).catch(() => cached || new Response('Asset not available offline', { status: 503 }))
       })
     )
     return
@@ -86,7 +89,11 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(() =>
           caches.match(request).then(
-            (cached) => cached || caches.match('/offline.html')
+            (cached) => cached || caches.match('/offline.html').then((offline) => offline || new Response('Offline', {
+              status: 503,
+              statusText: 'Service Unavailable',
+              headers: { 'Content-Type': 'text/html' }
+            }))
           )
         )
     )
@@ -95,7 +102,11 @@ self.addEventListener('fetch', (event) => {
 
   // Default: network-first
   event.respondWith(
-    fetch(request).catch(() => caches.match(request))
+    fetch(request).catch(() => caches.match(request).then((cached) => cached || new Response('Network error', {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: { 'Content-Type': 'text/plain' }
+    })))
   )
 })
 

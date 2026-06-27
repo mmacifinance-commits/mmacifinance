@@ -10,6 +10,7 @@ use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\DisbursementController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\Auth\TwoFactorController;
+use App\Http\Controllers\Auth\PasswordResetController;
 use Illuminate\Support\Facades\Route;
 
 // --- Guest Routes ---
@@ -20,6 +21,11 @@ Route::middleware('guest')->group(function () {
     Route::get('/2fa/verify', [TwoFactorController::class, 'index'])->name('2fa.index');
     Route::post('/2fa/verify', [TwoFactorController::class, 'verify'])->name('2fa.verify');
     Route::post('/2fa/resend', [TwoFactorController::class, 'resend'])->name('2fa.resend');
+
+    Route::get('/forgot-password', [PasswordResetController::class, 'showForgotForm'])->name('password.request');
+    Route::post('/forgot-password', [PasswordResetController::class, 'sendResetCode'])->name('password.email');
+    Route::get('/reset-password', [PasswordResetController::class, 'showResetForm'])->name('password.reset');
+    Route::post('/reset-password', [PasswordResetController::class, 'resetPassword'])->name('password.update');
 });
 
 // --- Authenticated Routes ---

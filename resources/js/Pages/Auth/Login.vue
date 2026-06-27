@@ -1,5 +1,5 @@
 <script setup>
-import { useForm, Head } from '@inertiajs/vue3'
+import { useForm, Head, Link } from '@inertiajs/vue3'
 import { ref } from 'vue'
 
 const form = useForm({
@@ -25,6 +25,11 @@ function submit() {
                     <img src="/images/logo.png" alt="MMAC Logo" class="mx-auto h-20 w-20 object-contain" />
                     <h1 class="mt-4 text-xl font-bold text-white">Budget Fund Utilization & Tracking</h1>
                     <p class="text-sm text-mustard/80 mt-1">Merchant Marine Academy of Caraga, Inc.</p>
+                </div>
+
+                <!-- Success Flash Message -->
+                <div v-if="$page.props.flash?.message || $page.props.flash?.success" class="mb-4 rounded-lg bg-green-500/20 border border-green-500/30 p-3 text-sm text-green-200 text-center">
+                    {{ $page.props.flash.message || $page.props.flash.success }}
                 </div>
 
                 <!-- Form -->
@@ -54,9 +59,14 @@ function submit() {
                         <p v-if="form.errors.password" class="mt-1 text-xs text-red-300">{{ form.errors.password }}</p>
                     </div>
 
-                    <div class="flex items-center gap-2">
-                        <input v-model="form.remember" type="checkbox" id="remember" class="rounded border-white/30 bg-white/10 text-mustard focus:ring-mustard/40" />
-                        <label for="remember" class="text-sm text-white/70">Remember me</label>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <input v-model="form.remember" type="checkbox" id="remember" class="rounded border-white/30 bg-white/10 text-mustard focus:ring-mustard/40" />
+                            <label for="remember" class="text-sm text-white/70">Remember me</label>
+                        </div>
+                        <Link href="/forgot-password" class="text-sm text-mustard hover:text-mustard-light transition font-medium">
+                            Forgot Password?
+                        </Link>
                     </div>
 
                     <button
