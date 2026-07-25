@@ -8,7 +8,7 @@ import { useOfflineQueue } from '@/composables/useOfflineQueue'
 const perms = computed(() => usePage().props.permissions || {})
 const { isOnline, offlinePost, offlinePut, offlineDelete } = useOfflineQueue()
 
-const props = defineProps({ expenses: Array, categories: Array, particulars: Array })
+const props = defineProps({ expenses: Array, categories: Array, particulars: Array, availableYears: Array, defaultYear: [Number, String] })
 const showModal = ref(false)
 const editing = ref(null)
 const form = useForm({ description: '', category_id: '', particular_id: '', amount: 0, paid: 0, date_encoded: '', date_approved: '', status: 'pending', notes: '' })
@@ -19,6 +19,7 @@ const offlineRows = ref([])
 const filterSearch = ref('')
 const filterCategory = ref('')
 const filterStatus = ref('')
+const filterYear = ref(props.defaultYear ? String(props.defaultYear) : 'all')
 
 const filteredExpenses = computed(() => {
     const all = [...props.expenses, ...offlineRows.value]
@@ -28,7 +29,14 @@ const filteredExpenses = computed(() => {
              (e.description || '').toLowerCase().includes(filterSearch.value.toLowerCase())) : true
         const matchCategory = filterCategory.value ? String(e.category_id) === String(filterCategory.value) : true
         const matchStatus = filterStatus.value ? e.status === filterStatus.value : true
-        return matchSearch && matchCategory && matchStatus
+
+        let matchYear = true
+        if (filterYear.value && filterYear.value !== 'all') {
+            const expYear = e.date_encoded ? String(e.date_encoded).slice(0, 4) : (e.created_at ? String(e.created_at).slice(0, 4) : null)
+            matchYear = expYear ? String(expYear) === String(filterYear.value) : false
+        }
+
+        return matchSearch && matchCategory && matchStatus && matchYear
     })
 })
 
@@ -36,6 +44,7 @@ function clearFilters() {
     filterSearch.value = ''
     filterCategory.value = ''
     filterStatus.value = ''
+    filterYear.value = props.defaultYear ? String(props.defaultYear) : 'all'
 }
 
 function fmt(v) { return new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(v || 0) }
@@ -148,11 +157,15 @@ function splitDate(d) {
     </div>
     <div class="flex flex-col sm:flex-row gap-4 mb-6">
         <input v-model="filterSearch" type="text" placeholder="Search by ref no or description..." class="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm w-full max-w-sm" />
-        <select v-model="filterCategory" class="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 min-w-[200px]">
+        <select v-model="filterYear" class="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 min-w-[150px]">
+            <option value="all">All Years</option>
+            <option v-for="y in (availableYears || [])" :key="y" :value="String(y)">Year {{ y }}</option>
+        </select>
+        <select v-model="filterCategory" class="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 min-w-[180px]">
             <option value="">All Categories</option>
             <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
         </select>
-        <select v-model="filterStatus" class="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 min-w-[200px]">
+        <select v-model="filterStatus" class="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 min-w-[160px]">
             <option value="">All Status</option>
             <option value="pending">Pending</option>
             <option value="approved">Approved</option>

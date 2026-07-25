@@ -6,6 +6,7 @@ const form = useForm({
 })
 
 function submit() {
+    form.email = form.email.trim().toLowerCase()
     form.post('/forgot-password')
 }
 </script>
@@ -22,6 +23,14 @@ function submit() {
                     <p class="text-sm text-white/60 mt-2 leading-relaxed">
                         Enter your email address and we'll send you a 6-digit verification code to reset your password.
                     </p>
+                </div>
+
+                <!-- Success / Error Flash Message -->
+                <div v-if="$page.props.flash?.message || $page.props.flash?.success" class="mb-4 rounded-lg bg-green-500/20 border border-green-500/30 p-3 text-sm text-green-200 text-center">
+                    {{ $page.props.flash.message || $page.props.flash.success }}
+                </div>
+                <div v-if="$page.props.flash?.error" class="mb-4 rounded-lg bg-red-500/20 border border-red-500/30 p-3 text-sm text-red-200 text-center">
+                    {{ $page.props.flash.error }}
                 </div>
 
                 <!-- Form -->

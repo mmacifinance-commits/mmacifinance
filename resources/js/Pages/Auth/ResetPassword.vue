@@ -14,10 +14,23 @@ const form = useForm({
     password_confirmation: '',
 })
 
+const resendForm = useForm({
+    email: props.email,
+})
+
+function onCodeInput(e) {
+    // Automatically strip spaces or non-digit characters if user types or pastes them
+    form.code = e.target.value.replace(/\D/g, '').slice(0, 6)
+}
+
 function submit() {
     form.post('/reset-password', {
         onFinish: () => form.reset('password', 'password_confirmation'),
     })
+}
+
+function resendCode() {
+    resendForm.post('/forgot-password')
 }
 </script>
 
@@ -35,15 +48,21 @@ function submit() {
                     </p>
                 </div>
 
+                <!-- Success / Message Flash -->
+                <div v-if="$page.props.flash?.message || $page.props.flash?.success" class="mb-4 rounded-lg bg-green-500/20 border border-green-500/30 p-3 text-sm text-green-200 text-center">
+                    {{ $page.props.flash.message || $page.props.flash.success }}
+                </div>
+
                 <!-- Form -->
                 <form @submit.prevent="submit" class="space-y-5">
                     <div>
                         <label class="block text-sm font-medium text-white/80 mb-1">Verification Code</label>
                         <input
-                            v-model="form.code"
+                            :value="form.code"
+                            @input="onCodeInput"
                             type="text"
                             inputmode="numeric"
-                            maxlength="6"
+                            maxlength="7"
                             required
                             autofocus
                             class="w-full rounded-lg border border-white/20 bg-white/10 px-4 py-2.5 text-center text-lg tracking-[0.5em] font-semibold text-white placeholder-white/20 focus:border-mustard focus:ring-2 focus:ring-mustard/40 transition"
@@ -85,9 +104,14 @@ function submit() {
                     </button>
 
                     <div class="text-center mt-4 flex justify-between items-center px-1">
-                        <Link href="/forgot-password" class="text-xs text-white/60 hover:text-white transition">
-                            Resend Code
-                        </Link>
+                        <button
+                            type="button"
+                            @click="resendCode"
+                            :disabled="resendForm.processing"
+                            class="text-xs text-white/60 hover:text-white transition disabled:opacity-50 underline"
+                        >
+                            {{ resendForm.processing ? 'Resending...' : 'Resend Code' }}
+                        </button>
                         <Link href="/login" class="text-xs text-mustard hover:text-mustard-light transition font-medium">
                             Back to Login
                         </Link>

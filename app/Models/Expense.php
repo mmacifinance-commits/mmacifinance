@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Expense extends Model
 {
@@ -35,5 +36,10 @@ class Expense extends Model
     public function particular(): BelongsTo
     {
         return $this->belongsTo(BudgetParticular::class, 'particular_id');
+    }
+
+    public function disbursements(): HasMany
+    {
+        return $this->hasMany(Disbursement::class, 'expense_id');
     }
 }

@@ -20,6 +20,12 @@ class PasswordResetController extends Controller
 
     public function sendResetCode(Request $request)
     {
+        if ($request->has('email')) {
+            $request->merge([
+                'email' => strtolower(trim($request->email)),
+            ]);
+        }
+
         $request->validate([
             'email' => 'required|email|exists:users,email',
         ], [
@@ -39,7 +45,12 @@ class PasswordResetController extends Controller
         $request->session()->put('password_reset_email', $email);
 
         // Send Email
-        Mail::to($email)->send(new PasswordResetMail($code, $user->name));
+        try {
+            Mail::to($email)->send(new PasswordResetMail($code, $user->name));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Password reset email failed: ' . $e->getMessage());
+            return back()->withErrors(['email' => 'Failed to send verification email. Please try again later.']);
+        }
 
         return redirect()->route('password.reset')->with('message', 'A verification code has been sent to your email.');
     }
@@ -63,17 +74,24 @@ class PasswordResetController extends Controller
             return redirect()->route('password.request');
         }
 
+        if ($request->has('code')) {
+            $cleanedCode = preg_replace('/\D/', '', (string) $request->code);
+            $request->merge(['code' => $cleanedCode]);
+        }
+
         $request->validate([
             'code' => 'required|numeric|digits:6',
             'password' => 'required|string|min:8|confirmed',
         ], [
+            'code.required' => 'Please enter the 6-digit verification code.',
+            'code.digits' => 'The verification code must be 6 digits.',
             'password.confirmed' => 'The password confirmation does not match.',
             'password.min' => 'The password must be at least 8 characters.',
         ]);
 
         $cachedCode = Cache::get('password_reset_code_' . $email);
 
-        if (!$cachedCode || $cachedCode !== $request->code) {
+        if (!$cachedCode || (string) $cachedCode !== (string) $request->code) {
             return back()->withErrors([
                 'code' => 'The verification code is invalid or has expired.',
             ]);

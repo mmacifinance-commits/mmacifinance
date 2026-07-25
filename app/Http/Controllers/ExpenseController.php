@@ -10,12 +10,33 @@ use Inertia\Inertia;
 
 class ExpenseController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        $expenses = Expense::with('category', 'particular.department')->latest()->get();
+
+        $yearsFromExpenses = $expenses->pluck('date_encoded')
+            ->filter()
+            ->map(fn($d) => (int) date('Y', strtotime($d)))
+            ->unique();
+
+        $budgetYears = \App\Models\AnnualBudget::pluck('year');
+        $currentYear = (int) date('Y');
+
+        $availableYears = $yearsFromExpenses->concat($budgetYears)
+            ->push($currentYear)
+            ->unique()
+            ->sortDesc()
+            ->values()
+            ->toArray();
+
+        $defaultYear = $currentYear;
+
         return Inertia::render('Expenses/Index', [
-            'expenses' => Expense::with('category', 'particular.department')->latest()->get(),
+            'expenses' => $expenses,
             'categories' => BudgetCategory::all(),
             'particulars' => BudgetParticular::with('category', 'department')->get(),
+            'availableYears' => $availableYears,
+            'defaultYear' => $defaultYear,
         ]);
     }
 
@@ -38,7 +59,8 @@ class ExpenseController extends Controller
         $validated['ref_no'] = 'EXP' . str_pad($nextNum, 8, '0', STR_PAD_LEFT);
         $validated['paid'] = $validated['paid'] ?? 0;
 
-        Expense::create($validated);
+        $expense = Expense::create($validated);
+        $this->syncBudgetItemExpenditure($expense);
 
         return redirect()->route('expenses.index')->with('success', 'Expense created.');
     }
@@ -60,14 +82,42 @@ class ExpenseController extends Controller
         $validated['paid'] = $validated['paid'] ?? 0;
 
         $expense->update($validated);
+        $this->syncBudgetItemExpenditure($expense);
 
         return redirect()->route('expenses.index')->with('success', 'Expense updated.');
     }
 
     public function destroy(Expense $expense)
     {
+        $oldExpense = clone $expense;
         $expense->delete();
+        $this->syncBudgetItemExpenditure($oldExpense);
 
         return redirect()->route('expenses.index')->with('success', 'Expense deleted.');
+    }
+
+    protected function syncBudgetItemExpenditure(Expense $expense)
+    {
+        if (!$expense->date_encoded || !$expense->particular_id) {
+            return;
+        }
+
+        $year = date('Y', strtotime($expense->date_encoded));
+        $budget = \App\Models\AnnualBudget::where('year', $year)->first();
+
+        if ($budget) {
+            $budgetItem = \App\Models\BudgetItem::where('budget_id', $budget->id)
+                ->where('particular_id', $expense->particular_id)
+                ->first();
+
+            if ($budgetItem) {
+                $total = Expense::whereYear('date_encoded', $year)
+                    ->where('particular_id', $expense->particular_id)
+                    ->where('status', '!=', 'cancelled')
+                    ->sum('amount');
+
+                $budgetItem->update(['expenditure' => $total]);
+            }
+        }
     }
 }

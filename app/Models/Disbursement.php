@@ -8,6 +8,7 @@ class Disbursement extends Model
 {
     protected $fillable = [
         'disbursement_no',
+        'expense_id',
         'description',
         'source',
         'pay_to',
@@ -24,4 +25,9 @@ class Disbursement extends Model
         'date_encoded' => 'date',
         'date_approved' => 'date',
     ];
+
+    public function expense()
+    {
+        return $this->belongsTo(Expense::class, 'expense_id');
+    }
 }

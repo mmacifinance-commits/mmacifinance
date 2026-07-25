@@ -35,14 +35,50 @@ class DashboardController extends Controller
         $totalExpenditure = 0;
         $categoryStats = [];
 
+        // Fetch non-cancelled expenses and disbursements for the selected fiscal year
+        $expensesForYear = Expense::whereYear('date_encoded', $selectedYear)
+            ->where('status', '!=', 'cancelled')
+            ->get();
+
+        $disbursementsForYear = Disbursement::whereYear('date_encoded', $selectedYear)
+            ->where('status', '!=', 'cancelled')
+            ->get();
+
+        $totalYearExpenses = (float) $expensesForYear->sum('amount');
+        $totalYearDisbursements = (float) $disbursementsForYear->sum('amount');
+
         if ($selectedBudget) {
-            $totalAppropriation = $selectedBudget->items->sum('appropriation');
-            $totalExpenditure = $selectedBudget->items->sum('expenditure');
+            $totalAppropriation = (float) $selectedBudget->items->sum('appropriation');
 
             $grouped = $selectedBudget->items->groupBy(fn($item) => $item->category?->name ?? 'Uncategorized');
+
             foreach ($grouped as $catName => $items) {
-                $catAppr = $items->sum('appropriation');
-                $catExp = $items->sum('expenditure');
+                $catAppr = (float) $items->sum('appropriation');
+
+                // Compute expenditure for items in this category
+                $catExp = 0;
+                foreach ($items as $item) {
+                    $actualExp = $expensesForYear->where('particular_id', $item->particular_id)->sum('amount');
+                    $itemExp = max((float) $actualExp, (float) $item->expenditure);
+                    $catExp += $itemExp;
+                }
+
+                // Check if any expenses match by category_id directly
+                $catId = $items->first()->category_id;
+                if ($catId) {
+                    $catActualExp = (float) $expensesForYear->where('category_id', $catId)->sum('amount');
+                    if ($catActualExp > $catExp) {
+                        $catExp = $catActualExp;
+                    }
+                }
+
+                // Check if any disbursements match this category name in source
+                $dsbSourceExp = (float) $disbursementsForYear->filter(function ($d) use ($catName) {
+                    return strtolower(trim($d->source)) === strtolower(trim($catName));
+                })->sum('amount');
+
+                $catExp += $dsbSourceExp;
+
                 $categoryStats[] = [
                     'name' => $catName,
                     'appropriation' => $catAppr,
@@ -50,16 +86,23 @@ class DashboardController extends Controller
                     'utilization' => $catAppr > 0 ? round($catExp / $catAppr * 100, 1) : 0,
                 ];
             }
+
+            $sumCatExp = array_sum(array_column($categoryStats, 'expenditure'));
+            $totalExpenditure = max($sumCatExp, $totalYearExpenses + $totalYearDisbursements);
+        } else {
+            $totalExpenditure = $totalYearExpenses + $totalYearDisbursements;
         }
 
-        // Recent expenses (last 5)
+        // Recent expenses for the selected fiscal year (last 5)
         $recentExpenses = Expense::with('category')
+            ->whereYear('date_encoded', $selectedYear)
             ->latest('date_encoded')
             ->take(5)
             ->get();
 
-        // Recent disbursements (last 5)
-        $recentDisbursements = Disbursement::latest('date_encoded')
+        // Recent disbursements for the selected fiscal year (last 5)
+        $recentDisbursements = Disbursement::whereYear('date_encoded', $selectedYear)
+            ->latest('date_encoded')
             ->take(5)
             ->get();
 
@@ -71,8 +114,8 @@ class DashboardController extends Controller
                 'totalAppropriation' => (float) $totalAppropriation,
                 'totalExpenditure' => (float) $totalExpenditure,
                 'balance' => (float) ($totalAppropriation - $totalExpenditure),
-                'pendingExpenses' => Expense::where('status', 'pending')->count(),
-                'pendingDisbursements' => Disbursement::where('status', 'pending')->count(),
+                'pendingExpenses' => Expense::whereYear('date_encoded', $selectedYear)->where('status', 'pending')->count(),
+                'pendingDisbursements' => Disbursement::whereYear('date_encoded', $selectedYear)->where('status', 'pending')->count(),
             ],
             'categoryStats' => $categoryStats,
             'recentExpenses' => $recentExpenses,
