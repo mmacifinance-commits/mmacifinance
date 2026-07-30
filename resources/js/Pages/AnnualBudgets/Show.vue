@@ -2,7 +2,7 @@
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
 import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 const perms = computed(() => usePage().props.permissions || {})
 
@@ -36,20 +36,36 @@ const itemForm = useForm({
 const selectedYear = ref(props.budget.year)
 const selectedSemester = ref(props.budget.semester || '')
 
+watch(() => props.budget, (newBudget) => {
+    if (newBudget) {
+        selectedYear.value = newBudget.year
+        selectedSemester.value = newBudget.semester || ''
+    }
+}, { immediate: true })
+
 const semestersForYear = computed(() => {
     if (!props.allBudgets) return []
     return props.allBudgets
-        .filter(b => b.year === selectedYear.value)
+        .filter(b => Number(b.year) === Number(selectedYear.value))
         .map(b => b.semester)
         .filter(Boolean)
 })
 
 function applyFilter() {
-    const match = props.allBudgets?.find(b =>
-        b.year === selectedYear.value &&
-        (b.semester || '') === selectedSemester.value
+    const matchingBudgets = (props.allBudgets || []).filter(b =>
+        Number(b.year) === Number(selectedYear.value)
     )
-    if (match) {
+    if (matchingBudgets.length === 0) return
+
+    let match = matchingBudgets.find(b => (b.semester || '') === (selectedSemester.value || ''))
+    if (!match) {
+        match = matchingBudgets[0]
+        if (match) {
+            selectedSemester.value = match.semester || ''
+        }
+    }
+
+    if (match && match.id !== props.budget.id) {
         router.get(`/annual-budgets/${match.id}`)
     }
 }
@@ -147,7 +163,7 @@ function catBalancePercent(group) {
     <div class="flex flex-wrap items-center gap-3 mb-6 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
         <div class="flex items-center gap-2">
             <label class="text-xs font-bold uppercase text-gray-500">Fiscal Year:</label>
-            <select v-model="selectedYear" @change="selectedSemester = ''; applyFilter()" class="rounded-md border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-[100px]">
+            <select v-model.number="selectedYear" @change="selectedSemester = ''; applyFilter()" class="rounded-md border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-[100px]">
                 <option v-for="y in availableYears" :key="y" :value="y">{{ y }}</option>
             </select>
         </div>
