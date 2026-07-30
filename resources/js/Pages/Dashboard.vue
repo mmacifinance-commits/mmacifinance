@@ -284,7 +284,7 @@ const barColors = ['#1e293b', '#d4a843', '#2563eb', '#059669', '#7c3aed', '#db27
 
         <!-- Monthly Line & Bar Graph Visualizer -->
         <div v-if="viewMode === 'monthly'" class="space-y-4">
-            <div class="relative h-72 pt-6 pb-2 px-2 border-b border-gray-200 bg-slate-50/50 rounded-lg overflow-hidden">
+            <div class="relative h-72 pt-14 pb-2 px-2 border-b border-gray-200 bg-slate-50/50 rounded-lg">
                 <!-- SVG Trend Lines Overlay -->
                 <svg class="absolute inset-0 w-full h-full pointer-events-none z-10" viewBox="0 0 1000 200" preserveAspectRatio="none">
                     <path :d="monthlySvgLines.apprPath" fill="none" stroke="#1e293b" stroke-width="2" stroke-dasharray="4 2" opacity="0.6" />
@@ -296,12 +296,17 @@ const barColors = ['#1e293b', '#d4a843', '#2563eb', '#059669', '#7c3aed', '#db27
                 <div class="h-full flex items-end justify-between gap-2 relative z-20">
                     <div v-for="m in (monthlyBreakdown || [])" :key="m.month_num" class="flex-1 flex flex-col items-center h-full justify-end group relative">
                         <!-- Tooltip -->
-                        <div class="absolute -top-16 opacity-0 group-hover:opacity-100 transition-opacity bg-navy-dark text-white text-[10px] p-2.5 rounded-lg shadow-xl pointer-events-none z-30 whitespace-nowrap">
-                            <div class="font-bold border-b border-white/20 pb-0.5 mb-1 text-mustard">{{ m.month }} {{ selectedYear }}</div>
-                            <div>Allocation: ₱{{ fmt(m.appropriation) }}</div>
-                            <div>Expenditures: ₱{{ fmt(m.expenditure) }}</div>
-                            <div>Balance: ₱{{ fmt(m.balance) }}</div>
-                            <div class="font-semibold text-emerald-400">Utilization: {{ m.utilization }}%</div>
+                        <div
+                            :class="[
+                                'absolute -top-24 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-navy-dark/95 backdrop-blur-md text-white text-[11px] p-3 rounded-xl shadow-2xl pointer-events-none z-50 whitespace-nowrap border border-white/20',
+                                m.month_num <= 2 ? 'left-0' : (m.month_num >= 11 ? 'right-0' : 'left-1/2 -translate-x-1/2')
+                            ]"
+                        >
+                            <div class="font-bold border-b border-white/20 pb-1 mb-1.5 text-mustard">{{ m.month }} {{ selectedYear }}</div>
+                            <div class="flex justify-between gap-3"><span class="text-white/70">Allocation:</span> <span class="font-semibold text-white">₱{{ fmt(m.appropriation) }}</span></div>
+                            <div class="flex justify-between gap-3"><span class="text-white/70">Expenditures:</span> <span class="font-semibold text-white">₱{{ fmt(m.expenditure) }}</span></div>
+                            <div class="flex justify-between gap-3"><span class="text-white/70">Balance:</span> <span class="font-semibold text-white">₱{{ fmt(m.balance) }}</span></div>
+                            <div class="flex justify-between gap-3 border-t border-white/10 pt-1 mt-1"><span class="text-white/70">Utilization:</span> <span class="font-bold text-emerald-400">{{ m.utilization }}%</span></div>
                         </div>
 
                         <!-- Bars Container -->
@@ -322,7 +327,7 @@ const barColors = ['#1e293b', '#d4a843', '#2563eb', '#059669', '#7c3aed', '#db27
 
         <!-- Multi-Year Comparative Trends -->
         <div v-else class="space-y-4">
-            <div class="relative h-72 pt-6 pb-2 px-4 border-b border-gray-200 bg-slate-50/50 rounded-lg overflow-hidden">
+            <div class="relative h-72 pt-14 pb-2 px-4 border-b border-gray-200 bg-slate-50/50 rounded-lg">
                 <!-- SVG Trend Lines Overlay for Multi-Year -->
                 <svg class="absolute inset-0 w-full h-full pointer-events-none z-10" viewBox="0 0 800 200" preserveAspectRatio="none">
                     <path :d="multiYearSvgLines.apprPath" fill="none" stroke="#1e293b" stroke-width="2" stroke-dasharray="4 2" opacity="0.6" />
@@ -334,12 +339,12 @@ const barColors = ['#1e293b', '#d4a843', '#2563eb', '#059669', '#7c3aed', '#db27
                 <div class="h-full flex items-end justify-around gap-6 relative z-20">
                     <div v-for="y in (multiYearComparison || [])" :key="y.year" class="flex-1 max-w-[120px] flex flex-col items-center h-full justify-end group relative">
                         <!-- Tooltip -->
-                        <div class="absolute -top-16 opacity-0 group-hover:opacity-100 transition-opacity bg-navy-dark text-white text-[10px] p-2.5 rounded-lg shadow-xl pointer-events-none z-30 whitespace-nowrap">
-                            <div class="font-bold border-b border-white/20 pb-0.5 mb-1 text-mustard">FY {{ y.year }} Performance</div>
-                            <div>Allocation: ₱{{ fmt(y.appropriation) }}</div>
-                            <div>Expenditures: ₱{{ fmt(y.expenditure) }}</div>
-                            <div>Remaining: ₱{{ fmt(y.balance) }}</div>
-                            <div class="font-semibold text-emerald-400">Util Rate: {{ y.utilization }}%</div>
+                        <div class="absolute -top-24 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-navy-dark/95 backdrop-blur-md text-white text-[11px] p-3 rounded-xl shadow-2xl pointer-events-none z-50 whitespace-nowrap border border-white/20">
+                            <div class="font-bold border-b border-white/20 pb-1 mb-1.5 text-mustard">FY {{ y.year }} Performance</div>
+                            <div class="flex justify-between gap-3"><span class="text-white/70">Allocation:</span> <span class="font-semibold text-white">₱{{ fmt(y.appropriation) }}</span></div>
+                            <div class="flex justify-between gap-3"><span class="text-white/70">Expenditures:</span> <span class="font-semibold text-white">₱{{ fmt(y.expenditure) }}</span></div>
+                            <div class="flex justify-between gap-3"><span class="text-white/70">Remaining:</span> <span class="font-semibold text-white">₱{{ fmt(y.balance) }}</span></div>
+                            <div class="flex justify-between gap-3 border-t border-white/10 pt-1 mt-1"><span class="text-white/70">Util Rate:</span> <span class="font-bold text-emerald-400">{{ y.utilization }}%</span></div>
                         </div>
 
                         <!-- Bars Container -->
