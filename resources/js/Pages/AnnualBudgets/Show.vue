@@ -204,7 +204,7 @@ function catBalancePercent(group) {
                     <tr class="bg-navy/90 text-white border-b border-mustard">
                         <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Monthly Ref No.</th>
                         <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Month</th>
-                        <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Department</th>
+                        <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Responsibility Center</th>
                         <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Account Title</th>
                         <th class="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-white">Appropriation</th>
                         <th class="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-white">Expenditure</th>

@@ -5,7 +5,11 @@ import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
 
 const pageProps = computed(() => usePage().props || {})
-const perms = computed(() => pageProps.value.userPermissions || {})
+const perms = computed(() => ({
+    ...(pageProps.value.userPermissions || {}),
+    isSuperAdmin: pageProps.value.userPermissions?.isSuperAdmin || pageProps.value.auth?.user?.role === 'super_admin',
+    canManageDisbursements: pageProps.value.userPermissions?.canManageDisbursements || pageProps.value.auth?.user?.role === 'super_admin',
+}))
 const userRole = computed(() => pageProps.value.userRole || pageProps.value.auth?.user?.role)
 
 const props = defineProps({
@@ -210,7 +214,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
             <h2 class="text-xl font-bold text-gray-900">Disbursements & Workflow</h2>
             <p class="text-sm text-gray-500">Manage release, approval, and posting of funds to General Ledger</p>
         </div>
-        <button v-if="perms.canManageDisbursements || perms.isCashier" @click="openCreate" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
+        <button v-if="perms.canManageDisbursements || perms.isCashier || perms.isSuperAdmin" @click="openCreate" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
             Create Disbursement
         </button>
     </div>
@@ -286,7 +290,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                         <td class="px-5 py-4 text-center align-middle">
                             <div class="inline-flex items-center gap-2">
                                 <!-- Cashier Submit Action -->
-                                <button v-if="(d.status === 'draft' || d.status === 'returned_for_revision') && (perms.isCashier || perms.canManageDisbursements)"
+                                <button v-if="(d.status === 'draft' || d.status === 'returned_for_revision') && (perms.isCashier || perms.canManageDisbursements || perms.isSuperAdmin)"
                                     @click="submitForApproval(d)"
                                     class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-xs font-bold shadow-sm transition">
                                     Submit for Approval
@@ -320,14 +324,14 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                                 </button>
 
                                 <!-- Standard Edit Button -->
-                                <button v-if="d.status !== 'posted' && (perms.canManageDisbursements || perms.isCashier)"
+                                <button v-if="d.status !== 'posted' && (perms.canManageDisbursements || perms.isCashier || perms.isSuperAdmin)"
                                     @click="openEdit(d)"
                                     class="px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded text-xs font-semibold border border-indigo-200 shadow-2xs transition">
                                     Edit
                                 </button>
 
                                 <!-- Standard Delete Button -->
-                                <button v-if="d.status !== 'posted' && (perms.canManageDisbursements || perms.isCashier)"
+                                <button v-if="d.status !== 'posted' && (perms.canManageDisbursements || perms.isCashier || perms.isSuperAdmin)"
                                     @click="remove(d.id)"
                                     class="px-2.5 py-1 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded text-xs font-semibold border border-rose-200 shadow-2xs transition">
                                     Delete

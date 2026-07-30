@@ -64,7 +64,7 @@ function remove(id) { if (confirm('Are you sure you want to delete this Account 
             <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
         </select>
         <select v-model="filterDepartment" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 min-w-[200px] shadow-sm">
-            <option value="">All Departments</option>
+            <option value="">All Responsibility Centers</option>
             <option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option>
         </select>
         <input v-model="searchQuery" type="text" placeholder="Search account title or code..." class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm w-full max-w-sm shadow-sm" />
@@ -76,7 +76,7 @@ function remove(id) { if (confirm('Are you sure you want to delete this Account 
                 <thead>
                     <tr class="bg-navy-dark text-white border-b-2 border-mustard">
                         <th class="px-6 py-4 text-left font-bold text-sm tracking-wide">Category</th>
-                        <th class="px-6 py-4 text-left font-bold text-sm tracking-wide">Department</th>
+                        <th class="px-6 py-4 text-left font-bold text-sm tracking-wide">Responsibility Center</th>
                         <th class="px-6 py-4 text-left font-bold text-sm tracking-wide">Account Code</th>
                         <th class="px-6 py-4 text-left font-bold text-sm tracking-wide">Account Title</th>
                         <th class="px-6 py-4 text-left font-bold text-sm tracking-wide">Description</th>
@@ -117,7 +117,7 @@ function remove(id) { if (confirm('Are you sure you want to delete this Account 
         <form @submit.prevent="save">
             <div class="grid gap-4 sm:grid-cols-2">
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Category</label><select v-model="form.category_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required><option value="">Select Category</option><option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
-                <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Department</label><select v-model="form.department_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required><option value="">Select Department</option><option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option></select></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Responsibility Center</label><select v-model="form.department_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required><option value="">Select Responsibility Center</option><option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option></select></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Account Code</label><input v-model="form.account_code" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" placeholder="e.g. 50201010" required /></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Account Name</label><input v-model="form.account_name" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" placeholder="e.g. Office Supplies Expense" required /></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Account Title</label><input v-model="form.particular" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" placeholder="e.g. Paper & Ink Supplies" required /></div>

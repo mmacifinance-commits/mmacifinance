@@ -48,9 +48,11 @@ class DisbursementController extends Controller
             'defaultYear' => $defaultYear,
             'userRole' => auth()->user()?->role,
             'userPermissions' => [
+                'canManageDisbursements' => auth()->user()?->canManageDisbursements() ?? false,
                 'canApprove' => auth()->user()?->canApproveDisbursements() ?? false,
                 'canPost' => auth()->user()?->canPostDisbursements() ?? false,
                 'isCashier' => auth()->user()?->isCashier() ?? false,
+                'isSuperAdmin' => auth()->user()?->isSuperAdmin() ?? false,
             ],
         ]);
     }

@@ -177,7 +177,7 @@ function splitDate(d) {
                         <th class="px-5 py-4 text-left font-bold text-xs tracking-wide">Ref. No.</th>
                         <th class="px-5 py-4 text-left font-bold text-xs tracking-wide">Description</th>
                         <th class="px-5 py-4 text-left font-bold text-xs tracking-wide">Category</th>
-                        <th class="px-5 py-4 text-left font-bold text-xs tracking-wide">Department</th>
+                        <th class="px-5 py-4 text-left font-bold text-xs tracking-wide">Responsibility Center</th>
                         <th class="px-5 py-4 text-left font-bold text-xs tracking-wide">Account Title</th>
                         <th class="px-5 py-4 text-right font-bold text-xs tracking-wide">Amount</th>
                         <th class="px-5 py-4 text-right font-bold text-xs tracking-wide">Posted Paid</th>

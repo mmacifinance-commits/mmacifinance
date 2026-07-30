@@ -83,9 +83,9 @@ function totalPostedDsb() { return (props.disbursements || []).filter(d => d.sta
                 </select>
             </div>
             <div>
-                <label class="block text-[11px] font-semibold text-gray-600 mb-1">Department</label>
+                <label class="block text-[11px] font-semibold text-gray-600 mb-1">Responsibility Center</label>
                 <select v-model="filterDepartment" @change="applyFilters" class="w-full rounded-md border-gray-300 text-xs py-1.5 bg-white">
-                    <option value="">All Departments</option>
+                    <option value="">All Responsibility Centers</option>
                     <option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option>
                 </select>
             </div>
