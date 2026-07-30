@@ -19,7 +19,7 @@ const sidebarMenus = {
     budget: [
         { href: '/annual-budgets', label: 'Annual Budget', icon: '' },
         { href: '/budget-categories', label: 'Budget Categories', icon: '' },
-        { href: '/budget-particulars', label: 'Budget Particulars', icon: '' },
+        { href: '/budget-particulars', label: 'Account Titles', icon: '' },
     ],
 }
 

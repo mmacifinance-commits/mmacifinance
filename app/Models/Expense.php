@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Expense extends Model
 {
@@ -38,8 +39,18 @@ class Expense extends Model
         return $this->belongsTo(BudgetParticular::class, 'particular_id');
     }
 
+    public function accountTitle(): BelongsTo
+    {
+        return $this->particular();
+    }
+
     public function disbursements(): HasMany
     {
         return $this->hasMany(Disbursement::class, 'expense_id');
+    }
+
+    public function auditTrails(): MorphMany
+    {
+        return $this->morphMany(AuditTrail::class, 'auditable')->latest();
     }
 }

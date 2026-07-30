@@ -15,7 +15,30 @@ class LoginController extends Controller
 {
     public function showLoginForm()
     {
-        return Inertia::render('Auth/Login');
+        $isLocalDev = config('app.env') === 'local' || config('app.debug') === true;
+
+        $users = [];
+        if ($isLocalDev) {
+            $users = User::select('id', 'name', 'email', 'role')->get()->map(function ($u) {
+                return [
+                    'name' => $u->name,
+                    'email' => $u->email,
+                    'role' => $u->role,
+                    'role_label' => match($u->role) {
+                        'super_admin' => 'Head of Finance',
+                        'cashier' => 'Cashier',
+                        'disbursement_officer' => 'Disbursement Officer',
+                        'budget_officer' => 'Budget Officer',
+                        'auditor' => 'Auditor',
+                        default => ucfirst($u->role),
+                    },
+                ];
+            });
+        }
+
+        return Inertia::render('Auth/Login', [
+            'demoUsers' => $users,
+        ]);
     }
 
     public function login(Request $request)
@@ -52,8 +75,14 @@ class LoginController extends Controller
             $user->otp_sent_at = now();
             $user->save();
 
-            // Send OTP Email
-            Mail::to($user->email)->send(new TwoFactorOtpMail($otp, $user->name));
+            \Illuminate\Support\Facades\Log::info("2FA OTP generated for {$user->email}: {$otp}");
+
+            try {
+                // Send OTP Email
+                Mail::to($user->email)->send(new TwoFactorOtpMail($otp, $user->name));
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error("Failed to send 2FA email to {$user->email}: " . $e->getMessage());
+            }
 
             // Store user id in session to maintain state before full login
             $request->session()->put('2fa_user_id', $user->id);

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class TwoFactorController extends Controller
@@ -23,12 +24,20 @@ class TwoFactorController extends Controller
         if ($user && $user->otp_sent_at) {
             $elapsed = abs(now()->diffInSeconds($user->otp_sent_at, false));
             if ($elapsed < 180) {
-                $cooldownSeconds = 180 - $elapsed;
+                $cooldownSeconds = (int) max(0, ceil(180 - $elapsed));
             }
+        }
+
+        $isDevMode = strtolower((string) config('app.env', 'local')) !== 'production' || (bool) config('app.debug', true);
+        $otpCode = $user ? (string) $user->otp_code : null;
+
+        if ($user && $user->otp_code) {
+            Log::info("2FA OTP Verification Code for {$user->email}: {$user->otp_code}");
         }
 
         return Inertia::render('Auth/Verify2FA', [
             'cooldownSeconds' => $cooldownSeconds,
+            'devOtp' => $isDevMode ? $otpCode : null,
         ]);
     }
 
@@ -102,8 +111,14 @@ class TwoFactorController extends Controller
             $user->otp_sent_at = now();
             $user->save();
 
-            // Send new OTP Email
-            \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\TwoFactorOtpMail($otp, $user->name));
+            Log::info("2FA OTP Verification Code for {$user->email}: {$otp}");
+
+            try {
+                // Send new OTP Email
+                \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\TwoFactorOtpMail($otp, $user->name));
+            } catch (\Throwable $e) {
+                Log::error("Failed sending 2FA email: " . $e->getMessage());
+            }
         }
 
         return back()->with('message', 'Verification code resent successfully.');

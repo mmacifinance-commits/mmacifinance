@@ -10,19 +10,32 @@ const props = defineProps({
     budget: Object,
     categories: Array,
     particulars: Array,
+    accountTitles: Array,
     availableYears: Array,
     allBudgets: Array,
 })
 
+const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+]
+
 const showItemModal = ref(false)
 const editingItem = ref(null)
-const itemForm = useForm({ category_id: '', particular_id: '', appropriation: 0, expenditure: 0 })
+const selectedMonthFilter = ref('') // '' for all, 1-12 for specific month
+
+const itemForm = useForm({
+    category_id: '',
+    particular_id: '',
+    month: 1,
+    appropriation: 0,
+    expenditure: 0
+})
 
 // Filters
 const selectedYear = ref(props.budget.year)
 const selectedSemester = ref(props.budget.semester || '')
 
-// Get unique semesters for the selected year
 const semestersForYear = computed(() => {
     if (!props.allBudgets) return []
     return props.allBudgets
@@ -43,9 +56,15 @@ function applyFilter() {
 
 function fmt(v) { return new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0) }
 
+const filteredItems = computed(() => {
+    const items = props.budget.items || []
+    if (!selectedMonthFilter.value) return items
+    return items.filter(i => (i.month || 1) === parseInt(selectedMonthFilter.value))
+})
+
 // Group items by category
 const groupedItems = computed(() => {
-    const items = props.budget.items || []
+    const items = filteredItems.value
     const groups = {}
     items.forEach(item => {
         const catName = item.category?.name || 'Uncategorized'
@@ -61,7 +80,7 @@ const groupedItems = computed(() => {
 })
 
 const grandTotals = computed(() => {
-    const items = props.budget.items || []
+    const items = filteredItems.value
     const app = items.reduce((s, i) => s + Number(i.appropriation || 0), 0)
     const exp = items.reduce((s, i) => s + Number(i.expenditure || 0), 0)
     return { appropriation: app, expenditure: exp, balance: app - exp }
@@ -69,12 +88,23 @@ const grandTotals = computed(() => {
 
 const utilRate = computed(() => grandTotals.value.appropriation > 0 ? ((grandTotals.value.expenditure / grandTotals.value.appropriation) * 100).toFixed(1) : '0.0')
 
-function openAddItem() { itemForm.reset(); editingItem.value = null; showItemModal.value = true }
-function openEditItem(item) {
-    itemForm.category_id = item.category_id; itemForm.particular_id = item.particular_id
-    itemForm.appropriation = item.appropriation; itemForm.expenditure = item.expenditure
-    editingItem.value = item.id; showItemModal.value = true
+function openAddItem() {
+    itemForm.reset()
+    itemForm.month = 1
+    editingItem.value = null
+    showItemModal.value = true
 }
+
+function openEditItem(item) {
+    itemForm.category_id = item.category_id
+    itemForm.particular_id = item.particular_id
+    itemForm.month = item.month || 1
+    itemForm.appropriation = item.appropriation
+    itemForm.expenditure = item.expenditure
+    editingItem.value = item.id
+    showItemModal.value = true
+}
+
 function saveItem() {
     if (editingItem.value) {
         itemForm.put(`/annual-budgets/${props.budget.id}/items/${editingItem.value}`, { onSuccess: () => { showItemModal.value = false } })
@@ -82,159 +112,197 @@ function saveItem() {
         itemForm.post(`/annual-budgets/${props.budget.id}/items`, { onSuccess: () => { showItemModal.value = false } })
     }
 }
+
 function removeItem(itemId) {
-    if (confirm('Delete this budget item?')) router.delete(`/annual-budgets/${props.budget.id}/items/${itemId}`)
+    if (confirm('Delete this monthly budget allocation item?')) router.delete(`/annual-budgets/${props.budget.id}/items/${itemId}`)
 }
 
-function catUtilPercent(group) {
-    return group.totals.appropriation > 0 ? ((group.totals.expenditure / group.totals.appropriation) * 100).toFixed(0) : '0'
-}
 function catBalancePercent(group) {
     return group.totals.appropriation > 0 ? (((group.totals.appropriation - group.totals.expenditure) / group.totals.appropriation) * 100).toFixed(0) : '0'
 }
 </script>
 
 <template>
-<Head :title="`FY ${budget.year} Budget`" />
+<Head :title="`FY ${budget.year} Budget Allocations`" />
 <AppLayout>
     <!-- Back + Title -->
     <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">
-            <Link href="/annual-budgets" class="flex items-center justify-center w-8 h-8 bg-gray-200 hover:bg-gray-300 text-gray-600 transition">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            <Link href="/annual-budgets" class="flex items-center justify-center px-3 py-1.5 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold transition">
+                Back
             </Link>
             <div>
-                <h2 class="text-xl font-bold text-gray-900">View Annual Budget</h2>
+                <div class="flex items-center gap-2">
+                    <h2 class="text-xl font-bold text-gray-900">Annual Budget Allocations</h2>
+                    <span class="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-navy/10 text-navy border border-navy/20">
+                        {{ budget.ref_no || ('AB-' + budget.year + '-000' + budget.id) }}
+                    </span>
+                </div>
                 <p class="text-sm text-gray-500">Fiscal Year {{ budget.year }}{{ budget.semester ? ' — ' + budget.semester : '' }}</p>
             </div>
         </div>
     </div>
 
-    <!-- Filters: SY and Semester -->
-    <div class="flex items-center gap-3 mb-4">
+    <!-- Filters: Year, Month, Semester -->
+    <div class="flex flex-wrap items-center gap-3 mb-6 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
         <div class="flex items-center gap-2">
-            <label class="text-xs font-bold uppercase text-gray-500">SY:</label>
-            <select v-model="selectedYear" @change="selectedSemester = ''; applyFilter()" class="border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-[100px]">
+            <label class="text-xs font-bold uppercase text-gray-500">Fiscal Year:</label>
+            <select v-model="selectedYear" @change="selectedSemester = ''; applyFilter()" class="rounded-md border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-[100px]">
                 <option v-for="y in availableYears" :key="y" :value="y">{{ y }}</option>
             </select>
         </div>
+
+        <div class="flex items-center gap-2">
+            <label class="text-xs font-bold uppercase text-gray-500">Budget Month:</label>
+            <select v-model="selectedMonthFilter" class="rounded-md border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-[140px]">
+                <option value="">All Months (Jan-Dec)</option>
+                <option v-for="(mName, idx) in monthNames" :key="idx+1" :value="idx+1">{{ mName }}</option>
+            </select>
+        </div>
+
         <div v-if="semestersForYear.length" class="flex items-center gap-2">
             <label class="text-xs font-bold uppercase text-gray-500">Semester:</label>
-            <select v-model="selectedSemester" @change="applyFilter()" class="border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-[120px]">
+            <select v-model="selectedSemester" @change="applyFilter()" class="rounded-md border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-[120px]">
                 <option value="">All</option>
                 <option v-for="s in semestersForYear" :key="s" :value="s">{{ s }}</option>
             </select>
         </div>
+
         <div class="flex-1"></div>
-        <button v-if="perms.canManageBudget" @click="openAddItem" class="flex items-center gap-2 bg-navy-dark px-4 py-2 text-sm font-semibold text-white hover:bg-navy transition">
-            <span>+</span> Add Budget Item
+        <button v-if="perms.canManageBudget" @click="openAddItem" class="rounded-lg bg-navy-dark px-4 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
+            Add Monthly Allocation Item
         </button>
     </div>
 
     <!-- Grouped by Category -->
-    <div v-for="group in groupedItems" :key="group.name" class="bg-white border border-gray-200 overflow-hidden mb-4">
+    <div v-for="group in groupedItems" :key="group.name" class="bg-white rounded-lg border border-gray-200 overflow-hidden mb-6 shadow-sm">
         <!-- Category Header -->
-        <div class="bg-navy-dark px-5 py-2.5">
-            <h3 class="text-sm font-bold text-white uppercase tracking-wide">{{ group.name }}</h3>
+        <div class="bg-navy-dark px-5 py-3 flex items-center justify-between">
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider">{{ group.name }}</h3>
+            <span class="text-xs text-mustard font-semibold">Subtotal Appropriation: ₱{{ fmt(group.totals.appropriation) }}</span>
         </div>
         <!-- Table Header -->
-        <table class="w-full text-sm table-fixed">
-            <thead>
-                <tr class="bg-navy/90 text-white">
-                    <th class="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-mustard w-[28%]">Responsibility Center</th>
-                    <th class="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-mustard w-[20%]">Particular</th>
-                    <th class="px-5 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-mustard w-[13%]">Appropriation</th>
-                    <th class="px-5 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-mustard w-[13%]">Expenditure</th>
-                    <th class="px-5 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-mustard w-[13%]">Balance</th>
-                    <th class="px-5 py-2.5 text-center text-xs font-bold uppercase tracking-wider text-mustard w-[5%]">%</th>
-                    <th class="px-5 py-2.5 text-center text-xs font-bold uppercase tracking-wider text-mustard w-[8%]"></th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr v-for="item in group.items" :key="item.id" class="border-b border-gray-100 hover:bg-gray-50/50">
-                    <td class="px-5 py-3 text-gray-700 text-xs truncate" :title="item.particular?.department?.name">{{ item.particular?.department?.name || '—' }}</td>
-                    <td class="px-5 py-3 text-mustard-light font-medium text-sm truncate" :title="item.particular?.particular" style="font-family: Inter, sans-serif;">{{ item.particular?.particular || 'N/A' }}</td>
-                    <td class="px-5 py-3 text-right font-medium">{{ fmt(item.appropriation) }}</td>
-                    <td class="px-5 py-3 text-right font-medium">{{ fmt(item.expenditure) }}</td>
-                    <td class="px-5 py-3 text-right font-medium">{{ fmt(Number(item.appropriation || 0) - Number(item.expenditure || 0)) }}</td>
-                    <td class="px-5 py-3 text-center">
-                        <span :class="Number(item.appropriation) > 0 && Number(item.expenditure) / Number(item.appropriation) > 0.5 ? 'text-red-500' : 'text-green-600'" class="font-bold text-xs">
-                            {{ Number(item.appropriation) > 0 ? ((Number(item.appropriation) - Number(item.expenditure)) / Number(item.appropriation) * 100).toFixed(0) : 0 }}%
-                        </span>
-                    </td>
-                    <td class="px-5 py-3 text-center text-xs">
-                        <template v-if="perms.canManageBudget">
-                            <button @click="openEditItem(item)" class="text-blue-600 hover:text-blue-800 font-medium mr-3 transition" title="Update">Update</button>
-                            <button @click="removeItem(item.id)" class="text-red-600 hover:text-red-800 font-medium transition" title="Delete">Delete</button>
-                        </template>
-                    </td>
-                </tr>
-            </tbody>
-            <!-- Category Subtotal -->
-            <tfoot>
-                <tr class="bg-gray-50 border-t-2 border-gray-300">
-                    <td colspan="2" class="px-5 py-2.5 font-bold text-gray-700 text-xs uppercase" style="font-family: Inter, sans-serif;">Sub Total:</td>
-                    <td class="px-5 py-2.5 text-right font-bold text-gray-900">{{ fmt(group.totals.appropriation) }}</td>
-                    <td class="px-5 py-2.5 text-right font-bold text-gray-900">{{ fmt(group.totals.expenditure) }}</td>
-                    <td class="px-5 py-2.5 text-right font-bold text-gray-900">{{ fmt(group.totals.appropriation - group.totals.expenditure) }}</td>
-                    <td class="px-5 py-2.5 text-center font-bold text-green-600 text-xs">{{ catBalancePercent(group) }}%</td>
-                    <td></td>
-                </tr>
-            </tfoot>
-        </table>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="bg-navy/90 text-white border-b border-mustard">
+                        <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Monthly Ref No.</th>
+                        <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Month</th>
+                        <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Department</th>
+                        <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Account Title</th>
+                        <th class="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-white">Appropriation</th>
+                        <th class="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-white">Expenditure</th>
+                        <th class="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-white">Balance</th>
+                        <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-white">Util %</th>
+                        <th v-if="perms.canManageBudget" class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-white">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="item in group.items" :key="item.id" class="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
+                        <td class="px-4 py-3 align-middle">
+                            <span class="font-mono text-xs font-semibold px-2 py-0.5 bg-slate-100 text-slate-800 rounded border border-slate-200">
+                                {{ item.ref_no || (`MB-${budget.year}-${String(item.month || 1).padStart(2, '0')}-000${item.id}`) }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 font-semibold text-gray-700 text-xs align-middle">
+                            {{ monthNames[(item.month || 1) - 1] }}
+                        </td>
+                        <td class="px-4 py-3 text-gray-700 text-xs align-middle">
+                            {{ item.particular?.department?.name || '—' }}
+                        </td>
+                        <td class="px-4 py-3 text-gray-900 font-medium text-sm align-middle">
+                            {{ item.particular?.particular || 'N/A' }}
+                        </td>
+                        <td class="px-4 py-3 text-right font-medium text-gray-900 align-middle">₱{{ fmt(item.appropriation) }}</td>
+                        <td class="px-4 py-3 text-right font-medium text-gray-700 align-middle">₱{{ fmt(item.expenditure) }}</td>
+                        <td class="px-4 py-3 text-right font-medium text-gray-700 align-middle">₱{{ fmt(Number(item.appropriation || 0) - Number(item.expenditure || 0)) }}</td>
+                        <td class="px-4 py-3 text-center align-middle">
+                            <span :class="Number(item.appropriation) > 0 && Number(item.expenditure) / Number(item.appropriation) > 0.5 ? 'text-rose-600 bg-rose-50' : 'text-emerald-700 bg-emerald-50'" class="font-bold text-xs px-2 py-0.5 rounded-full">
+                                {{ Number(item.appropriation) > 0 ? ((Number(item.expenditure) / Number(item.appropriation)) * 100).toFixed(0) : 0 }}%
+                            </span>
+                        </td>
+                        <td v-if="perms.canManageBudget" class="px-4 py-3 text-center align-middle">
+                            <div class="inline-flex items-center gap-1.5">
+                                <button @click="openEditItem(item)" class="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded text-xs font-semibold shadow-sm transition border border-indigo-200">
+                                    Edit
+                                </button>
+                                <button @click="removeItem(item.id)" class="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded text-xs font-semibold shadow-sm transition border border-rose-200">
+                                    Delete
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+                <tfoot>
+                    <tr class="bg-gray-50 border-t-2 border-gray-300 font-bold">
+                        <td colspan="4" class="px-4 py-2.5 text-gray-700 text-xs uppercase">Category Subtotal:</td>
+                        <td class="px-4 py-2.5 text-right text-gray-900">₱{{ fmt(group.totals.appropriation) }}</td>
+                        <td class="px-4 py-2.5 text-right text-gray-900">₱{{ fmt(group.totals.expenditure) }}</td>
+                        <td class="px-4 py-2.5 text-right text-gray-900">₱{{ fmt(group.totals.appropriation - group.totals.expenditure) }}</td>
+                        <td class="px-4 py-2.5 text-center text-emerald-700 text-xs">{{ catBalancePercent(group) }}% Balance</td>
+                        <td v-if="perms.canManageBudget"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
     </div>
 
     <!-- Empty state -->
-    <div v-if="!groupedItems.length" class="bg-white border border-gray-200 p-8 text-center text-gray-400">
-        No budget items yet. Click "Add Budget Item" to get started.
+    <div v-if="!groupedItems.length" class="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-400 shadow-sm">
+        No budget allocation items found for this selection. Click "Add Monthly Allocation Item" to get started.
     </div>
 
     <!-- Grand Total -->
-    <div v-if="groupedItems.length" class="bg-white border border-gray-200 overflow-hidden mt-2">
-        <table class="w-full text-sm table-fixed">
+    <div v-if="groupedItems.length" class="bg-white rounded-lg border border-gray-200 overflow-hidden mt-4 shadow-sm">
+        <table class="w-full text-sm">
             <tfoot>
-                <tr class="bg-navy-dark text-white">
-                    <td colspan="2" class="px-5 py-3 font-bold text-mustard text-xs uppercase tracking-wider w-[48%]">Grand Total:</td>
-                    <td class="px-5 py-3 text-right font-bold text-white w-[13%]">{{ fmt(grandTotals.appropriation) }}</td>
-                    <td class="px-5 py-3 text-right font-bold text-white w-[13%]">{{ fmt(grandTotals.expenditure) }}</td>
-                    <td class="px-5 py-3 text-right font-bold text-white w-[13%]">{{ fmt(grandTotals.balance) }}</td>
-                    <td class="px-5 py-3 text-center font-bold text-mustard text-xs w-[5%]">{{ utilRate }}%</td>
-                    <td class="w-[8%]"></td>
+                <tr class="bg-navy-dark text-white font-bold">
+                    <td class="px-5 py-3 text-mustard text-xs uppercase tracking-wider">Grand Total Budget Performance:</td>
+                    <td class="px-5 py-3 text-right text-white">Appropriation: ₱{{ fmt(grandTotals.appropriation) }}</td>
+                    <td class="px-5 py-3 text-right text-white">Expenditures: ₱{{ fmt(grandTotals.expenditure) }}</td>
+                    <td class="px-5 py-3 text-right text-white">Remaining Balance: ₱{{ fmt(grandTotals.balance) }}</td>
+                    <td class="px-5 py-3 text-center text-mustard text-xs">Utilization: {{ utilRate }}%</td>
                 </tr>
             </tfoot>
         </table>
     </div>
 
     <!-- Add/Edit Item Modal -->
-    <Modal :show="showItemModal" :title="editingItem ? 'Edit Budget Item' : 'Add Budget Item'" :subtitle="editingItem ? 'Update this budget line item.' : 'Add a new appropriation line item.'" @close="showItemModal = false">
+    <Modal :show="showItemModal" :title="editingItem ? 'Edit Monthly Budget Allocation' : 'Add Monthly Budget Allocation'" :subtitle="editingItem ? 'Update monthly budget item details.' : 'Allocate budget for a specific month and account title.'" max-width="lg" @close="showItemModal = false">
         <form @submit.prevent="saveItem">
-            <div class="space-y-4">
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div class="sm:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Budget Month</label>
+                    <select v-model.number="itemForm.month" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required>
+                        <option v-for="(mName, idx) in monthNames" :key="idx+1" :value="idx+1">{{ mName }} (Month {{ idx+1 }})</option>
+                    </select>
+                </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Category</label>
-                    <select v-model="itemForm.category_id" class="w-full border border-gray-300 px-3 py-2.5 text-sm" required>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Budget Category</label>
+                    <select v-model="itemForm.category_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required>
                         <option value="">Select category</option>
                         <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Particular</label>
-                    <select v-model="itemForm.particular_id" class="w-full border border-gray-300 px-3 py-2.5 text-sm" required>
-                        <option value="">Select particular</option>
-                        <option v-for="p in particulars" :key="p.id" :value="p.id">{{ p.particular }}</option>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Account Title</label>
+                    <select v-model="itemForm.particular_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required>
+                        <option value="">Select account title</option>
+                        <option v-for="p in (accountTitles || particulars)" :key="p.id" :value="p.id">{{ p.particular }}</option>
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Appropriation Amount</label>
-                    <input v-model.number="itemForm.appropriation" type="number" step="0.01" min="0" placeholder="0.00" class="w-full border border-gray-300 px-3 py-2.5 text-sm" required />
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Monthly Appropriation Amount (₱)</label>
+                    <input v-model.number="itemForm.appropriation" type="number" step="0.01" min="0" placeholder="0.00" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required />
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Expenditure Amount</label>
-                    <input v-model.number="itemForm.expenditure" type="number" step="0.01" min="0" placeholder="0.00" class="w-full border border-gray-300 px-3 py-2.5 text-sm" />
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Expenditure (₱)</label>
+                    <input v-model.number="itemForm.expenditure" type="number" step="0.01" min="0" placeholder="0.00" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" />
                 </div>
             </div>
-            <div class="flex items-center justify-end gap-3 pt-5">
-                <button type="button" @click="showItemModal = false" class="border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button type="submit" :disabled="itemForm.processing" class="bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition">{{ editingItem ? 'Update Item' : 'Add Item' }}</button>
+            <div class="flex items-center justify-end gap-3 pt-5 border-t mt-4">
+                <button type="button" @click="showItemModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button type="submit" :disabled="itemForm.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">{{ editingItem ? 'Update Allocation' : 'Save Allocation' }}</button>
             </div>
         </form>
     </Modal>

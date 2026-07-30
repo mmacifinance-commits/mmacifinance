@@ -2,11 +2,20 @@
 import { useForm, Head, Link } from '@inertiajs/vue3'
 import { ref } from 'vue'
 
+const props = defineProps({
+    demoUsers: Array,
+})
+
 const form = useForm({
     email: '',
     password: '',
     remember: false,
 })
+
+function selectUser(user) {
+    form.email = user.email
+    form.password = 'password'
+}
 
 function submit() {
     form.post('/login', {
@@ -77,6 +86,26 @@ function submit() {
                         {{ form.processing ? 'Signing in...' : 'Sign In' }}
                     </button>
                 </form>
+
+                <!-- Demo User Accounts Quick Selection List -->
+                <div v-if="demoUsers?.length" class="mt-6 border-t border-white/20 pt-4">
+                    <p class="text-xs font-bold uppercase tracking-wider text-mustard/90 mb-2.5 text-left">Select Account to Sign In:</p>
+                    <div class="space-y-1.5 text-left">
+                        <button
+                            v-for="u in demoUsers"
+                            :key="u.email"
+                            type="button"
+                            @click="selectUser(u)"
+                            class="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 transition group text-xs text-white"
+                        >
+                            <div>
+                                <div class="font-bold text-white group-hover:text-mustard transition-colors">{{ u.name }}</div>
+                                <div class="text-[11px] text-white/60 font-mono">{{ u.email }}</div>
+                            </div>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-white/20 text-mustard border border-mustard/30">{{ u.role_label }}</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

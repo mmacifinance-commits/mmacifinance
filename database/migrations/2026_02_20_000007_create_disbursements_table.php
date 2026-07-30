@@ -17,7 +17,7 @@ return new class extends Migration {
             $table->enum('method', ['check', 'cash', 'bank_transfer'])->default('check');
             $table->date('date_encoded');
             $table->date('date_approved')->nullable();
-            $table->enum('status', ['pending', 'approved', 'posted', 'cancelled'])->default('pending');
+            $table->string('status', 40)->default('draft');
             $table->text('notes')->nullable();
             $table->timestamps();
         });

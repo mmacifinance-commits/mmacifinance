@@ -44,10 +44,16 @@ class User extends Authenticatable
     const ROLE_DISBURSEMENT_OFFICER = 'disbursement_officer';
     const ROLE_BUDGET_OFFICER = 'budget_officer';
     const ROLE_AUDITOR = 'auditor';
+    const ROLE_CASHIER = 'cashier';
 
     public function isSuperAdmin(): bool
     {
         return $this->role === self::ROLE_SUPER_ADMIN;
+    }
+
+    public function isCashier(): bool
+    {
+        return $this->role === self::ROLE_CASHIER;
     }
 
     public function canManageBudget(): bool
@@ -57,18 +63,29 @@ class User extends Authenticatable
 
     public function canManageExpenses(): bool
     {
-        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_DISBURSEMENT_OFFICER]);
+        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_DISBURSEMENT_OFFICER, self::ROLE_CASHIER]);
     }
 
     public function canManageDisbursements(): bool
     {
-        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_DISBURSEMENT_OFFICER]);
+        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_DISBURSEMENT_OFFICER, self::ROLE_CASHIER]);
+    }
+
+    public function canApproveDisbursements(): bool
+    {
+        return $this->role === self::ROLE_SUPER_ADMIN;
+    }
+
+    public function canPostDisbursements(): bool
+    {
+        return $this->role === self::ROLE_SUPER_ADMIN;
     }
 
     public function getRoleLabelAttribute(): string
     {
         return match ($this->role) {
             self::ROLE_SUPER_ADMIN => 'Head of Finance',
+            self::ROLE_CASHIER => 'Cashier',
             self::ROLE_DISBURSEMENT_OFFICER => 'Disbursement Officer',
             self::ROLE_BUDGET_OFFICER => 'Budget Monitoring Officer',
             self::ROLE_AUDITOR => 'Auditor',

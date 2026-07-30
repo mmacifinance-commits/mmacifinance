@@ -6,6 +6,7 @@ use App\Models\AnnualBudget;
 use App\Models\BudgetItem;
 use App\Models\BudgetCategory;
 use App\Models\BudgetParticular;
+use App\Models\AuditTrail;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -13,24 +14,51 @@ class AnnualBudgetController extends Controller
 {
     public function index()
     {
+        $budgets = AnnualBudget::with(['items.category', 'items.particular.department'])
+            ->latest('year')
+            ->get();
+
+        // Ensure ref_no is generated for existing annual budgets if null
+        foreach ($budgets as $b) {
+            if (!$b->ref_no) {
+                $b->update(['ref_no' => sprintf('AB-%d-%04d', $b->year, $b->id)]);
+            }
+            foreach ($b->items as $item) {
+                if (!$item->ref_no) {
+                    $item->update(['ref_no' => sprintf('MB-%d-%02d-%04d', $b->year, $item->month ?: 1, $item->id)]);
+                }
+            }
+        }
+
         return Inertia::render('AnnualBudgets/Index', [
-            'budgets' => AnnualBudget::with('items.category', 'items.particular.department')
-                ->latest('year')
-                ->get(),
+            'budgets' => $budgets,
             'categories' => BudgetCategory::all(),
             'particulars' => BudgetParticular::with('category', 'department')->get(),
+            'accountTitles' => BudgetParticular::with('category', 'department')->get(),
             'availableYears' => AnnualBudget::distinct()->orderByDesc('year')->pluck('year'),
         ]);
     }
 
     public function show(AnnualBudget $annualBudget)
     {
+        if (!$annualBudget->ref_no) {
+            $annualBudget->update(['ref_no' => sprintf('AB-%d-%04d', $annualBudget->year, $annualBudget->id)]);
+        }
+
+        $budget = $annualBudget->load(['items.category', 'items.particular.department']);
+        foreach ($budget->items as $item) {
+            if (!$item->ref_no) {
+                $item->update(['ref_no' => sprintf('MB-%d-%02d-%04d', $annualBudget->year, $item->month ?: 1, $item->id)]);
+            }
+        }
+
         return Inertia::render('AnnualBudgets/Show', [
-            'budget' => $annualBudget->load('items.category', 'items.particular.department'),
+            'budget' => $budget,
             'categories' => BudgetCategory::all(),
             'particulars' => BudgetParticular::with('category', 'department')->get(),
+            'accountTitles' => BudgetParticular::with('category', 'department')->get(),
             'availableYears' => AnnualBudget::distinct()->orderByDesc('year')->pluck('year'),
-            'allBudgets' => AnnualBudget::select('id', 'year', 'semester')->orderByDesc('year')->get(),
+            'allBudgets' => AnnualBudget::select('id', 'year', 'ref_no', 'semester')->orderByDesc('year')->get(),
         ]);
     }
 
@@ -41,9 +69,10 @@ class AnnualBudgetController extends Controller
             'semester' => 'nullable|string|max:20',
         ]);
 
-        AnnualBudget::create($validated);
+        $annualBudget = AnnualBudget::create($validated);
+        AuditTrail::log($annualBudget, 'created', auth()->user(), "Created Annual Budget for year {$annualBudget->year}");
 
-        return redirect()->route('annual-budgets.index')->with('success', 'Budget year created.');
+        return redirect()->route('annual-budgets.index')->with('success', 'Annual Budget created with reference number ' . $annualBudget->ref_no);
     }
 
     public function storeItem(Request $request, AnnualBudget $annualBudget)
@@ -51,13 +80,17 @@ class AnnualBudgetController extends Controller
         $validated = $request->validate([
             'category_id' => 'required|exists:budget_categories,id',
             'particular_id' => 'required|exists:budget_particulars,id',
+            'month' => 'nullable|integer|min:1|max:12',
             'appropriation' => 'required|numeric|min:0',
             'expenditure' => 'nullable|numeric|min:0',
         ]);
 
-        $annualBudget->items()->create($validated);
+        $validated['month'] = $validated['month'] ?: 1;
 
-        return redirect()->route('annual-budgets.show', $annualBudget)->with('success', 'Budget item added.');
+        $item = $annualBudget->items()->create($validated);
+        AuditTrail::log($item, 'created', auth()->user(), "Added Monthly Budget Allocation item {$item->ref_no}");
+
+        return redirect()->route('annual-budgets.show', $annualBudget)->with('success', 'Monthly Budget Allocation added.');
     }
 
     public function updateItem(Request $request, AnnualBudget $annualBudget, BudgetItem $item)
@@ -65,26 +98,32 @@ class AnnualBudgetController extends Controller
         $validated = $request->validate([
             'category_id' => 'required|exists:budget_categories,id',
             'particular_id' => 'required|exists:budget_particulars,id',
+            'month' => 'nullable|integer|min:1|max:12',
             'appropriation' => 'required|numeric|min:0',
             'expenditure' => 'nullable|numeric|min:0',
         ]);
 
-        $item->update($validated);
+        $validated['month'] = $validated['month'] ?: $item->month ?: 1;
 
-        return redirect()->route('annual-budgets.show', $annualBudget)->with('success', 'Budget item updated.');
+        $item->update($validated);
+        AuditTrail::log($item, 'modified', auth()->user(), "Updated Monthly Budget Allocation item {$item->ref_no}");
+
+        return redirect()->route('annual-budgets.show', $annualBudget)->with('success', 'Monthly Budget Allocation updated.');
     }
 
     public function destroyItem(AnnualBudget $annualBudget, BudgetItem $item)
     {
+        AuditTrail::log($item, 'deleted', auth()->user(), "Deleted Monthly Budget Allocation item {$item->ref_no}");
         $item->delete();
 
-        return redirect()->route('annual-budgets.show', $annualBudget)->with('success', 'Budget item deleted.');
+        return redirect()->route('annual-budgets.show', $annualBudget)->with('success', 'Monthly Budget Allocation deleted.');
     }
 
     public function destroy(AnnualBudget $annualBudget)
     {
+        AuditTrail::log($annualBudget, 'deleted', auth()->user(), "Deleted Annual Budget {$annualBudget->ref_no}");
         $annualBudget->delete();
 
-        return redirect()->route('annual-budgets.index')->with('success', 'Budget year deleted.');
+        return redirect()->route('annual-budgets.index')->with('success', 'Annual Budget deleted.');
     }
 }

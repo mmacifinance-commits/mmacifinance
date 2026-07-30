@@ -6,6 +6,10 @@ const props = defineProps({
     cooldownSeconds: {
         type: Number,
         default: 0
+    },
+    devOtp: {
+        type: String,
+        default: null
     }
 })
 
@@ -50,8 +54,9 @@ watch(() => props.cooldownSeconds, (newVal) => {
 })
 
 const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
+    const totalSecs = Math.max(0, Math.floor(Number(seconds) || 0))
+    const mins = Math.floor(totalSecs / 60)
+    const secs = totalSecs % 60
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 }
 
@@ -132,9 +137,18 @@ function resendCode() {
                 </div>
 
                 <h1 class="mt-4 text-[1.4rem] font-medium text-[#1b2b41] tracking-normal mb-3">Verify Your Identity</h1>
-                <p class="text-[0.95rem] text-gray-400 mt-2 mb-8 leading-relaxed font-light px-2">
+                <p class="text-[0.95rem] text-gray-400 mt-2 mb-4 leading-relaxed font-light px-2">
                     We've sent a 6-digit verification code to your email address. Enter the code below to continue.
                 </p>
+
+                <!-- Dev Mode OTP Display Banner -->
+                <div v-if="devOtp" class="mb-6 rounded-xl bg-amber-50 p-3 text-xs font-sans text-amber-900 border border-amber-300 shadow-sm text-left flex items-center gap-3">
+                    <span class="text-xl">🔑</span>
+                    <div>
+                        <div class="font-bold text-amber-900">Local Dev Verification Code</div>
+                        <div class="text-[11px] text-amber-700">Code: <span class="font-mono font-extrabold text-sm text-navy-dark tracking-widest bg-amber-200/80 px-2 py-0.5 rounded select-all">{{ devOtp }}</span></div>
+                    </div>
+                </div>
 
                 <!-- Form -->
                 <form @submit.prevent="submit" class="space-y-7">

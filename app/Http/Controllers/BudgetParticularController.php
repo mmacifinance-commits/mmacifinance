@@ -12,8 +12,11 @@ class BudgetParticularController extends Controller
 {
     public function index()
     {
+        $particulars = BudgetParticular::with('category', 'department')->latest()->get();
+
         return Inertia::render('BudgetParticulars/Index', [
-            'particulars' => BudgetParticular::with('category', 'department')->latest()->get(),
+            'particulars' => $particulars,
+            'accountTitles' => $particulars,
             'categories' => BudgetCategory::all(),
             'departments' => Department::all(),
         ]);
@@ -32,7 +35,7 @@ class BudgetParticularController extends Controller
 
         BudgetParticular::create($validated);
 
-        return redirect()->route('budget-particulars.index')->with('success', 'Particular created.');
+        return redirect()->route('budget-particulars.index')->with('success', 'Account Title created successfully.');
     }
 
     public function update(Request $request, BudgetParticular $budgetParticular)
@@ -48,13 +51,13 @@ class BudgetParticularController extends Controller
 
         $budgetParticular->update($validated);
 
-        return redirect()->route('budget-particulars.index')->with('success', 'Particular updated.');
+        return redirect()->route('budget-particulars.index')->with('success', 'Account Title updated successfully.');
     }
 
     public function destroy(BudgetParticular $budgetParticular)
     {
         $budgetParticular->delete();
 
-        return redirect()->route('budget-particulars.index')->with('success', 'Particular deleted.');
+        return redirect()->route('budget-particulars.index')->with('success', 'Account Title deleted successfully.');
     }
 }

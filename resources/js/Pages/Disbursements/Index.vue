@@ -3,17 +3,44 @@ import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
-import { useOfflineQueue } from '@/composables/useOfflineQueue'
 
-const perms = computed(() => usePage().props.permissions || {})
-const { isOnline, offlinePost, offlinePut, offlineDelete } = useOfflineQueue()
+const pageProps = computed(() => usePage().props || {})
+const perms = computed(() => pageProps.value.userPermissions || {})
+const userRole = computed(() => pageProps.value.userRole || pageProps.value.auth?.user?.role)
 
-const props = defineProps({ disbursements: Array, expenses: Array, availableYears: Array, defaultYear: [Number, String] })
+const props = defineProps({
+    disbursements: Array,
+    expenses: Array,
+    availableYears: Array,
+    defaultYear: [Number, String],
+    userRole: String,
+    userPermissions: Object,
+})
+
 const showModal = ref(false)
-const editing = ref(null)
-const form = useForm({ expense_id: '', description:'', source:'Expenditure', pay_to:'', amount:0, method:'check', date_encoded:'', date_approved:'', status:'pending', notes:'' })
+const showAuditModal = ref(false)
+const showActionModal = ref(false)
+const actionType = ref('') // 'approve', 'post', 'reject', 'return'
+const selectedDsb = ref(null)
 
-// Optimistic local rows for offline-queued items
+const actionForm = useForm({
+    remarks: ''
+})
+
+const editing = ref(null)
+const form = useForm({
+    expense_id: '',
+    description: '',
+    source: 'Expenditure',
+    pay_to: '',
+    amount: 0,
+    method: 'check',
+    date_encoded: '',
+    status: 'draft',
+    notes: '',
+    remarks: '',
+})
+
 const offlineRows = ref([])
 
 const filterSearch = ref('')
@@ -60,8 +87,8 @@ function clearFilters() {
     filterStatus.value = ''
 }
 
-function fmt(v) { return new Intl.NumberFormat('en-PH', { minimumFractionDigits:2 }).format(v || 0) }
-function fmtDate(d) { return d ? new Date(d).toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' }) : '—' }
+function fmt(v) { return new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(v || 0) }
+function fmtDate(d) { return d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—' }
 
 function openCreate() {
     form.reset()
@@ -74,14 +101,27 @@ function openCreate() {
         }
     }
     form.source = 'Expenditure'
-    form.date_encoded = new Date().toISOString().slice(0,10)
+    form.status = (perms.value.isCashier ? 'for_approval' : 'draft')
+    form.date_encoded = new Date().toISOString().slice(0, 10)
     editing.value = null
     showModal.value = true
 }
 
 function openEdit(d) {
-    Object.assign(form, { expense_id: d.expense_id || '', description:d.description, source:d.source, pay_to:d.pay_to, amount:d.amount, method:d.method, status:d.status, notes:d.notes||'', date_encoded:d.date_encoded?.slice(0,10)||'', date_approved:d.date_approved?.slice(0,10)||'' })
-    editing.value=d.id; showModal.value=true
+    Object.assign(form, {
+        expense_id: d.expense_id || '',
+        description: d.description,
+        source: d.source,
+        pay_to: d.pay_to,
+        amount: d.amount,
+        method: d.method,
+        status: d.status,
+        notes: d.notes || '',
+        remarks: d.remarks || '',
+        date_encoded: d.date_encoded?.slice(0, 10) || '',
+    })
+    editing.value = d.id
+    showModal.value = true
 }
 
 function onExpenseSelect(event) {
@@ -95,198 +135,326 @@ function onExpenseSelect(event) {
     }
 }
 
-async function save() {
-    const data = {
-        expense_id: form.expense_id,
-        description: form.description,
-        source: form.source,
-        pay_to: form.pay_to,
-        amount: form.amount,
-        method: form.method,
-        status: form.status,
-        notes: form.notes,
-        date_encoded: form.date_encoded,
-        date_approved: form.date_approved,
-    }
-
+function save() {
     if (editing.value) {
-        const { queued } = await offlinePut(
-            `/disbursements/${editing.value}`,
-            data,
-            `Edit Disbursement: '${form.description}'`
-        )
-        if (queued) {
-            const idx = offlineRows.value.findIndex(r => r.id === editing.value)
-            if (idx !== -1) offlineRows.value[idx] = { ...offlineRows.value[idx], ...data }
-            showModal.value = false
-        } else {
-            form.put(`/disbursements/${editing.value}`, { onSuccess:()=>{ showModal.value=false } })
-        }
+        form.put(`/disbursements/${editing.value}`, { onSuccess: () => { showModal.value = false } })
     } else {
-        const { queued, item } = await offlinePost(
-            '/disbursements',
-            data,
-            `Add Disbursement: '${form.description}' → ${form.pay_to}`
-        )
-        if (queued) {
-            const linkedExp = props.expenses?.find(e => String(e.id) === String(form.expense_id))
-            offlineRows.value.unshift({
-                id: `offline-${item.id}`,
-                disbursement_no: '(pending)',
-                expense_id: form.expense_id,
-                expense: linkedExp,
-                description: form.description,
-                source: form.source,
-                pay_to: form.pay_to,
-                amount: form.amount,
-                method: form.method,
-                status: form.status,
-                date_encoded: form.date_encoded,
-                date_approved: form.date_approved,
-                notes: form.notes,
-                _offline: true,
-            })
-            showModal.value = false
-        } else {
-            form.post('/disbursements', { onSuccess:()=>{ showModal.value=false } })
-        }
+        form.post('/disbursements', { onSuccess: () => { showModal.value = false } })
     }
 }
 
-async function remove(id) {
-    if (!confirm('Delete?')) return
-    if (String(id).startsWith('offline-')) {
-        offlineRows.value = offlineRows.value.filter(r => r.id !== id)
-        return
-    }
-    const { queued } = await offlineDelete(`/disbursements/${id}`, `Delete Disbursement #${id}`)
-    if (queued) {
-        offlineRows.value = offlineRows.value.filter(r => r.id !== id)
-    } else {
+function remove(id) {
+    if (confirm('Are you sure you want to delete this disbursement record?')) {
         router.delete(`/disbursements/${id}`)
     }
 }
 
-const statusColors = { pending:'bg-yellow-100 text-yellow-800', approved:'bg-blue-100 text-blue-800', posted:'bg-green-100 text-green-800', cancelled:'bg-red-100 text-red-800' }
-const methodLabels = { check:'Check', cash:'Cash', bank_transfer:'Bank Transfer' }
+function submitForApproval(d) {
+    if (confirm('Submit this disbursement for approval to the Head of Finance?')) {
+        router.post(`/disbursements/${d.id}/submit`, { remarks: 'Released and submitted by Cashier' })
+    }
+}
+
+function openActionModal(d, type) {
+    selectedDsb.value = d
+    actionType.value = type
+    actionForm.reset()
+    showActionModal.value = true
+}
+
+function executeAction() {
+    if (!selectedDsb.value || !actionType.value) return
+    const dId = selectedDsb.value.id
+    const endpoint = `/disbursements/${dId}/${actionType.value}`
+    actionForm.post(endpoint, {
+        onSuccess: () => {
+            showActionModal.value = false
+            selectedDsb.value = null
+        }
+    })
+}
+
+function openAuditLogs(d) {
+    selectedDsb.value = d
+    showAuditModal.value = true
+}
+
+const statusBadgeStyles = {
+    draft: 'bg-slate-100 text-slate-700 border-slate-300',
+    for_release: 'bg-indigo-100 text-indigo-800 border-indigo-300',
+    for_approval: 'bg-amber-100 text-amber-800 border-amber-300',
+    approved: 'bg-blue-100 text-blue-800 border-blue-300',
+    posted: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+    rejected: 'bg-rose-100 text-rose-800 border-rose-300',
+    returned_for_revision: 'bg-purple-100 text-purple-800 border-purple-300',
+}
+
+const statusLabels = {
+    draft: 'Draft',
+    for_release: 'For Release',
+    for_approval: 'For Approval',
+    approved: 'Approved',
+    posted: 'Posted (GL)',
+    rejected: 'Rejected',
+    returned_for_revision: 'Returned for Revision',
+}
+
+const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transfer' }
 </script>
 
 <template>
 <Head title="Disbursements" />
 <AppLayout>
     <div class="flex items-center justify-between mb-6">
-        <div><h2 class="text-xl font-bold text-gray-900">Disbursements</h2><p class="text-sm text-gray-500">Manage fund disbursements</p></div>
-        <button v-if="perms.canManageDisbursements" @click="openCreate" class="flex items-center gap-2 rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition">+ Add Disbursement</button>
+        <div>
+            <h2 class="text-xl font-bold text-gray-900">Disbursements & Workflow</h2>
+            <p class="text-sm text-gray-500">Manage release, approval, and posting of funds to General Ledger</p>
+        </div>
+        <button v-if="perms.canManageDisbursements || perms.isCashier" @click="openCreate" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
+            Create Disbursement
+        </button>
     </div>
 
     <!-- Filters -->
     <div class="flex flex-col sm:flex-row gap-4 mb-6">
-        <input v-model="filterSearch" type="text" placeholder="Search by DSB no, expense ref, description, or pay to..." class="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm w-full max-w-sm" />
-        <select v-model="filterYear" class="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 min-w-[150px]">
+        <input v-model="filterSearch" type="text" placeholder="Search DSB no, pay to, description, expense ref..." class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm w-full max-w-sm shadow-sm" />
+        <select v-model="filterYear" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 min-w-[140px] shadow-sm">
             <option value="all">All Years</option>
             <option v-for="y in (availableYears || [])" :key="y" :value="String(y)">Year {{ y }}</option>
         </select>
-        <select v-model="filterMethod" class="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 min-w-[160px]">
+        <select v-model="filterMethod" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 min-w-[150px] shadow-sm">
             <option value="">All Methods</option>
             <option value="check">Check</option>
             <option value="cash">Cash</option>
             <option value="bank_transfer">Bank Transfer</option>
         </select>
-        <select v-model="filterStatus" class="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 min-w-[160px]">
-            <option value="">All Status</option>
-            <option value="pending">Pending</option>
+        <select v-model="filterStatus" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 min-w-[180px] shadow-sm">
+            <option value="">All Workflow Stages</option>
+            <option value="draft">Draft</option>
+            <option value="for_approval">For Approval</option>
             <option value="approved">Approved</option>
             <option value="posted">Posted</option>
-            <option value="cancelled">Cancelled</option>
+            <option value="rejected">Rejected</option>
+            <option value="returned_for_revision">Returned for Revision</option>
         </select>
     </div>
 
-    <div class="rounded-lg bg-white shadow-sm border overflow-hidden">
+    <!-- Table -->
+    <div class="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden">
         <div class="overflow-x-auto w-full pb-4">
             <table class="w-full text-sm min-w-max whitespace-nowrap">
-                <thead><tr class="bg-navy-dark text-white">
-                    <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-mustard">DSB No</th>
-                    <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-mustard">Expense Ref</th>
-                    <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-mustard">Description</th>
-                    <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-mustard">Pay To</th>
-                    <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-wider text-mustard">Amount</th>
-                    <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Method</th>
-                    <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Status</th>
-                    <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Date</th>
-                    <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Actions</th>
-                </tr></thead>
+                <thead>
+                    <tr class="bg-navy-dark text-white border-b-2 border-mustard">
+                        <th class="px-5 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-white">DSB Reference</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-white">Expense Ref</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-white">Payee / Description</th>
+                        <th class="px-5 py-3.5 text-right text-xs font-bold uppercase tracking-wider text-white">Disbursement Amount</th>
+                        <th class="px-5 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-white">Payment Method</th>
+                        <th class="px-5 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-white">Workflow Status</th>
+                        <th class="px-5 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-white">Audit Trail</th>
+                        <th class="px-5 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-white">Actions</th>
+                    </tr>
+                </thead>
                 <tbody>
-                    <tr
-                        v-for="d in filteredDisbursements"
-                        :key="d.id"
-                        :class="['border-b hover:bg-gray-50/50', d._offline ? 'bg-amber-50/60' : '']"
-                    >
-                        <td class="px-5 py-3 font-mono text-xs">
+                    <tr v-for="d in filteredDisbursements" :key="d.id" class="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
+                        <td class="px-5 py-4 font-mono text-xs font-bold text-navy align-middle">
                             {{ d.disbursement_no }}
-                            <span v-if="d._offline" class="ml-1 inline-block bg-amber-100 text-amber-700 border border-amber-200 rounded px-1 py-0.5 text-[9px] font-bold uppercase leading-none">⏳ Queued</span>
                         </td>
-                        <td class="px-5 py-3 font-mono text-xs text-blue-600 font-semibold">
+                        <td class="px-5 py-4 font-mono text-xs text-blue-600 font-semibold align-middle">
                             {{ d.expense?.ref_no || '—' }}
                         </td>
-                        <td class="px-5 py-3 font-medium text-gray-800">{{ d.description }}</td>
-                        <td class="px-5 py-3 text-gray-600">{{ d.pay_to }}</td>
-                        <td class="px-5 py-3 text-right font-medium">{{ fmt(d.amount) }}</td>
-                        <td class="px-5 py-3 text-center text-xs">{{ methodLabels[d.method] }}</td>
-                        <td class="px-5 py-3 text-center">
-                            <!-- Offline queued badge overrides status -->
-                            <span v-if="d._offline" class="rounded-full px-3 py-1 text-xs font-semibold uppercase bg-amber-100 text-amber-800 border border-amber-200">⏳ Queued</span>
-                            <span v-else :class="[statusColors[d.status],'rounded-full px-3 py-1 text-xs font-semibold uppercase']">{{ d.status }}</span>
+                        <td class="px-5 py-4 align-middle">
+                            <div class="font-semibold text-gray-900 text-sm">{{ d.pay_to }}</div>
+                            <div class="text-xs text-gray-500">{{ d.description }}</div>
                         </td>
-                        <td class="px-5 py-3 text-center text-xs">{{ fmtDate(d.date_encoded) }}</td>
-                        <td v-if="perms.canManageDisbursements" class="px-5 py-3 text-center">
-                            <button @click="openEdit(d)" class="text-blue-600 hover:text-blue-800 font-medium mr-3 transition" :disabled="d._offline" :class="{ 'opacity-40 cursor-not-allowed': d._offline }">Update</button>
-                            <button @click="remove(d.id)" class="text-red-600 hover:text-red-800 font-medium transition">Delete</button>
+                        <td class="px-5 py-4 text-right font-mono text-sm font-bold text-gray-900 align-middle">₱{{ fmt(d.amount) }}</td>
+                        <td class="px-5 py-4 text-center text-xs align-middle">
+                            <span class="px-2.5 py-1 rounded bg-slate-100 text-slate-700 font-medium border border-slate-200">
+                                {{ methodLabels[d.method] || d.method }}
+                            </span>
+                        </td>
+                        <td class="px-5 py-4 text-center align-middle">
+                            <span :class="[statusBadgeStyles[d.status] || 'bg-gray-100 text-gray-800', 'inline-flex items-center rounded-full px-3 py-1 text-xs font-bold border shadow-2xs']">
+                                {{ statusLabels[d.status] || d.status }}
+                            </span>
+                        </td>
+                        <td class="px-5 py-4 text-center align-middle">
+                            <button @click="openAuditLogs(d)" class="text-xs text-indigo-700 hover:text-indigo-900 font-semibold bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded border border-indigo-200 transition">
+                                View Stamps
+                            </button>
+                        </td>
+                        <td class="px-5 py-4 text-center align-middle">
+                            <div class="inline-flex items-center gap-2">
+                                <!-- Cashier Submit Action -->
+                                <button v-if="(d.status === 'draft' || d.status === 'returned_for_revision') && (perms.isCashier || perms.canManageDisbursements)"
+                                    @click="submitForApproval(d)"
+                                    class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-xs font-bold shadow-sm transition">
+                                    Submit for Approval
+                                </button>
+
+                                <!-- Head of Finance Approve Action -->
+                                <button v-if="d.status === 'for_approval' && perms.canApprove"
+                                    @click="openActionModal(d, 'approve')"
+                                    class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold shadow-sm transition">
+                                    Approve
+                                </button>
+
+                                <!-- Head of Finance Post Action -->
+                                <button v-if="d.status === 'approved' && perms.canPost"
+                                    @click="openActionModal(d, 'post')"
+                                    class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold shadow-sm transition">
+                                    Post to Ledger
+                                </button>
+
+                                <!-- Head of Finance Reject / Return Actions -->
+                                <button v-if="d.status === 'for_approval' && perms.canApprove"
+                                    @click="openActionModal(d, 'return')"
+                                    class="px-2 py-1 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded text-xs font-semibold border border-purple-200 transition">
+                                    Return
+                                </button>
+
+                                <button v-if="d.status === 'for_approval' && perms.canApprove"
+                                    @click="openActionModal(d, 'reject')"
+                                    class="px-2 py-1 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded text-xs font-semibold border border-rose-200 transition">
+                                    Reject
+                                </button>
+
+                                <!-- Standard Edit Button -->
+                                <button v-if="d.status !== 'posted' && (perms.canManageDisbursements || perms.isCashier)"
+                                    @click="openEdit(d)"
+                                    class="px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded text-xs font-semibold border border-indigo-200 shadow-2xs transition">
+                                    Edit
+                                </button>
+
+                                <!-- Standard Delete Button -->
+                                <button v-if="d.status !== 'posted' && (perms.canManageDisbursements || perms.isCashier)"
+                                    @click="remove(d.id)"
+                                    class="px-2.5 py-1 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded text-xs font-semibold border border-rose-200 shadow-2xs transition">
+                                    Delete
+                                </button>
+                            </div>
                         </td>
                     </tr>
                     <tr v-if="filteredDisbursements.length === 0">
-                        <td colspan="9" class="px-5 py-8 text-center text-sm text-gray-500">No disbursements found.</td>
+                        <td colspan="8" class="px-5 py-8 text-center text-sm text-gray-500">No disbursement records found.</td>
                     </tr>
                 </tbody>
             </table>
         </div>
         <div class="px-5 py-3 bg-gray-50 text-xs text-gray-500 border-t flex items-center justify-between">
             <span>Total Records: {{ filteredDisbursements.length }}</span>
-            <div class="flex gap-2">
-                <button type="button" @click="clearFilters" class="px-3 py-1.5 rounded bg-white border border-gray-200 hover:bg-gray-100 text-gray-600 font-medium">Clear Filters</button>
-            </div>
+            <button type="button" @click="clearFilters" class="px-3 py-1.5 rounded bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-semibold shadow-sm">Clear Filters</button>
         </div>
     </div>
-    <Modal :show="showModal" :title="editing ? 'Edit Disbursement' : 'Add Disbursement'" :subtitle="editing ? 'Update disbursement.' : 'Record a new disbursement.'" max-width="lg" @close="showModal = false">
+
+    <!-- Create/Edit Disbursement Modal -->
+    <Modal :show="showModal" :title="editing ? 'Edit Disbursement' : 'Create Disbursement'" :subtitle="editing ? 'Update disbursement release details.' : 'Enter release details and submit for approval.'" max-width="lg" @close="showModal = false">
         <form @submit.prevent="save">
             <div class="grid gap-4 sm:grid-cols-2">
                 <div class="sm:col-span-2">
                     <label class="block text-sm font-medium mb-1.5">Linked Expense <span class="text-red-500">*</span></label>
-                    <select v-model="form.expense_id" @change="onExpenseSelect" class="w-full rounded-lg border px-3 py-2.5 text-sm" required>
+                    <select v-model="form.expense_id" @change="onExpenseSelect" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required>
                         <option value="" disabled>Select Linked Expense</option>
                         <option v-for="e in filteredExpensesForModal" :key="e.id" :value="e.id">
                             {{ e.ref_no }} - {{ e.description }} (Total: ₱{{ fmt(e.amount) }} | Paid: ₱{{ fmt(e.paid) }})
                         </option>
                     </select>
-                    <p v-if="form.errors.expense_id" class="mt-1 text-xs text-red-600">{{ form.errors.expense_id }}</p>
-                    <p v-if="filteredExpensesForModal.length === 0" class="mt-1 text-xs text-amber-600 font-medium">
-                        No expenses found for Year {{ filterYear }}. Please select another year filter or create an expense first.
-                    </p>
                 </div>
-                <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1.5">Description</label><input v-model="form.description" class="w-full rounded-lg border px-3 py-2.5 text-sm" required /></div>
-                <div><label class="block text-sm font-medium mb-1.5">Source</label><input v-model="form.source" class="w-full rounded-lg border px-3 py-2.5 text-sm" required /></div>
-                <div><label class="block text-sm font-medium mb-1.5">Pay To</label><input v-model="form.pay_to" class="w-full rounded-lg border px-3 py-2.5 text-sm" required /></div>
-                <div><label class="block text-sm font-medium mb-1.5">Amount</label><input v-model.number="form.amount" type="number" step="0.01" class="w-full rounded-lg border px-3 py-2.5 text-sm" required /></div>
-                <div><label class="block text-sm font-medium mb-1.5">Method</label><select v-model="form.method" class="w-full rounded-lg border px-3 py-2.5 text-sm"><option value="check">Check</option><option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option></select></div>
-                <div><label class="block text-sm font-medium mb-1.5">Status</label><select v-model="form.status" class="w-full rounded-lg border px-3 py-2.5 text-sm"><option value="pending">Pending</option><option value="approved">Approved</option><option value="posted">Posted</option><option value="cancelled">Cancelled</option></select></div>
-                <div><label class="block text-sm font-medium mb-1.5">Date Encoded</label><input v-model="form.date_encoded" type="date" class="w-full rounded-lg border px-3 py-2.5 text-sm" required /></div>
-                <div><label class="block text-sm font-medium mb-1.5">Date Approved</label><input v-model="form.date_approved" type="date" class="w-full rounded-lg border px-3 py-2.5 text-sm" /></div>
-                <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1.5">Notes</label><input v-model="form.notes" class="w-full rounded-lg border px-3 py-2.5 text-sm" /></div>
+                <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1.5">Description</label><input v-model="form.description" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
+                <div><label class="block text-sm font-medium mb-1.5">Category / Source</label><input v-model="form.source" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
+                <div><label class="block text-sm font-medium mb-1.5">Pay To (Payee)</label><input v-model="form.pay_to" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
+                <div><label class="block text-sm font-medium mb-1.5">Disbursement Amount (₱)</label><input v-model.number="form.amount" type="number" step="0.01" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
+                <div><label class="block text-sm font-medium mb-1.5">Payment Method</label><select v-model="form.method" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"><option value="check">Check</option><option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option></select></div>
+                <div><label class="block text-sm font-medium mb-1.5">Date Encoded</label><input v-model="form.date_encoded" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
+                <div>
+                    <label class="block text-sm font-medium mb-1.5">Workflow Status</label>
+                    <select v-model="form.status" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :disabled="perms.isCashier">
+                        <option value="draft">Draft</option>
+                        <option value="for_approval">For Approval</option>
+                        <option value="approved" v-if="!perms.isCashier">Approved</option>
+                        <option value="posted" v-if="!perms.isCashier">Posted</option>
+                    </select>
+                </div>
+                <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1.5">Notes / Purpose</label><input v-model="form.notes" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" placeholder="Supporting details or notes" /></div>
             </div>
-            <div class="flex items-center justify-end gap-3 pt-5">
-                <button type="button" @click="showModal=false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button type="submit" :disabled="form.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy">{{ form.processing ? 'Saving...' : (editing ? 'Update' : 'Create') }}</button>
+            <div class="flex items-center justify-end gap-3 pt-5 border-t mt-4">
+                <button type="button" @click="showModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button type="submit" :disabled="form.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy shadow-sm">
+                    {{ form.processing ? 'Saving...' : (editing ? 'Update Record' : (perms.isCashier ? 'Submit for Approval' : 'Save Record')) }}
+                </button>
             </div>
         </form>
+    </Modal>
+
+    <!-- Head of Finance Action Modal (Approve, Post, Reject, Return) -->
+    <Modal :show="showActionModal" :title="`Workflow Action: ${actionType.toUpperCase()}`" subtitle="Enter remarks or approval notes for this disbursement transaction." max-width="md" @close="showActionModal = false">
+        <form @submit.prevent="executeAction">
+            <div class="space-y-4">
+                <div class="p-3 bg-slate-50 border rounded text-xs text-slate-700 space-y-1">
+                    <div><span class="font-bold">DSB Reference:</span> {{ selectedDsb?.disbursement_no }}</div>
+                    <div><span class="font-bold">Payee:</span> {{ selectedDsb?.pay_to }}</div>
+                    <div><span class="font-bold">Amount:</span> ₱{{ fmt(selectedDsb?.amount) }}</div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Workflow Remarks</label>
+                    <textarea v-model="actionForm.remarks" rows="3" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="Enter optional or mandatory remarks..." :required="actionType === 'reject' || actionType === 'return'"></textarea>
+                </div>
+            </div>
+            <div class="flex items-center justify-end gap-3 pt-4 border-t mt-4">
+                <button type="button" @click="showActionModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button type="submit" :disabled="actionForm.processing" class="rounded-lg px-5 py-2 text-sm font-semibold text-white shadow-sm"
+                    :class="actionType === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700' : (actionType === 'post' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-rose-600 hover:bg-rose-700')">
+                    Confirm {{ actionType.toUpperCase() }}
+                </button>
+            </div>
+        </form>
+    </Modal>
+
+    <!-- Audit Trail Stamps Drawer / Modal -->
+    <Modal :show="showAuditModal" title="Audit Trail & User Stamps" subtitle="Full transaction history and user authorization stamps" max-width="lg" @close="showAuditModal = false">
+        <div class="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+            <div class="p-3 bg-navy-dark text-white rounded-lg flex justify-between items-center text-xs">
+                <div><span class="font-bold">DSB Reference:</span> {{ selectedDsb?.disbursement_no }}</div>
+                <div><span class="font-bold">Current Status:</span> <span class="uppercase text-mustard font-bold">{{ statusLabels[selectedDsb?.status] || selectedDsb?.status }}</span></div>
+            </div>
+
+            <!-- User Stamps List -->
+            <div class="border rounded-lg divide-y bg-white">
+                <div v-if="selectedDsb?.prepared_by" class="p-3 text-xs">
+                    <span class="font-bold text-slate-700">Prepared By:</span> {{ selectedDsb.prepared_by?.name }} – {{ selectedDsb.prepared_by?.role_label }}
+                </div>
+                <div v-if="selectedDsb?.released_by" class="p-3 text-xs">
+                    <span class="font-bold text-slate-700">Released By:</span> {{ selectedDsb.released_by?.name }} – {{ selectedDsb.released_by?.role_label }}
+                </div>
+                <div v-if="selectedDsb?.submitted_by" class="p-3 text-xs">
+                    <span class="font-bold text-slate-700">Submitted By:</span> {{ selectedDsb.submitted_by?.name }} – {{ selectedDsb.submitted_by?.role_label }}
+                </div>
+                <div v-if="selectedDsb?.approved_by" class="p-3 text-xs">
+                    <span class="font-bold text-slate-700">Approved By:</span> {{ selectedDsb.approved_by?.name }} – {{ selectedDsb.approved_by?.role_label }}
+                </div>
+                <div v-if="selectedDsb?.posted_by" class="p-3 text-xs">
+                    <span class="font-bold text-slate-700">Posted By:</span> {{ selectedDsb.posted_by?.name }} – {{ selectedDsb.posted_by?.role_label }}
+                </div>
+            </div>
+
+            <!-- Log Entries -->
+            <h4 class="text-xs font-bold text-gray-700 uppercase tracking-wider mt-4">Full Activity Log History</h4>
+            <div class="space-y-2">
+                <div v-for="log in (selectedDsb?.audit_trails || [])" :key="log.id" class="p-3 rounded-md bg-gray-50 border border-gray-200 text-xs">
+                    <div class="flex justify-between items-center font-semibold text-gray-900 mb-1">
+                        <span class="capitalize text-navy">{{ log.action }} by {{ log.user_name }} ({{ log.user_role }})</span>
+                        <span class="text-gray-500 text-[11px]">{{ fmtDate(log.created_at) }}</span>
+                    </div>
+                    <p class="text-gray-600 italic" v-if="log.remarks">"{{ log.remarks }}"</p>
+                </div>
+                <div v-if="!selectedDsb?.audit_trails?.length" class="text-xs text-gray-500 italic p-3 text-center bg-gray-50 rounded">
+                    No explicit audit log entries recorded yet.
+                </div>
+            </div>
+        </div>
+        <div class="flex justify-end pt-4 border-t mt-4">
+            <button type="button" @click="showAuditModal = false" class="rounded-lg bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-300">Close</button>
+        </div>
     </Modal>
 </AppLayout>
 </template>

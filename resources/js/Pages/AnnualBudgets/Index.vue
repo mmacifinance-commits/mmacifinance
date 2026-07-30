@@ -1,7 +1,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
-import { Head, useForm, router, usePage } from '@inertiajs/vue3'
+import { Head, useForm, router, usePage, Link } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
 
 const props = defineProps({ budgets: Array, categories: Array, particulars: Array, availableYears: Array })
@@ -19,7 +19,7 @@ function removeBudget(id) {
     if (confirm('Delete this entire budget year and all its items?')) router.delete(`/annual-budgets/${id}`)
 }
 
-function budgetTotal(items, field) { return items.reduce((s, i) => s + Number(i[field] || 0), 0) }
+function budgetTotal(items, field) { return items ? items.reduce((s, i) => s + Number(i[field] || 0), 0) : 0 }
 function utilRate(items) {
     const app = budgetTotal(items, 'appropriation')
     const exp = budgetTotal(items, 'expenditure')
@@ -33,11 +33,11 @@ function utilRate(items) {
     <!-- Page Header -->
     <div class="flex items-center justify-between mb-6">
         <div>
-            <h2 class="text-xl font-bold text-gray-900">Annual Budget</h2>
-            <p class="text-sm text-gray-500">Manage annual budget allocations</p>
+            <h2 class="text-xl font-bold text-gray-900">Annual Budget Records</h2>
+            <p class="text-sm text-gray-500">Manage annual reference numbers and monthly allocations</p>
         </div>
-        <button v-if="perms.canManageBudget" @click="showNewBudget = true" class="flex items-center gap-2 rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition">
-            <span>+</span> New Annual Budget
+        <button v-if="perms.canManageBudget" @click="showNewBudget = true" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
+            New Annual Budget
         </button>
     </div>
 
@@ -46,33 +46,43 @@ function utilRate(items) {
         <div class="overflow-x-auto w-full pb-4">
             <table class="w-full text-sm min-w-max whitespace-nowrap">
                 <thead>
-                    <tr class="bg-navy-dark text-white">
-                        <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-mustard">Year</th>
-                        <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-wider text-mustard">Total Appropriation</th>
-                        <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-wider text-mustard">Total Expenditure</th>
-                        <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-wider text-mustard">Balance</th>
-                        <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Utilization Rate</th>
-                        <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-mustard">Actions</th>
+                    <tr class="bg-navy-dark text-white border-b-2 border-mustard">
+                        <th class="px-5 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-white">Annual Ref No.</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-white">Fiscal Year</th>
+                        <th class="px-5 py-3.5 text-right text-xs font-bold uppercase tracking-wider text-white">Total Appropriation</th>
+                        <th class="px-5 py-3.5 text-right text-xs font-bold uppercase tracking-wider text-white">Total Expenditure</th>
+                        <th class="px-5 py-3.5 text-right text-xs font-bold uppercase tracking-wider text-white">Balance</th>
+                        <th class="px-5 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-white">Utilization Rate</th>
+                        <th class="px-5 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-white">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="budget in budgets" :key="budget.id" class="border-b border-gray-100 hover:bg-gray-50/50">
-                        <td class="px-5 py-4 font-bold text-gray-900">{{ budget.year }}{{ budget.semester ? ' — ' + budget.semester : '' }}</td>
-                        <td class="px-5 py-4 text-right text-gray-700">{{ fmt(budgetTotal(budget.items, 'appropriation')) }}</td>
-                        <td class="px-5 py-4 text-right text-gray-700">{{ fmt(budgetTotal(budget.items, 'expenditure')) }}</td>
-                        <td class="px-5 py-4 text-right text-gray-700">{{ fmt(budgetTotal(budget.items, 'appropriation') - budgetTotal(budget.items, 'expenditure')) }}</td>
-                        <td class="px-5 py-4 text-center">
-                            <span :class="parseFloat(utilRate(budget.items)) > 50 ? 'text-red-500' : 'text-green-600'" class="font-medium">{{ utilRate(budget.items) }}%</span>
+                    <tr v-for="budget in budgets" :key="budget.id" class="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
+                        <td class="px-5 py-4 font-mono font-semibold text-navy align-middle">
+                            <span class="px-2 py-1 bg-slate-100 rounded text-xs border border-slate-200">{{ budget.ref_no || ('AB-' + budget.year + '-000' + budget.id) }}</span>
                         </td>
-                        <td class="px-5 py-4 text-center">
-                            <div class="flex items-center justify-center gap-2">
-                                <Link :href="`/annual-budgets/${budget.id}`" class="text-blue-600 hover:text-blue-800 font-medium mr-2 transition" title="View">View</Link>
-                                <button v-if="perms.canManageBudget" @click="removeBudget(budget.id)" class="text-red-600 hover:text-red-800 font-medium transition" title="Delete">Delete</button>
+                        <td class="px-5 py-4 font-bold text-gray-900 align-middle">{{ budget.year }}{{ budget.semester ? ' — ' + budget.semester : '' }}</td>
+                        <td class="px-5 py-4 text-right text-gray-700 font-medium align-middle">₱{{ fmt(budgetTotal(budget.items, 'appropriation')) }}</td>
+                        <td class="px-5 py-4 text-right text-gray-700 font-medium align-middle">₱{{ fmt(budgetTotal(budget.items, 'expenditure')) }}</td>
+                        <td class="px-5 py-4 text-right text-gray-700 font-medium align-middle">₱{{ fmt(budgetTotal(budget.items, 'appropriation') - budgetTotal(budget.items, 'expenditure')) }}</td>
+                        <td class="px-5 py-4 text-center align-middle">
+                            <span :class="parseFloat(utilRate(budget.items)) > 50 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'" class="font-bold px-2.5 py-1 rounded-full text-xs">
+                                {{ utilRate(budget.items) }}%
+                            </span>
+                        </td>
+                        <td class="px-5 py-4 text-center align-middle">
+                            <div class="inline-flex items-center gap-2">
+                                <Link :href="`/annual-budgets/${budget.id}`" class="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-md text-xs font-semibold shadow-sm transition-all duration-150 border border-blue-200">
+                                    Manage Items
+                                </Link>
+                                <button v-if="perms.canManageBudget" @click="removeBudget(budget.id)" class="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-md text-xs font-semibold shadow-sm transition-all duration-150 border border-rose-200">
+                                    Delete
+                                </button>
                             </div>
                         </td>
                     </tr>
                     <tr v-if="!budgets.length">
-                        <td colspan="6" class="px-5 py-8 text-center text-gray-400">No annual budgets yet.</td>
+                        <td colspan="7" class="px-5 py-8 text-center text-gray-400">No annual budgets recorded yet.</td>
                     </tr>
                 </tbody>
             </table>
@@ -83,32 +93,27 @@ function utilRate(items) {
     </div>
 
     <!-- New Budget Modal -->
-    <Modal :show="showNewBudget" title="New Annual Budget" subtitle="Create a new annual budget for a fiscal year." @close="showNewBudget = false">
+    <Modal :show="showNewBudget" title="New Annual Budget" subtitle="Create a new annual budget record with an automatic annual reference number." @close="showNewBudget = false">
         <form @submit.prevent="createBudget">
             <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700 mb-1.5">Fiscal Year</label>
-                <input v-model.number="budgetForm.year" type="number" min="2000" max="2100" placeholder="e.g. 2026" class="w-full border border-gray-300 px-3 py-2.5 text-sm" required />
+                <input v-model.number="budgetForm.year" type="number" min="2000" max="2100" placeholder="e.g. 2026" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm" required />
                 <p v-if="budgetForm.errors.year" class="mt-1 text-xs text-red-500">{{ budgetForm.errors.year }}</p>
             </div>
             <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700 mb-1.5">Semester (optional)</label>
-                <select v-model="budgetForm.semester" class="w-full border border-gray-300 px-3 py-2.5 text-sm">
-                    <option value="">None</option>
+                <select v-model="budgetForm.semester" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm">
+                    <option value="">Full Year (Jan – Dec)</option>
                     <option value="1st Semester">1st Semester</option>
                     <option value="2nd Semester">2nd Semester</option>
                     <option value="Summer">Summer</option>
                 </select>
             </div>
-            <div class="flex items-center justify-end gap-3 pt-2">
+            <div class="flex items-center justify-end gap-3 pt-4 border-t">
                 <button type="button" @click="showNewBudget = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button type="submit" :disabled="budgetForm.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition">Create</button>
+                <button type="submit" :disabled="budgetForm.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">Create Annual Budget</button>
             </div>
         </form>
     </Modal>
 </AppLayout>
 </template>
-
-<script>
-import { Link } from '@inertiajs/vue3'
-export default { components: { Link } }
-</script>

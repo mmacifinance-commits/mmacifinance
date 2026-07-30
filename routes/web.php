@@ -64,7 +64,7 @@ Route::middleware('auth')->group(function () {
         Route::delete('/budget-particulars/{budget_particular}', [BudgetParticularController::class, 'destroy']);
     });
 
-    // --- Expenditures & Disbursements: Super Admin + Disbursement Officer can CRUD, others view ---
+    // --- Expenditures & Disbursements: Super Admin + Disbursement Officer + Cashier can view/CRUD disbursements ---
     Route::get('/expenses', [ExpenseController::class, 'index'])->name('expenses.index');
     Route::get('/disbursements', [DisbursementController::class, 'index'])->name('disbursements.index');
 
@@ -72,9 +72,21 @@ Route::middleware('auth')->group(function () {
         Route::post('/expenses', [ExpenseController::class, 'store']);
         Route::put('/expenses/{expense}', [ExpenseController::class, 'update']);
         Route::delete('/expenses/{expense}', [ExpenseController::class, 'destroy']);
+    });
 
+    // Cashier, Disbursement Officer, and Super Admin can manage disbursements & submit for approval
+    Route::middleware('role:super_admin,disbursement_officer,cashier')->group(function () {
         Route::post('/disbursements', [DisbursementController::class, 'store']);
         Route::put('/disbursements/{disbursement}', [DisbursementController::class, 'update']);
         Route::delete('/disbursements/{disbursement}', [DisbursementController::class, 'destroy']);
+        Route::post('/disbursements/{disbursement}/submit', [DisbursementController::class, 'submitForApproval'])->name('disbursements.submit');
+    });
+
+    // Head of Finance (Super Admin) approval & posting operations
+    Route::middleware('role:super_admin')->group(function () {
+        Route::post('/disbursements/{disbursement}/approve', [DisbursementController::class, 'approve'])->name('disbursements.approve');
+        Route::post('/disbursements/{disbursement}/post', [DisbursementController::class, 'postDisbursement'])->name('disbursements.post');
+        Route::post('/disbursements/{disbursement}/reject', [DisbursementController::class, 'reject'])->name('disbursements.reject');
+        Route::post('/disbursements/{disbursement}/return', [DisbursementController::class, 'returnForRevision'])->name('disbursements.return');
     });
 });
