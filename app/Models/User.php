@@ -61,6 +61,11 @@ class User extends Authenticatable
         return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_BUDGET_OFFICER]);
     }
 
+    public function canManageIncome(): bool
+    {
+        return $this->role === self::ROLE_SUPER_ADMIN;
+    }
+
     public function canManageExpenses(): bool
     {
         return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_DISBURSEMENT_OFFICER, self::ROLE_CASHIER]);

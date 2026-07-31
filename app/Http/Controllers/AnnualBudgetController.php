@@ -7,11 +7,22 @@ use App\Models\BudgetItem;
 use App\Models\BudgetCategory;
 use App\Models\BudgetParticular;
 use App\Models\AuditTrail;
+use App\Models\Income;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class AnnualBudgetController extends Controller
 {
+    protected function ensureIncomeExistsForYear(int $year): void
+    {
+        if (!Income::whereYear('date_encoded', $year)->exists()) {
+            throw ValidationException::withMessages([
+                'year' => "You must create at least one income record for {$year} before creating appropriation.",
+            ]);
+        }
+    }
+
     public function index()
     {
         $budgets = AnnualBudget::with(['items.category', 'items.particular.department'])
@@ -69,6 +80,8 @@ class AnnualBudgetController extends Controller
             'semester' => 'nullable|string|max:20',
         ]);
 
+        $this->ensureIncomeExistsForYear((int) $validated['year']);
+
         $annualBudget = AnnualBudget::create($validated);
         AuditTrail::log($annualBudget, 'created', auth()->user(), "Created Annual Budget for year {$annualBudget->year}");
 
@@ -84,6 +97,8 @@ class AnnualBudgetController extends Controller
             'appropriation' => 'required|numeric|min:0',
             'expenditure' => 'nullable|numeric|min:0',
         ]);
+
+        $this->ensureIncomeExistsForYear((int) $annualBudget->year);
 
         $validated['month'] = $validated['month'] ?: 1;
 
@@ -102,6 +117,8 @@ class AnnualBudgetController extends Controller
             'appropriation' => 'required|numeric|min:0',
             'expenditure' => 'nullable|numeric|min:0',
         ]);
+
+        $this->ensureIncomeExistsForYear((int) $annualBudget->year);
 
         $validated['month'] = $validated['month'] ?: $item->month ?: 1;
 

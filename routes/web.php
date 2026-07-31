@@ -9,6 +9,8 @@ use App\Http\Controllers\AnnualBudgetController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\DisbursementController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\IncomeController;
+use App\Http\Controllers\RevenueController;
 use App\Http\Controllers\Auth\TwoFactorController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use Illuminate\Support\Facades\Route;
@@ -35,6 +37,8 @@ Route::middleware('auth')->group(function () {
     // Everyone can view the dashboard and reports
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
+    Route::get('/income', [IncomeController::class, 'index'])->name('income.index');
+    Route::get('/revenue', [RevenueController::class, 'index'])->name('revenue.index');
 
     // --- Budget section: Super Admin + Budget Officer can CRUD, others can only view ---
     Route::get('/annual-budgets', [AnnualBudgetController::class, 'index'])->name('annual-budgets.index');
@@ -80,6 +84,13 @@ Route::middleware('auth')->group(function () {
         Route::put('/disbursements/{disbursement}', [DisbursementController::class, 'update']);
         Route::delete('/disbursements/{disbursement}', [DisbursementController::class, 'destroy']);
         Route::post('/disbursements/{disbursement}/submit', [DisbursementController::class, 'submitForApproval'])->name('disbursements.submit');
+    });
+
+    // Income management: Head Admin only
+    Route::middleware('role:super_admin')->group(function () {
+        Route::post('/income', [IncomeController::class, 'store'])->name('income.store');
+        Route::put('/income/{income}', [IncomeController::class, 'update'])->name('income.update');
+        Route::delete('/income/{income}', [IncomeController::class, 'destroy'])->name('income.destroy');
     });
 
     // Head of Finance (Super Admin) approval & posting operations

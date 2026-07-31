@@ -10,6 +10,8 @@ const flash = computed(() => page.props.flash)
 const mainNavItems = [
     { href: '/', label: 'DASHBOARD', icon: '', section: 'dashboard' },
     { href: '/annual-budgets', label: 'BUDGET', icon: '', section: 'budget' },
+    { href: '/income', label: 'INCOME', icon: '', section: 'income' },
+    { href: '/revenue', label: 'REVENUE', icon: '', section: 'revenue' },
     { href: '/expenses', label: 'EXPENDITURES', icon: '', section: 'expenditures' },
     { href: '/disbursements', label: 'DISBURSEMENTS', icon: '', section: 'disbursements' },
     { href: '/reports', label: 'FINANCIAL REPORTS', icon: '', section: 'reports' },
@@ -32,6 +34,8 @@ function getActiveSection() {
     const p = currentPath.value
     if (p === '/') return 'dashboard'
     if (p.startsWith('/annual-budgets') || p.startsWith('/budget-categories') || p.startsWith('/budget-particulars') || p.startsWith('/departments')) return 'budget'
+    if (p.startsWith('/income')) return 'income'
+    if (p.startsWith('/revenue')) return 'revenue'
     if (p.startsWith('/expenses')) return 'expenditures'
     if (p.startsWith('/disbursements')) return 'disbursements'
     if (p.startsWith('/reports')) return 'reports'
