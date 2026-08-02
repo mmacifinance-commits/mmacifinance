@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\AnnualBudget;
 use App\Models\BudgetCategory;
+use App\Models\BudgetItem;
 use App\Models\BudgetParticular;
 use App\Models\Department;
 use App\Models\Disbursement;
 use App\Models\Expense;
+use App\Models\IncomeAllocation;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -29,6 +31,10 @@ class ReportController extends Controller
             ->sortDesc()
             ->values()
             ->toArray();
+
+        if ($startDate && $endDate && strtotime($endDate) < strtotime($startDate)) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
 
         // Expenses Query
         $expQuery = Expense::with(['category', 'particular.department']);
@@ -74,6 +80,109 @@ class ReportController extends Controller
             });
         }
 
+        $annualBudgetItemsQuery = BudgetItem::query()
+            ->with(['budget', 'category', 'particular.department'])
+            ->whereHas('budget', fn ($q) => $q->where('year', $selectedYear));
+        if ($categoryId) {
+            $annualBudgetItemsQuery->where('category_id', $categoryId);
+        }
+        if ($accountTitleId) {
+            $annualBudgetItemsQuery->where('particular_id', $accountTitleId);
+        }
+        if ($departmentId) {
+            $annualBudgetItemsQuery->whereHas('particular', fn ($q) => $q->where('department_id', $departmentId));
+        }
+
+        $annualBudgetItems = $annualBudgetItemsQuery->get();
+
+        $selectedBudgetItemsQuery = BudgetItem::query()
+            ->with(['budget', 'category', 'particular.department'])
+            ->whereHas('budget', fn ($q) => $q->where('year', $selectedYear));
+        if ($selectedMonth) {
+            $selectedBudgetItemsQuery->where('month', $selectedMonth);
+        }
+        if ($categoryId) {
+            $selectedBudgetItemsQuery->where('category_id', $categoryId);
+        }
+        if ($accountTitleId) {
+            $selectedBudgetItemsQuery->where('particular_id', $accountTitleId);
+        }
+        if ($departmentId) {
+            $selectedBudgetItemsQuery->whereHas('particular', fn ($q) => $q->where('department_id', $departmentId));
+        }
+
+        $selectedBudgetItems = $selectedBudgetItemsQuery->get();
+
+        $monthItemsQuery = BudgetItem::query()
+            ->whereHas('budget', fn ($q) => $q->where('year', $selectedYear));
+
+        $selectedMonthLabel = 'All Months';
+        if ($startDate && $endDate) {
+            $startMonth = (int) date('n', strtotime($startDate));
+            $endMonth = (int) date('n', strtotime($endDate));
+            $monthItemsQuery->whereBetween('month', [$startMonth, $endMonth]);
+            $selectedMonthLabel = date('M d, Y', strtotime($startDate)) . ' - ' . date('M d, Y', strtotime($endDate));
+        } elseif ($selectedMonth) {
+            $monthItemsQuery->where('month', $selectedMonth);
+            $selectedMonthLabel = date('F', mktime(0, 0, 0, $selectedMonth, 1));
+        }
+
+        if ($categoryId) {
+            $monthItemsQuery->where('category_id', $categoryId);
+        }
+        if ($accountTitleId) {
+            $monthItemsQuery->where('particular_id', $accountTitleId);
+        }
+        if ($departmentId) {
+            $monthItemsQuery->whereHas('particular', fn ($q) => $q->where('department_id', $departmentId));
+        }
+
+        $monthItems = $monthItemsQuery->get();
+        $monthAppropriation = (float) $monthItems->sum('appropriation');
+        $monthExpenditure = (float) $monthItems->sum(fn ($item) => $item->postedExpenditureTotal());
+
+        $selectedMonthPerformance = [
+            'month_label' => $selectedMonthLabel,
+            'appropriation' => $monthAppropriation,
+            'expenditure' => $monthExpenditure,
+            'utilizationRate' => $monthAppropriation > 0
+                ? round(($monthExpenditure / $monthAppropriation) * 100, 2)
+                : 0,
+        ];
+
+        $budgetPerformanceByYear = collect($availableYears)->map(function ($year) use ($selectedMonth, $departmentId, $categoryId, $accountTitleId) {
+            $query = BudgetItem::query()
+                ->whereHas('budget', fn ($q) => $q->where('year', $year))
+                ->with(['particular.department']);
+
+            if ($selectedMonth) {
+                $query->where('month', $selectedMonth);
+            }
+            if ($categoryId) {
+                $query->where('category_id', $categoryId);
+            }
+            if ($accountTitleId) {
+                $query->where('particular_id', $accountTitleId);
+            }
+            if ($departmentId) {
+                $query->whereHas('particular', fn ($q) => $q->where('department_id', $departmentId));
+            }
+
+            $items = $query->get();
+            $appropriation = (float) $items->sum('appropriation');
+            $expenditure = (float) $items->sum(fn ($item) => $item->postedExpenditureTotal());
+
+            return [
+                'year' => (int) $year,
+                'selectedMonth' => $selectedMonth,
+                'appropriation' => $appropriation,
+                'expenditure' => $expenditure,
+                'utilizationRate' => $appropriation > 0 ? round(($expenditure / $appropriation) * 100, 2) : 0,
+            ];
+        })->values();
+
+        $selectedMonthLabel = $selectedMonthPerformance['month_label'] ?? ($selectedMonth ? date('F', mktime(0, 0, 0, $selectedMonth, 1)) : 'All Months');
+
         return Inertia::render('Reports/Index', [
             'budgets' => AnnualBudget::with(['items.category', 'items.particular.department'])->get(),
             'categories' => BudgetCategory::all(),
@@ -82,6 +191,11 @@ class ReportController extends Controller
             'departments' => Department::all(),
             'expenses' => $expQuery->latest()->get(),
             'disbursements' => $dsbQuery->latest()->get(),
+            'annualBudgetItems' => $annualBudgetItems,
+            'budgetItems' => $selectedBudgetItems,
+            'selectedMonthPerformance' => $selectedMonthPerformance,
+            'budgetPerformanceByYear' => $budgetPerformanceByYear,
+            'selectedMonthLabel' => $selectedMonthLabel,
             'availableYears' => $availableYears,
             'filters' => [
                 'year' => $selectedYear,

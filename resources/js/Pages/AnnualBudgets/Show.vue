@@ -5,6 +5,24 @@ import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3'
 import { ref, computed, watch } from 'vue'
 
 const perms = computed(() => usePage().props.permissions || {})
+const FULL_YEAR_SEMESTER = 'Full Year (Jan-Dec)'
+const SEMESTER_ORDER = {
+    [FULL_YEAR_SEMESTER]: 0,
+    '1st Semester': 1,
+    '2nd Semester': 2,
+    Summer: 3,
+}
+
+function normalizeSemester(value) {
+    const semester = String(value || '').trim()
+    const lower = semester.toLowerCase()
+
+    if (!semester || lower === 'full year' || lower === 'full year (jan-dec)' || lower === 'full year (jan - dec)' || lower === 'full year (jan–dec)' || lower === 'full year (jan – dec)') {
+        return FULL_YEAR_SEMESTER
+    }
+
+    return semester
+}
 
 const props = defineProps({
     budget: Object,
@@ -21,25 +39,29 @@ const monthNames = [
 ]
 
 const showItemModal = ref(false)
+const showImportModal = ref(false)
 const editingItem = ref(null)
 const selectedMonthFilter = ref('') // '' for all, 1-12 for specific month
+const searchTerm = ref('')
+const importForm = useForm({
+    csv_file: null,
+})
 
 const itemForm = useForm({
     category_id: '',
     particular_id: '',
     month: 1,
     appropriation: 0,
-    expenditure: 0
 })
 
 // Filters
 const selectedYear = ref(props.budget.year)
-const selectedSemester = ref(props.budget.semester || '')
+const selectedSemester = ref(normalizeSemester(props.budget.semester))
 
 watch(() => props.budget, (newBudget) => {
     if (newBudget) {
         selectedYear.value = newBudget.year
-        selectedSemester.value = newBudget.semester || ''
+        selectedSemester.value = normalizeSemester(newBudget.semester)
     }
 }, { immediate: true })
 
@@ -47,8 +69,10 @@ const semestersForYear = computed(() => {
     if (!props.allBudgets) return []
     return props.allBudgets
         .filter(b => Number(b.year) === Number(selectedYear.value))
-        .map(b => b.semester)
+        .map(b => normalizeSemester(b.semester))
         .filter(Boolean)
+        .filter((semester, idx, arr) => arr.indexOf(semester) === idx)
+        .sort((a, b) => (SEMESTER_ORDER[a] ?? 99) - (SEMESTER_ORDER[b] ?? 99))
 })
 
 function applyFilter() {
@@ -57,11 +81,11 @@ function applyFilter() {
     )
     if (matchingBudgets.length === 0) return
 
-    let match = matchingBudgets.find(b => (b.semester || '') === (selectedSemester.value || ''))
+    let match = matchingBudgets.find(b => normalizeSemester(b.semester) === normalizeSemester(selectedSemester.value))
     if (!match) {
         match = matchingBudgets[0]
         if (match) {
-            selectedSemester.value = match.semester || ''
+            selectedSemester.value = normalizeSemester(match.semester)
         }
     }
 
@@ -74,8 +98,18 @@ function fmt(v) { return new Intl.NumberFormat('en-PH', { minimumFractionDigits:
 
 const filteredItems = computed(() => {
     const items = props.budget.items || []
-    if (!selectedMonthFilter.value) return items
-    return items.filter(i => (i.month || 1) === parseInt(selectedMonthFilter.value))
+    return items.filter((item) => {
+        const matchesMonth = !selectedMonthFilter.value || (item.month || 1) === parseInt(selectedMonthFilter.value)
+        const term = searchTerm.value.trim().toLowerCase()
+        const matchesSearch = !term || [
+            item.ref_no,
+            item.particular?.particular,
+            item.particular?.department?.name,
+            item.category?.name,
+        ].some((value) => String(value || '').toLowerCase().includes(term))
+
+        return matchesMonth && matchesSearch
+    })
 })
 
 // Group items by category
@@ -116,7 +150,6 @@ function openEditItem(item) {
     itemForm.particular_id = item.particular_id
     itemForm.month = item.month || 1
     itemForm.appropriation = item.appropriation
-    itemForm.expenditure = item.expenditure
     editingItem.value = item.id
     showItemModal.value = true
 }
@@ -131,6 +164,19 @@ function saveItem() {
 
 function removeItem(itemId) {
     if (confirm('Delete this monthly budget allocation item?')) router.delete(`/annual-budgets/${props.budget.id}/items/${itemId}`)
+}
+
+function exportCsv() {
+    window.location.href = `/annual-budgets/${props.budget.id}/export-csv`
+}
+
+function handleImportCsv() {
+    importForm.post(`/annual-budgets/${props.budget.id}/import-csv`, {
+        onSuccess: () => {
+            showImportModal.value = false
+            importForm.reset()
+        },
+    })
 }
 
 function catBalancePercent(group) {
@@ -154,13 +200,21 @@ function catBalancePercent(group) {
                         {{ budget.ref_no || ('AB-' + budget.year + '-000' + budget.id) }}
                     </span>
                 </div>
-                <p class="text-sm text-gray-500">Fiscal Year {{ budget.year }}{{ budget.semester ? ' — ' + budget.semester : '' }}</p>
+                <p class="text-sm text-gray-500">Fiscal Year {{ budget.year }}{{ normalizeSemester(budget.semester) ? ' — ' + normalizeSemester(budget.semester) : '' }}</p>
             </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <button @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition shadow-sm">
+                Export CSV
+            </button>
+            <button v-if="perms.canManageBudget" @click="showImportModal = true" class="rounded-lg bg-navy-dark px-4 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
+                Import CSV
+            </button>
         </div>
     </div>
 
     <!-- Filters: Year, Month, Semester -->
-    <div class="flex flex-wrap items-center gap-3 mb-6 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+    <div class="flex flex-wrap items-end gap-3 mb-6 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
         <div class="flex items-center gap-2">
             <label class="text-xs font-bold uppercase text-gray-500">Fiscal Year:</label>
             <select v-model.number="selectedYear" @change="selectedSemester = ''; applyFilter()" class="rounded-md border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-[100px]">
@@ -176,6 +230,16 @@ function catBalancePercent(group) {
             </select>
         </div>
 
+        <div class="flex items-center gap-2 min-w-[280px] flex-1">
+            <label class="text-xs font-bold uppercase text-gray-500 whitespace-nowrap">Search:</label>
+            <input
+                v-model="searchTerm"
+                type="text"
+                class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm bg-white"
+                placeholder="Search account title, responsibility center, or ref no..."
+            />
+        </div>
+
         <div v-if="semestersForYear.length" class="flex items-center gap-2">
             <label class="text-xs font-bold uppercase text-gray-500">Semester:</label>
             <select v-model="selectedSemester" @change="applyFilter()" class="rounded-md border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-[120px]">
@@ -184,8 +248,7 @@ function catBalancePercent(group) {
             </select>
         </div>
 
-        <div class="flex-1"></div>
-        <button v-if="perms.canManageBudget" @click="openAddItem" class="rounded-lg bg-navy-dark px-4 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
+        <button v-if="perms.canManageBudget" @click="openAddItem" class="ml-auto rounded-lg bg-navy-dark px-4 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
             Add Monthly Allocation Item
         </button>
     </div>
@@ -311,14 +374,44 @@ function catBalancePercent(group) {
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Monthly Appropriation Amount (₱)</label>
                     <input v-model.number="itemForm.appropriation" type="number" step="0.01" min="0" placeholder="0.00" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required />
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Expenditure (₱)</label>
-                    <input v-model.number="itemForm.expenditure" type="number" step="0.01" min="0" placeholder="0.00" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" />
+                <div class="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+                    Expenditure is now calculated automatically from linked disbursements with status <span class="font-semibold">Posted (GL)</span>. It is no longer editable here.
                 </div>
             </div>
             <div class="flex items-center justify-end gap-3 pt-5 border-t mt-4">
                 <button type="button" @click="showItemModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
                 <button type="submit" :disabled="itemForm.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">{{ editingItem ? 'Update Allocation' : 'Save Allocation' }}</button>
+            </div>
+        </form>
+    </Modal>
+
+    <Modal :show="showImportModal" title="Import Budget CSV" subtitle="Upload a CSV file to add or update monthly budget allocation rows. Missing budget categories, departments, and account titles will be created automatically." max-width="lg" @close="showImportModal = false">
+        <form @submit.prevent="handleImportCsv">
+            <div class="space-y-4">
+                <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                    <p class="font-semibold text-slate-900 mb-2">Required columns</p>
+                    <p class="text-xs leading-6">
+                        <span class="font-semibold">month</span>, <span class="font-semibold">budget_category</span>, <span class="font-semibold">account_title</span>, <span class="font-semibold">appropriation</span>
+                    </p>
+                    <p class="mt-2 text-xs leading-6">
+                    Optional columns: <span class="font-semibold">fiscal_year</span>, <span class="font-semibold">semester</span>, <span class="font-semibold">responsibility_center</span>, <span class="font-semibold">account_code</span>, <span class="font-semibold">description</span>. Expenditure is recalculated automatically and ignored on import.
+                </p>
+            </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">CSV File</label>
+                    <input
+                        type="file"
+                        accept=".csv,text/csv"
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+                        @change="(e) => importForm.csv_file = e.target.files?.[0] || null"
+                        required
+                    />
+                    <p v-if="importForm.errors.csv_file" class="mt-1 text-xs text-red-500">{{ importForm.errors.csv_file }}</p>
+                </div>
+            </div>
+            <div class="flex items-center justify-end gap-3 pt-5 border-t mt-4">
+                <button type="button" @click="showImportModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button type="submit" :disabled="importForm.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">{{ importForm.processing ? 'Importing...' : 'Import CSV' }}</button>
             </div>
         </form>
     </Modal>

@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { ref, computed, watch } from 'vue'
 import { Link, usePage, router } from '@inertiajs/vue3'
 import OfflineBanner from '@/Components/OfflineBanner.vue'
@@ -9,9 +9,9 @@ const flash = computed(() => page.props.flash)
 
 const mainNavItems = [
     { href: '/', label: 'DASHBOARD', icon: '', section: 'dashboard' },
+    { href: '/iaeo', label: 'IAEO', icon: '', section: 'iaeo' },
     { href: '/annual-budgets', label: 'BUDGET', icon: '', section: 'budget' },
     { href: '/income', label: 'INCOME', icon: '', section: 'income' },
-    { href: '/revenue', label: 'REVENUE', icon: '', section: 'revenue' },
     { href: '/expenses', label: 'EXPENDITURES', icon: '', section: 'expenditures' },
     { href: '/disbursements', label: 'DISBURSEMENTS', icon: '', section: 'disbursements' },
     { href: '/reports', label: 'FINANCIAL REPORTS', icon: '', section: 'reports' },
@@ -35,7 +35,7 @@ function getActiveSection() {
     if (p === '/') return 'dashboard'
     if (p.startsWith('/annual-budgets') || p.startsWith('/budget-categories') || p.startsWith('/budget-particulars') || p.startsWith('/departments')) return 'budget'
     if (p.startsWith('/income')) return 'income'
-    if (p.startsWith('/revenue')) return 'revenue'
+    if (p.startsWith('/iaeo') || p.startsWith('/revenue')) return 'iaeo'
     if (p.startsWith('/expenses')) return 'expenditures'
     if (p.startsWith('/disbursements')) return 'disbursements'
     if (p.startsWith('/reports')) return 'reports'
@@ -74,7 +74,7 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
                 <div class="flex items-center gap-3">
                     <img src="/images/logo.png" alt="MMAC Logo" class="h-11 w-11 object-contain" />
                     <div>
-                        <h1 class="text-base font-bold text-white leading-tight tracking-wide">ACCOUNTING INFORMATION SYSTEM</h1>
+                        <h1 class="text-base font-bold text-white leading-tight tracking-wide">Budget Fund Utilization Report</h1>
                         <p class="text-xs text-mustard mt-0.5">Merchant Marine Academy of Caraga, Inc.</p>
                     </div>
                 </div>
@@ -126,20 +126,24 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
                     <span class="mr-2">{{ item.icon }}</span>{{ item.label }}
                 </Link>
                 <button @click="logout" class="w-full px-4 py-3 text-left text-xs font-bold uppercase text-red-300 border-b border-navy-light">
-                    🚪 Logout
+                    ðŸšª Logout
                 </button>
             </div>
         </nav>
 
         <!-- Flash Messages -->
-        <div v-if="showFlash && (flash?.success || flash?.error)" class="fixed top-20 right-4 z-50 w-80">
+        <div v-if="showFlash && (flash?.success || flash?.error || flash?.warning)" class="fixed top-20 right-4 z-50 w-80">
             <div v-if="flash?.success" class="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700 shadow-lg flex justify-between items-center">
-                <span>✅ {{ flash.success }}</span>
+                <span>Success: {{ flash.success }}</span>
                 <button @click="showFlash = false" class="text-green-500 hover:text-green-700 ml-2">&times;</button>
             </div>
             <div v-if="flash?.error" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 shadow-lg flex justify-between items-center">
-                <span>❌ {{ flash.error }}</span>
+                <span>Error: {{ flash.error }}</span>
                 <button @click="showFlash = false" class="text-red-500 hover:text-red-700 ml-2">&times;</button>
+            </div>
+            <div v-if="flash?.warning" class="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 shadow-lg flex justify-between items-center">
+                <span>⚠ {{ flash.warning }}</span>
+                <button @click="showFlash = false" class="text-amber-600 hover:text-amber-800 ml-2">&times;</button>
             </div>
         </div>
 
@@ -180,3 +184,4 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
         </footer>
     </div>
 </template>
+

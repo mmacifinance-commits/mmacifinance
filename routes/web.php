@@ -38,11 +38,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
     Route::get('/income', [IncomeController::class, 'index'])->name('income.index');
-    Route::get('/revenue', [RevenueController::class, 'index'])->name('revenue.index');
+    Route::get('/iaeo', [RevenueController::class, 'index'])->name('iaeo.index');
+    Route::redirect('/revenue', '/iaeo', 301);
 
     // --- Budget section: Super Admin + Budget Officer can CRUD, others can only view ---
     Route::get('/annual-budgets', [AnnualBudgetController::class, 'index'])->name('annual-budgets.index');
     Route::get('/annual-budgets/{annual_budget}', [AnnualBudgetController::class, 'show'])->name('annual-budgets.show');
+    Route::get('/annual-budgets/{annual_budget}/export-csv', [AnnualBudgetController::class, 'exportCsv'])->name('annual-budgets.export-csv');
     Route::get('/departments', [DepartmentController::class, 'index'])->name('departments.index');
     Route::get('/budget-categories', [BudgetCategoryController::class, 'index'])->name('budget-categories.index');
     Route::get('/budget-particulars', [BudgetParticularController::class, 'index'])->name('budget-particulars.index');
@@ -54,6 +56,7 @@ Route::middleware('auth')->group(function () {
         Route::post('annual-budgets/{annual_budget}/items', [AnnualBudgetController::class, 'storeItem'])->name('annual-budgets.items.store');
         Route::put('annual-budgets/{annual_budget}/items/{item}', [AnnualBudgetController::class, 'updateItem'])->name('annual-budgets.items.update');
         Route::delete('annual-budgets/{annual_budget}/items/{item}', [AnnualBudgetController::class, 'destroyItem'])->name('annual-budgets.items.destroy');
+        Route::post('annual-budgets/{annual_budget}/import-csv', [AnnualBudgetController::class, 'importCsv'])->name('annual-budgets.import-csv');
 
         Route::post('/departments', [DepartmentController::class, 'store']);
         Route::put('/departments/{department}', [DepartmentController::class, 'update']);
@@ -78,6 +81,10 @@ Route::middleware('auth')->group(function () {
         Route::delete('/expenses/{expense}', [ExpenseController::class, 'destroy']);
     });
 
+    Route::middleware('role:super_admin,disbursement_officer,cashier')->group(function () {
+        Route::post('/expenses/{expense}/submit', [ExpenseController::class, 'submitForApproval'])->name('expenses.submit');
+    });
+
     // Cashier, Disbursement Officer, and Super Admin can manage disbursements & submit for approval
     Route::middleware('role:super_admin,disbursement_officer,cashier')->group(function () {
         Route::post('/disbursements', [DisbursementController::class, 'store']);
@@ -99,5 +106,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/disbursements/{disbursement}/post', [DisbursementController::class, 'postDisbursement'])->name('disbursements.post');
         Route::post('/disbursements/{disbursement}/reject', [DisbursementController::class, 'reject'])->name('disbursements.reject');
         Route::post('/disbursements/{disbursement}/return', [DisbursementController::class, 'returnForRevision'])->name('disbursements.return');
+        Route::post('/expenses/{expense}/approve', [ExpenseController::class, 'approve'])->name('expenses.approve');
+        Route::post('/expenses/{expense}/reject', [ExpenseController::class, 'reject'])->name('expenses.reject');
+        Route::post('/expenses/{expense}/return', [ExpenseController::class, 'returnForRevision'])->name('expenses.return');
     });
 });

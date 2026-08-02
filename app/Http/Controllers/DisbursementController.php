@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\AuditTrail;
+use App\Models\AnnualBudget;
 use App\Models\Disbursement;
 use App\Models\Expense;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class DisbursementController extends Controller
@@ -27,9 +29,11 @@ class DisbursementController extends Controller
         $yearsFromDsb = $disbursements->pluck('date_encoded')
             ->filter()
             ->map(fn($d) => (int) date('Y', strtotime($d)))
-            ->unique();
+            ->unique()
+            ->sortDesc()
+            ->values();
 
-        $budgetYears = \App\Models\AnnualBudget::pluck('year');
+        $budgetYears = AnnualBudget::pluck('year');
         $currentYear = (int) date('Y');
 
         $availableYears = $yearsFromDsb->concat($budgetYears)
@@ -39,11 +43,21 @@ class DisbursementController extends Controller
             ->values()
             ->toArray();
 
-        $defaultYear = $currentYear;
+        $defaultYear = $yearsFromDsb->first() ?? $budgetYears->sortDesc()->values()->first() ?? $currentYear;
 
         return Inertia::render('Disbursements/Index', [
             'disbursements' => $disbursements,
-            'expenses' => Expense::select('id', 'ref_no', 'description', 'amount', 'paid', 'date_encoded', 'created_at')->get(),
+            'expenses' => Expense::select(
+                'id',
+                'ref_no',
+                'description',
+                'amount',
+                'paid',
+                'date_encoded',
+                'created_at',
+                'status'
+            )->get(),
+            'budgetYears' => AnnualBudget::pluck('year')->values()->toArray(),
             'availableYears' => $availableYears,
             'defaultYear' => $defaultYear,
             'userRole' => auth()->user()?->role,
@@ -61,15 +75,20 @@ class DisbursementController extends Controller
      * Statuses the current user may set directly on create/edit. The approval
      * outcomes (approved, posted, rejected, returned_for_revision) are only
      * reachable through the dedicated Head of Finance endpoints — allowing them
-     * here would let a Cashier finalize a disbursement without approval.
+     * here would let a user finalize a disbursement without approval.
      */
     protected function allowedStatuses(): array
     {
-        if (auth()->user()?->canApproveDisbursements()) {
-            return ['draft', 'for_release', 'for_approval', 'approved', 'posted', 'rejected', 'returned_for_revision'];
-        }
-
         return ['draft', 'for_release', 'for_approval'];
+    }
+
+    protected function ensureApprovedLinkedExpense(Expense $expense): void
+    {
+        if (strtolower((string) $expense->status) !== 'approved') {
+            throw ValidationException::withMessages([
+                'expense_id' => 'Only approved expenses can be released as disbursements.',
+            ]);
+        }
     }
 
     public function store(Request $request)
@@ -90,6 +109,23 @@ class DisbursementController extends Controller
             'status.in' => 'You are not authorized to set this status.',
         ]);
 
+        $selectedExpense = Expense::findOrFail($validated['expense_id']);
+        $this->ensureApprovedLinkedExpense($selectedExpense);
+        $expenseYear = (int) date('Y', strtotime($selectedExpense->date_encoded));
+        $releaseYear = (int) date('Y', strtotime($validated['date_encoded']));
+
+        if (!AnnualBudget::where('year', $expenseYear)->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'expense_id' => "No annual budget exists for FY {$expenseYear}. Please create the annual budget first.",
+            ]);
+        }
+
+        if (!AnnualBudget::where('year', $releaseYear)->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'date_encoded' => "No annual budget exists for FY {$releaseYear}. Please create the annual budget first.",
+            ]);
+        }
+
         $lastDsb = Disbursement::latest('id')->first();
         $nextNum = $lastDsb ? intval(substr($lastDsb->disbursement_no, 3)) + 1 : 1;
         $validated['disbursement_no'] = 'DSB' . str_pad($nextNum, 8, '0', STR_PAD_LEFT);
@@ -100,6 +136,10 @@ class DisbursementController extends Controller
             $validated['status'] = 'for_approval';
             $validated['released_by_id'] = auth()->id();
             $validated['submitted_by_id'] = auth()->id();
+        }
+
+        if ($validated['status'] === 'for_release') {
+            $validated['released_by_id'] = $validated['released_by_id'] ?? auth()->id();
         }
 
         $dsb = Disbursement::create($validated);
@@ -139,11 +179,32 @@ class DisbursementController extends Controller
             'status.in' => 'You are not authorized to set this status.',
         ]);
 
+        $selectedExpense = Expense::findOrFail($validated['expense_id']);
+        $this->ensureApprovedLinkedExpense($selectedExpense);
+        $expenseYear = (int) date('Y', strtotime($selectedExpense->date_encoded));
+        $releaseYear = (int) date('Y', strtotime($validated['date_encoded']));
+
+        if (!AnnualBudget::where('year', $expenseYear)->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'expense_id' => "No annual budget exists for FY {$expenseYear}. Please create the annual budget first.",
+            ]);
+        }
+
+        if (!AnnualBudget::where('year', $releaseYear)->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'date_encoded' => "No annual budget exists for FY {$releaseYear}. Please create the annual budget first.",
+            ]);
+        }
+
         // Same escalation as store(): a Cashier saving release details goes straight to for_approval
         if (auth()->user()?->isCashier() && in_array($validated['status'], ['for_release', 'for_approval'])) {
             $validated['status'] = 'for_approval';
             $validated['released_by_id'] = auth()->id();
             $validated['submitted_by_id'] = auth()->id();
+        }
+
+        if ($validated['status'] === 'for_release') {
+            $validated['released_by_id'] = $validated['released_by_id'] ?? auth()->id();
         }
 
         $disbursement->update($validated);
@@ -164,6 +225,10 @@ class DisbursementController extends Controller
             'remarks' => 'nullable|string',
         ]);
 
+        if (!auth()->user()?->canManageDisbursements()) {
+            abort(403, 'You are not allowed to submit disbursements for approval.');
+        }
+
         $disbursement->update([
             'status' => 'for_approval',
             'released_by_id' => auth()->id(),
@@ -182,6 +247,10 @@ class DisbursementController extends Controller
             'remarks' => 'nullable|string',
         ]);
 
+        if (!auth()->user()?->canApproveDisbursements()) {
+            abort(403, 'Only the Head of Finance can approve disbursements.');
+        }
+
         $disbursement->update([
             'status' => 'approved',
             'approved_by_id' => auth()->id(),
@@ -196,6 +265,10 @@ class DisbursementController extends Controller
 
     public function postDisbursement(Request $request, Disbursement $disbursement)
     {
+        if (!auth()->user()?->canPostDisbursements()) {
+            abort(403, 'Only the Head of Finance can post disbursements.');
+        }
+
         if ($disbursement->status !== 'approved') {
             return redirect()->back()->with('error', 'Disbursement must be approved before posting.');
         }
@@ -223,6 +296,10 @@ class DisbursementController extends Controller
             'remarks' => 'required|string|max:500',
         ]);
 
+        if (!auth()->user()?->canApproveDisbursements()) {
+            abort(403, 'Only the Head of Finance can reject disbursements.');
+        }
+
         $disbursement->update([
             'status' => 'rejected',
             'rejected_by_id' => auth()->id(),
@@ -241,6 +318,10 @@ class DisbursementController extends Controller
         $request->validate([
             'remarks' => 'required|string|max:500',
         ]);
+
+        if (!auth()->user()?->canApproveDisbursements()) {
+            abort(403, 'Only the Head of Finance can return disbursements for revision.');
+        }
 
         $disbursement->update([
             'status' => 'returned_for_revision',
@@ -282,25 +363,18 @@ class DisbursementController extends Controller
                 ->where('status', 'posted')
                 ->sum('amount');
 
-            $expense->update(['paid' => $totalPaid]);
+            $updates = ['paid' => $totalPaid];
 
-            // Sync budget item expenditure as well
-            if ($expense->date_encoded && $expense->particular_id) {
-                $year = date('Y', strtotime($expense->date_encoded));
-                $budget = \App\Models\AnnualBudget::where('year', $year)->first();
-                if ($budget) {
-                    $budgetItem = \App\Models\BudgetItem::where('budget_id', $budget->id)
-                        ->where('particular_id', $expense->particular_id)
-                        ->first();
-                    if ($budgetItem) {
-                        $postedTotal = Expense::whereYear('date_encoded', $year)
-                            ->where('particular_id', $expense->particular_id)
-                            ->where('status', '!=', 'cancelled')
-                            ->sum('paid');
-                        $budgetItem->update(['expenditure' => $postedTotal]);
-                    }
-                }
+            if ($totalPaid > 0 && $expense->status !== 'cancelled') {
+                $updates['status'] = 'posted';
+                $updates['date_approved'] = $expense->date_approved ?: now();
+            } elseif ($totalPaid <= 0 && $expense->status === 'posted') {
+                $updates['status'] = 'pending';
             }
+
+            $expense->update($updates);
+
+            // Budget item expenditure is derived dynamically from posted disbursements.
         }
     }
 }

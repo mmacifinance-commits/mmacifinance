@@ -11,12 +11,6 @@ class IncomeController extends Controller
 {
     public function index(Request $request)
     {
-        $selectedYear = (int) ($request->query('year') ?: date('Y'));
-        $selectedMonth = $request->query('month') ? (int) $request->query('month') : null;
-        $startDate = $request->query('start_date');
-        $endDate = $request->query('end_date');
-        $search = trim((string) $request->query('search', ''));
-
         $availableYears = Income::query()
             ->selectRaw('YEAR(date_encoded) as year')
             ->distinct()
@@ -26,6 +20,12 @@ class IncomeController extends Controller
             ->sortDesc()
             ->values()
             ->toArray();
+
+        $selectedYear = (int) ($request->query('year') ?: ($availableYears[0] ?? date('Y')));
+        $selectedMonth = $request->query('month') ? (int) $request->query('month') : null;
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+        $search = trim((string) $request->query('search', ''));
 
         $query = Income::query();
         if ($search !== '') {
@@ -45,7 +45,9 @@ class IncomeController extends Controller
         }
 
         $incomeRecords = $query->latest('date_encoded')->get();
-        $totalRevenue = (float) $incomeRecords->sum('amount');
+        $totalRevenue = (float) Income::query()
+            ->whereYear('date_encoded', $selectedYear)
+            ->sum('amount');
 
         return Inertia::render('Income/Index', [
             'incomeRecords' => $incomeRecords,
@@ -79,7 +81,7 @@ class IncomeController extends Controller
 
         Income::create($validated);
 
-        return redirect()->route('income.index')->with('success', 'Income item created successfully.');
+        return redirect()->back()->with('success', 'Income item created successfully.');
     }
 
     public function update(Request $request, Income $income)
@@ -94,13 +96,13 @@ class IncomeController extends Controller
 
         $income->update($validated);
 
-        return redirect()->route('income.index')->with('success', 'Income item updated successfully.');
+        return redirect()->back()->with('success', 'Income item updated successfully.');
     }
 
     public function destroy(Income $income)
     {
         $income->delete();
 
-        return redirect()->route('income.index')->with('success', 'Income item deleted successfully.');
+        return redirect()->back()->with('success', 'Income item deleted successfully.');
     }
 }

@@ -1,4 +1,7 @@
-# Accounting Information System User Manual
+# BUDGET FUND UTILIZATION REPORT
+## User Manual
+
+Prepared from the current system workflow
 
 ## Table of Contents
 
@@ -17,7 +20,7 @@
 
 ## 1. Overview
 
-This Accounting Information System is used to manage budget fund utilization and tracking. It records income, creates budget appropriations, tracks expenses and disbursements, and shows summaries through dashboards and reports.
+This Budget Fund Utilization Report system is used to manage budget fund utilization and tracking. It records income, creates budget appropriations, tracks expenses and disbursements, and shows summaries through dashboards and reports.
 
 The system is designed so that all records are connected from the source of funds down to the final posted transaction.
 
@@ -40,14 +43,16 @@ The general flow of the system is:
 
 1. Income is recorded.
 2. Appropriation is created from the income source.
-3. An annual budget is created.
-4. Budget categories, responsibility centers, and account titles are assigned.
-5. Monthly budget items are prepared.
-6. Expenses are recorded.
-7. Disbursements are created.
-8. Disbursements are approved or returned.
-9. Posted transactions reduce the available balance.
-10. Dashboard and revenue summaries update automatically.
+3. A real allocation record is stored so the appropriation is linked to income.
+4. An annual budget is created.
+5. Budget categories, responsibility centers, and account titles are assigned.
+6. Monthly budget items are prepared.
+7. Expenses are recorded and submitted for approval.
+8. The Head of Finance approves, returns, or rejects the expense.
+9. Approved expenses can then be linked to disbursements.
+10. Disbursements are approved and posted.
+11. Posted disbursements become the official expenditure source.
+12. Dashboard, IAEO, and financial reports update automatically from the posted records.
 
 ## 4. Step-by-Step Explanation
 
@@ -72,6 +77,7 @@ This means:
 
 - income is the total source amount
 - appropriation is the part assigned for use
+- the deduction is stored as a real linked allocation record
 
 The system uses appropriation as the controlled budget amount.
 
@@ -161,6 +167,13 @@ The expense should be linked to:
 
 This allows the system to know exactly where the money was spent.
 
+Important:
+
+- the expense starts as a workflow record
+- the Head of Finance controls approval, return, and rejection
+- an expense does not become official expenditure until it is linked to a posted disbursement
+- if it goes over the appropriation, the system still saves it and shows a warning
+
 ### 4.9 Creating Disbursements
 
 A disbursement is the payment or release record for an expense.
@@ -175,22 +188,18 @@ It usually includes:
 - workflow status
 
 Disbursements are used to track the movement of money.
+Only approved expenses should be linked to a disbursement.
 
 ### 4.10 Approval and Posting
 
-Disbursements go through approval before they are finalized.
+Expenses and disbursements both go through a workflow before they are finalized.
 
 Possible statuses include:
 
-- prepared
-- submitted
-- for approval
-- approved
-- posted
-- returned
-- rejected
+- Expense: pending -> for_approval -> approved -> returned_for_revision / rejected
+- Disbursement: draft -> for_release -> for_approval -> approved -> posted
 
-When a transaction is posted, it becomes official and updates the balance.
+When a disbursement is posted, it becomes official and updates the actual expenditure, balance, and utilization automatically.
 
 ### 4.11 Dashboard Updates
 
@@ -222,6 +231,7 @@ The revenue page shows the relationship between:
 - appropriation
 - expenses
 - remaining appropriation
+- remaining income
 
 This page helps users understand how the budget source was used.
 
@@ -286,11 +296,13 @@ To keep the system accurate:
 
 - income should be recorded first
 - appropriation should come from income
+- appropriation should be stored as a real linked allocation record
 - budget items should use the correct category, responsibility center, and account title
 - expenses should be linked to the correct budget item
 - disbursements should be tied to expenses
 - approvals should follow the user role permissions
 - posted records should update totals automatically
+- over-budget expenses may still be saved, but the system should warn the user
 
 ## 7. Summary of Each Module
 
@@ -320,7 +332,7 @@ Shows a summary of the budget and transactions.
 
 ### Revenue
 
-Shows income, appropriation, expenses, and remaining appropriation.
+Shows income, appropriation, expenses, remaining appropriation, and remaining income.
 
 ## 8. Login and Navigation Guide
 
@@ -436,6 +448,10 @@ Approval is restricted by role. Only the authorized final approver can complete 
 ### What should I do if a record looks wrong?
 
 Review the linked category, responsibility center, account title, and date. If needed, return the record for correction instead of posting it.
+
+### Can the system save an expense that is over budget?
+
+Yes. The system allows it, but it shows a warning so users can monitor the overrun.
 
 ## 11. Simple Example
 

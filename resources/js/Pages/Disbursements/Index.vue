@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
@@ -15,6 +15,7 @@ const userRole = computed(() => pageProps.value.userRole || pageProps.value.auth
 const props = defineProps({
     disbursements: Array,
     expenses: Array,
+    budgetYears: Array,
     availableYears: Array,
     defaultYear: [Number, String],
     userRole: String,
@@ -51,6 +52,34 @@ const filterSearch = ref('')
 const filterYear = ref(props.defaultYear ? String(props.defaultYear) : 'all')
 const filterMethod = ref('')
 const filterStatus = ref('')
+const linkedExpenseFilter = ref('all')
+const linkedExpenseSearch = ref('')
+
+function expensePaymentState(expense) {
+    const amount = Number(expense?.amount || 0)
+    const paid = Number(expense?.paid || 0)
+    if (paid <= 0) return 'unpaid'
+    if (amount > 0 && paid < amount) return 'partial'
+    return 'fully_paid'
+}
+
+function expensePaymentLabel(expense) {
+    const state = expensePaymentState(expense)
+    return {
+        unpaid: 'Unpaid',
+        partial: 'Partially Paid',
+        fully_paid: 'Fully Paid',
+    }[state] || 'Unpaid'
+}
+
+function expensePaymentBadgeClass(expense) {
+    const state = expensePaymentState(expense)
+    return {
+        unpaid: 'bg-rose-100 text-rose-700 border-rose-200',
+        partial: 'bg-amber-100 text-amber-700 border-amber-200',
+        fully_paid: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    }[state] || 'bg-slate-100 text-slate-700 border-slate-200'
+}
 
 const filteredDisbursements = computed(() => {
     const all = [...(props.disbursements || []), ...offlineRows.value]
@@ -74,13 +103,32 @@ const filteredDisbursements = computed(() => {
 })
 
 const filteredExpensesForModal = computed(() => {
-    if (!props.expenses?.length) return []
-    if (!filterYear.value || filterYear.value === 'all') {
-        return props.expenses
+    let rows = [...(props.expenses || [])].filter(e => String(e.status || '').toLowerCase() === 'approved')
+
+    if (linkedExpenseSearch.value.trim()) {
+        const q = linkedExpenseSearch.value.trim().toLowerCase()
+        rows = rows.filter(e =>
+            (e.ref_no || '').toLowerCase().includes(q) ||
+            (e.description || '').toLowerCase().includes(q) ||
+            (e.pay_to || '').toLowerCase().includes(q)
+        )
     }
-    return props.expenses.filter(e => {
-        const expYear = e.date_encoded ? String(e.date_encoded).slice(0, 4) : (e.created_at ? String(e.created_at).slice(0, 4) : null)
-        return String(expYear) === String(filterYear.value)
+
+    if (filterYear.value && filterYear.value !== 'all') {
+        rows = rows.filter(e => {
+            const expYear = e.date_encoded ? String(e.date_encoded).slice(0, 4) : (e.created_at ? String(e.created_at).slice(0, 4) : null)
+            return String(expYear) === String(filterYear.value)
+        })
+    }
+
+    if (linkedExpenseFilter.value !== 'all') {
+        rows = rows.filter(e => expensePaymentState(e) === linkedExpenseFilter.value)
+    }
+
+    const sortOrder = { unpaid: 0, partial: 1, fully_paid: 2 }
+    return rows.sort((a, b) => {
+        const diff = (sortOrder[expensePaymentState(a)] ?? 9) - (sortOrder[expensePaymentState(b)] ?? 9)
+        return diff !== 0 ? diff : String(a.ref_no || '').localeCompare(String(b.ref_no || ''))
     })
 })
 
@@ -91,10 +139,30 @@ function clearFilters() {
     filterStatus.value = ''
 }
 
+function clearLinkedExpenseFilter() {
+    linkedExpenseFilter.value = 'all'
+}
+
+function clearLinkedExpenseSearch() {
+    linkedExpenseSearch.value = ''
+}
+
+const selectedExpense = computed(() => {
+    return props.expenses?.find(e => String(e.id) === String(form.expense_id)) || null
+})
+
 function fmt(v) { return new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(v || 0) }
 function fmtDate(d) { return d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—' }
 
+const PESO = '₱'
+
 function openCreate() {
+    const budgetYears = (props.budgetYears || []).map(y => Number(y))
+    if (filterYear.value !== 'all' && budgetYears.length && !budgetYears.includes(Number(filterYear.value))) {
+        alert(`No annual budget exists for FY ${filterYear.value}. Please create the annual budget first.`)
+        return
+    }
+
     form.reset()
     form.expense_id = filteredExpensesForModal.value[0]?.id || ''
     if (form.expense_id) {
@@ -212,10 +280,10 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
     <div class="flex items-center justify-between mb-6">
         <div>
             <h2 class="text-xl font-bold text-gray-900">Disbursements & Workflow</h2>
-            <p class="text-sm text-gray-500">Manage release, approval, and posting of funds to General Ledger</p>
+            <p class="text-sm text-gray-500">Manage payment release, approval, and posting of linked expenses to General Ledger</p>
         </div>
         <button v-if="perms.canManageDisbursements || perms.isCashier || perms.isSuperAdmin" @click="openCreate" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
-            Create Disbursement
+            Create Payment Release
         </button>
     </div>
 
@@ -271,7 +339,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                             <div class="font-semibold text-gray-900 text-sm">{{ d.pay_to }}</div>
                             <div class="text-xs text-gray-500">{{ d.description }}</div>
                         </td>
-                        <td class="px-5 py-4 text-right font-mono text-sm font-bold text-gray-900 align-middle">₱{{ fmt(d.amount) }}</td>
+                        <td class="px-5 py-4 text-right font-mono text-sm font-bold text-gray-900 align-middle">{{ PESO }}{{ fmt(d.amount) }}</td>
                         <td class="px-5 py-4 text-center text-xs align-middle">
                             <span class="px-2.5 py-1 rounded bg-slate-100 text-slate-700 font-medium border border-slate-200">
                                 {{ methodLabels[d.method] || d.method }}
@@ -293,7 +361,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                                 <button v-if="(d.status === 'draft' || d.status === 'returned_for_revision') && (perms.isCashier || perms.canManageDisbursements || perms.isSuperAdmin)"
                                     @click="submitForApproval(d)"
                                     class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-xs font-bold shadow-sm transition">
-                                    Submit for Approval
+                                    Submit Release
                                 </button>
 
                                 <!-- Head of Finance Approve Action -->
@@ -307,7 +375,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                                 <button v-if="d.status === 'approved' && perms.canPost"
                                     @click="openActionModal(d, 'post')"
                                     class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold shadow-sm transition">
-                                    Post to Ledger
+                                    Post Release
                                 </button>
 
                                 <!-- Head of Finance Reject / Return Actions -->
@@ -324,14 +392,14 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                                 </button>
 
                                 <!-- Standard Edit Button -->
-                                <button v-if="d.status !== 'posted' && (perms.canManageDisbursements || perms.isCashier || perms.isSuperAdmin)"
+                                <button v-if="d.status !== 'posted' || perms.isSuperAdmin"
                                     @click="openEdit(d)"
                                     class="px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded text-xs font-semibold border border-indigo-200 shadow-2xs transition">
                                     Edit
                                 </button>
 
                                 <!-- Standard Delete Button -->
-                                <button v-if="d.status !== 'posted' && (perms.canManageDisbursements || perms.isCashier || perms.isSuperAdmin)"
+                                <button v-if="d.status !== 'posted' || perms.isSuperAdmin"
                                     @click="remove(d.id)"
                                     class="px-2.5 py-1 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded text-xs font-semibold border border-rose-200 shadow-2xs transition">
                                     Delete
@@ -352,40 +420,142 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
     </div>
 
     <!-- Create/Edit Disbursement Modal -->
-    <Modal :show="showModal" :title="editing ? 'Edit Disbursement' : 'Create Disbursement'" :subtitle="editing ? 'Update disbursement release details.' : 'Enter release details and submit for approval.'" max-width="lg" @close="showModal = false">
+    <Modal :show="showModal" :title="editing ? 'Edit Disbursement' : 'Create Disbursement'" :subtitle="editing ? 'Update disbursement release details.' : 'Enter release details and submit for approval.'" max-width="5xl" @close="showModal = false">
         <form @submit.prevent="save">
-            <div class="grid gap-4 sm:grid-cols-2">
-                <div class="sm:col-span-2">
-                    <label class="block text-sm font-medium mb-1.5">Linked Expense <span class="text-red-500">*</span></label>
-                    <select v-model="form.expense_id" @change="onExpenseSelect" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required>
-                        <option value="" disabled>Select Linked Expense</option>
-                        <option v-for="e in filteredExpensesForModal" :key="e.id" :value="e.id">
-                            {{ e.ref_no }} - {{ e.description }} (Total: ₱{{ fmt(e.amount) }} | Paid: ₱{{ fmt(e.paid) }})
-                        </option>
-                    </select>
+            <div class="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+                <!-- Linked expense picker -->
+                <div class="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <div class="flex flex-wrap items-end justify-between gap-2">
+                        <div class="min-w-[220px] flex-1">
+                            <label class="block text-sm font-medium">Linked Expense <span class="text-red-500">*</span></label>
+                            <p class="mt-1 text-xs text-slate-500">
+                                Search expenses by reference, description, or payee.
+                            </p>
+                        </div>
+                        <div class="inline-flex items-center rounded-lg border border-slate-200 bg-white p-1 text-[11px] font-semibold text-slate-600 shadow-sm">
+                            <button type="button" @click="linkedExpenseFilter = 'all'" :class="linkedExpenseFilter === 'all' ? 'bg-navy-dark text-white shadow-sm' : 'text-slate-500'" class="rounded-md px-2 py-1 transition">All</button>
+                            <button type="button" @click="linkedExpenseFilter = 'unpaid'" :class="linkedExpenseFilter === 'unpaid' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-500'" class="rounded-md px-2 py-1 transition">Unpaid</button>
+                            <button type="button" @click="linkedExpenseFilter = 'partial'" :class="linkedExpenseFilter === 'partial' ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-500'" class="rounded-md px-2 py-1 transition">Partial</button>
+                            <button type="button" @click="linkedExpenseFilter = 'fully_paid'" :class="linkedExpenseFilter === 'fully_paid' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500'" class="rounded-md px-2 py-1 transition">Paid</button>
+                        </div>
+                    </div>
+
+                    <div class="grid gap-2 sm:grid-cols-[1fr_auto]">
+                        <div class="relative">
+                            <input
+                                v-model="linkedExpenseSearch"
+                                type="text"
+                                class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 pr-16 text-sm focus:border-navy focus:outline-none"
+                                placeholder="Search ref no, description, payee..."
+                            />
+                            <button
+                                v-if="linkedExpenseSearch"
+                                type="button"
+                                class="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-[11px] font-semibold text-indigo-600 hover:bg-indigo-50"
+                                @click="clearLinkedExpenseSearch"
+                            >
+                                Clear
+                            </button>
+                        </div>
+                        <button
+                            type="button"
+                            class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                            @click="clearLinkedExpenseFilter"
+                        >
+                            Reset Filters
+                        </button>
+                    </div>
+
+                    <p class="text-xs text-slate-500">
+                        Showing {{ filteredExpensesForModal.length }} approved expenses eligible for disbursement for {{ filterYear === 'all' ? 'all years' : `FY ${filterYear}` }}.
+                    </p>
+
+                    <div v-if="selectedExpense" class="rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Selected</p>
+                                <p class="mt-1 text-sm font-semibold text-slate-900">{{ selectedExpense.ref_no }} - {{ selectedExpense.description }}</p>
+                                <p class="text-xs text-slate-500">{{ selectedExpense.pay_to || 'No payee yet' }}</p>
+                            </div>
+                            <span :class="['rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider', expensePaymentBadgeClass(selectedExpense)]">
+                                {{ expensePaymentLabel(selectedExpense) }}
+                            </span>
+                        </div>
+                        <div class="mt-2.5 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
+                            <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                                <p class="text-[10px] uppercase tracking-wide text-slate-400">Total</p>
+                                <p class="mt-1 font-semibold text-slate-900">{{ PESO }}{{ fmt(selectedExpense.amount) }}</p>
+                            </div>
+                            <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                                <p class="text-[10px] uppercase tracking-wide text-slate-400">Paid</p>
+                                <p class="mt-1 font-semibold text-slate-900">{{ PESO }}{{ fmt(selectedExpense.paid) }}</p>
+                            </div>
+                            <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                                <p class="text-[10px] uppercase tracking-wide text-slate-400">Remaining</p>
+                                <p class="mt-1 font-semibold text-slate-900">{{ PESO }}{{ fmt(Math.max(0, Number(selectedExpense.amount || 0) - Number(selectedExpense.paid || 0))) }}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="filteredExpensesForModal.length" class="max-h-[18rem] overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+                        <button
+                            v-for="e in filteredExpensesForModal"
+                            :key="e.id"
+                            type="button"
+                            class="w-full border-b border-slate-100 px-3 py-2.5 text-left transition last:border-b-0 hover:bg-slate-50"
+                            :class="String(form.expense_id) === String(e.id) ? 'bg-indigo-50' : ''"
+                            @click="form.expense_id = e.id; onExpenseSelect({ target: { value: e.id } })"
+                        >
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <p class="truncate text-sm font-semibold text-slate-900">{{ e.ref_no }} - {{ e.description }}</p>
+                                    <p class="truncate text-xs text-slate-500">{{ e.pay_to || 'No payee yet' }}</p>
+                                </div>
+                                <span :class="['rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider', expensePaymentBadgeClass(e)]">
+                                    {{ expensePaymentLabel(e) }}
+                                </span>
+                            </div>
+
+                        </button>
+                    </div>
+                    <div v-else class="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
+                        No linked expenses match your search or filter.
+                    </div>
                 </div>
-                <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1.5">Description</label><input v-model="form.description" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
-                <div><label class="block text-sm font-medium mb-1.5">Category / Source</label><input v-model="form.source" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
-                <div><label class="block text-sm font-medium mb-1.5">Pay To (Payee)</label><input v-model="form.pay_to" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
-                <div><label class="block text-sm font-medium mb-1.5">Disbursement Amount (₱)</label><input v-model.number="form.amount" type="number" step="0.01" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
-                <div><label class="block text-sm font-medium mb-1.5">Payment Method</label><select v-model="form.method" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"><option value="check">Check</option><option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option></select></div>
-                <div><label class="block text-sm font-medium mb-1.5">Date Encoded</label><input v-model="form.date_encoded" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
-                <div>
-                    <label class="block text-sm font-medium mb-1.5">Workflow Status</label>
-                    <select v-model="form.status" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :disabled="perms.isCashier">
-                        <option value="draft">Draft</option>
-                        <option value="for_approval">For Approval</option>
-                        <option value="approved" v-if="!perms.isCashier">Approved</option>
-                        <option value="posted" v-if="!perms.isCashier">Posted</option>
-                    </select>
+
+                <!-- Disbursement fields -->
+                <div class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2">
+                    <div class="sm:col-span-2">
+                        <label class="block text-sm font-medium mb-1.5">Description</label>
+                        <textarea
+                            v-model="form.description"
+                            rows="3"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm leading-6"
+                            placeholder="Enter a clearer description for the disbursement"
+                            required
+                        />
+                    </div>
+                    <div><label class="block text-sm font-medium mb-1.5">Category / Source</label><input v-model="form.source" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
+                    <div><label class="block text-sm font-medium mb-1.5">Pay To (Payee)</label><input v-model="form.pay_to" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
+                    <div><label class="block text-sm font-medium mb-1.5">Disbursement Amount (₱)</label><input v-model.number="form.amount" type="number" step="0.01" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
+                    <div><label class="block text-sm font-medium mb-1.5">Payment Method</label><select v-model="form.method" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"><option value="check">Check</option><option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option></select></div>
+                    <div><label class="block text-sm font-medium mb-1.5">Date Encoded</label><input v-model="form.date_encoded" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1.5">Workflow Status</label>
+                        <select v-model="form.status" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :disabled="perms.isCashier">
+                            <option value="draft">Draft</option>
+                            <option value="for_release" v-if="!perms.isCashier">For Release</option>
+                            <option value="for_approval">For Approval</option>
+                        </select>
+                    </div>
+                    <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1.5">Notes / Purpose</label><input v-model="form.notes" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" placeholder="Supporting details or notes" /></div>
+                    <div class="sm:col-span-2 flex items-center justify-end gap-3 pt-2 border-t mt-2">
+                        <button type="button" @click="showModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                        <button type="submit" :disabled="form.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy shadow-sm">
+                            {{ form.processing ? 'Saving...' : (editing ? 'Update Record' : (perms.isCashier ? 'Submit for Approval' : 'Save Record')) }}
+                        </button>
+                    </div>
                 </div>
-                <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1.5">Notes / Purpose</label><input v-model="form.notes" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" placeholder="Supporting details or notes" /></div>
-            </div>
-            <div class="flex items-center justify-end gap-3 pt-5 border-t mt-4">
-                <button type="button" @click="showModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button type="submit" :disabled="form.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy shadow-sm">
-                    {{ form.processing ? 'Saving...' : (editing ? 'Update Record' : (perms.isCashier ? 'Submit for Approval' : 'Save Record')) }}
-                </button>
             </div>
         </form>
     </Modal>
@@ -397,7 +567,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                 <div class="p-3 bg-slate-50 border rounded text-xs text-slate-700 space-y-1">
                     <div><span class="font-bold">DSB Reference:</span> {{ selectedDsb?.disbursement_no }}</div>
                     <div><span class="font-bold">Payee:</span> {{ selectedDsb?.pay_to }}</div>
-                    <div><span class="font-bold">Amount:</span> ₱{{ fmt(selectedDsb?.amount) }}</div>
+                    <div><span class="font-bold">Amount:</span> {{ PESO }}{{ fmt(selectedDsb?.amount) }}</div>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Workflow Remarks</label>
@@ -415,7 +585,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
     </Modal>
 
     <!-- Audit Trail Stamps Drawer / Modal -->
-    <Modal :show="showAuditModal" title="Audit Trail & User Stamps" subtitle="Full transaction history and user authorization stamps" max-width="lg" @close="showAuditModal = false">
+    <Modal :show="showAuditModal" title="Audit Trail & User Stamps" subtitle="Full transaction history and user authorization stamps" max-width="5xl" @close="showAuditModal = false">
         <div class="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
             <div class="p-3 bg-navy-dark text-white rounded-lg flex justify-between items-center text-xs">
                 <div><span class="font-bold">DSB Reference:</span> {{ selectedDsb?.disbursement_no }}</div>
@@ -462,3 +632,4 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
     </Modal>
 </AppLayout>
 </template>
+

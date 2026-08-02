@@ -25,4 +25,9 @@ class AnnualBudget extends Model
     {
         return $this->hasMany(BudgetItem::class, 'budget_id');
     }
+
+    public function incomeAllocations(): HasMany
+    {
+        return $this->hasMany(IncomeAllocation::class);
+    }
 }

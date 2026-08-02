@@ -93,27 +93,8 @@ class DashboardController extends Controller
         $postedDisbursements = $disbQuery->get();
         $totalExpenditure = (float) $postedDisbursements->sum('amount');
 
-        // Also check posted expenses directly if any
-        $expenseQuery = Expense::where('paid', '>', 0);
-        if ($startDate && $endDate) {
-            $expenseQuery->whereBetween('date_encoded', [$startDate, $endDate]);
-        } elseif ($selectedMonth) {
-            $expenseQuery->whereYear('date_encoded', $selectedYear)->whereMonth('date_encoded', $selectedMonth);
-        } else {
-            $expenseQuery->whereYear('date_encoded', $selectedYear);
-        }
-        if ($categoryId) {
-            $expenseQuery->where('category_id', $categoryId);
-        }
-        if ($accountTitleId) {
-            $expenseQuery->where('particular_id', $accountTitleId);
-        }
-        if ($departmentId) {
-            $expenseQuery->whereHas('particular', fn($p) => $p->where('department_id', $departmentId));
-        }
-
-        $postedExpensesTotal = (float) $expenseQuery->sum('paid');
-        $effectiveExpenditure = max($totalExpenditure, $postedExpensesTotal);
+        // Official expenditures are derived only from posted disbursements.
+        $effectiveExpenditure = $totalExpenditure;
 
         $remainingBalance = $totalAppropriation - $effectiveExpenditure;
         $utilizationRate = $totalAppropriation > 0 ? round(($effectiveExpenditure / $totalAppropriation) * 100, 2) : 0;
@@ -229,8 +210,8 @@ class DashboardController extends Controller
                 'balance' => $remainingBalance,
                 'utilizationRate' => $utilizationRate,
                 'totalTransactions' => $postedDisbursements->count(),
-                'pendingExpenses' => Expense::where('status', 'pending')->count(),
-                'pendingDisbursements' => Disbursement::whereIn('status', ['draft', 'for_release', 'for_approval'])->count(),
+                'pendingExpenses' => Expense::whereYear('date_encoded', $selectedYear)->where('status', 'pending')->count(),
+                'pendingDisbursements' => Disbursement::whereYear('date_encoded', $selectedYear)->whereIn('status', ['draft', 'for_release', 'for_approval'])->count(),
             ],
             'categoryStats' => $categoryStats,
             'multiYearComparison' => $multiYearComparison,

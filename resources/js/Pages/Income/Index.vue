@@ -17,6 +17,7 @@ const props = defineProps({
 const showModal = ref(false)
 const editing = ref(null)
 const form = useForm({ source: '', description: '', amount: 0, date_encoded: '', notes: '' })
+const PESO = '\u20b1'
 
 const selectedYear = ref(props.filters?.year || new Date().getFullYear())
 const selectedMonth = ref(props.filters?.month || '')
@@ -119,7 +120,7 @@ function remove(id) {
     </div>
 
     <div class="grid gap-4 md:grid-cols-2 mb-6">
-        <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden"><div class="h-1 bg-navy-dark"></div><div class="p-4"><p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Total Income</p><p class="text-xl font-extrabold text-navy-dark mt-0.5">₱{{ fmt(stats?.totalRevenue) }}</p></div></div>
+        <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden"><div class="h-1 bg-navy-dark"></div><div class="p-4"><p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Total Income</p><p class="text-xl font-extrabold text-navy-dark mt-0.5">{{ PESO }}{{ fmt(stats?.totalRevenue) }}</p></div></div>
         <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden"><div class="h-1 bg-slate-700"></div><div class="p-4"><p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Income Records</p><p class="text-xl font-extrabold text-slate-800 mt-0.5">{{ stats?.recordCount || 0 }}</p></div></div>
     </div>
 
@@ -129,17 +130,28 @@ function remove(id) {
             <span class="text-xs text-mustard font-semibold">Head of Finance only can add</span>
         </div>
         <div class="divide-y">
-            <div v-for="item in incomeRecords" :key="item.id" class="px-5 py-4 flex items-center justify-between gap-4">
-                <div>
+            <div class="hidden grid-cols-[1.15fr_1.9fr_0.9fr_0.85fr_auto] items-center gap-4 px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-gray-500 sm:grid">
+                <div>Income No.</div>
+                <div>Source / Description</div>
+                <div>Date</div>
+                <div class="text-right">Amount</div>
+                <div class="text-right">Actions</div>
+            </div>
+            <div v-for="item in incomeRecords" :key="item.id" class="grid grid-cols-1 gap-3 px-5 py-4 sm:grid-cols-[1.15fr_1.9fr_0.9fr_0.85fr_auto] sm:items-center sm:gap-4">
+                <div class="min-w-0">
                     <p class="text-sm font-bold text-gray-900">{{ item.income_no }}</p>
-                    <p class="text-xs text-gray-500">{{ item.source }} - {{ item.description }}</p>
-                    <p class="text-[11px] text-gray-400 mt-1">{{ item.date_encoded?.slice?.(0, 10) }}</p>
+                    <p class="mt-1 text-[11px] text-gray-400 sm:hidden">{{ item.date_encoded?.slice?.(0, 10) }}</p>
                 </div>
-                <div class="text-right">
-                    <p class="text-sm font-bold text-gray-900">₱{{ fmt(item.amount) }}</p>
-                    <p class="text-xs text-gray-500">{{ item.notes || 'No notes' }}</p>
+                <div class="min-w-0">
+                    <p class="truncate text-sm font-semibold leading-5 text-gray-900">{{ item.source }}</p>
+                    <p class="truncate text-xs leading-5 text-gray-500">{{ item.description }}</p>
                 </div>
-                <div v-if="perms.canManageIncome" class="flex items-center gap-2">
+                <div class="hidden text-sm text-gray-600 sm:block">{{ item.date_encoded?.slice?.(0, 10) }}</div>
+                <div class="sm:justify-self-end sm:text-right">
+                    <p class="text-sm font-bold text-gray-900 tabular-nums">{{ PESO }}{{ fmt(item.amount) }}</p>
+                    <p class="mt-1 text-xs leading-5 text-gray-500">{{ item.notes || 'No notes' }}</p>
+                </div>
+                <div v-if="perms.canManageIncome" class="flex items-center gap-2 sm:justify-self-end sm:self-center">
                     <button @click="openEdit(item)" class="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-md text-xs font-semibold border border-indigo-200">Edit</button>
                     <button @click="remove(item.id)" class="px-3 py-1.5 bg-rose-50 text-rose-700 rounded-md text-xs font-semibold border border-rose-200">Delete</button>
                 </div>

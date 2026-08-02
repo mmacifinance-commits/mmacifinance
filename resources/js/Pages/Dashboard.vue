@@ -2,6 +2,8 @@
 import AppLayout from '@/Layouts/AppLayout.vue'
 import { Head, router } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
+import ComboTrendChart from '@/Components/ComboTrendChart.vue'
+import YearlyCombinedChart from '@/Components/YearlyCombinedChart.vue'
 
 const props = defineProps({
     budgets: Array,
@@ -18,6 +20,7 @@ const props = defineProps({
 })
 
 const viewMode = ref('monthly') // 'monthly' or 'annual'
+const hoveredAnnualPoint = ref(null)
 
 // Active Filter States
 const selectedYear = ref(props.filters?.year || 2026)
@@ -121,8 +124,70 @@ const multiYearSvgLines = computed(() => {
     const apprPath = apprCoords.reduce((acc, p, i) => i === 0 ? `M ${p.x} ${p.y}` : `${acc} L ${p.x} ${p.y}`, '')
     const expPath = expCoords.reduce((acc, p, i) => i === 0 ? `M ${p.x} ${p.y}` : `${acc} L ${p.x} ${p.y}`, '')
 
-    return { apprPath, expPath, apprCoords, expCoords }
+    const baselineY = height - 20
+    const apprAreaPath = `${apprPath} L ${apprCoords[apprCoords.length - 1].x} ${baselineY} L ${apprCoords[0].x} ${baselineY} Z`
+    const expAreaPath = `${expPath} L ${expCoords[expCoords.length - 1].x} ${baselineY} L ${expCoords[0].x} ${baselineY} Z`
+
+    return { apprPath, expPath, apprAreaPath, expAreaPath, apprCoords, expCoords }
 })
+
+const monthlyCombinedItems = computed(() => {
+    return (props.monthlyBreakdown || []).map(m => ({
+        ...m,
+        label: m.month,
+        tooltipTitle: `${m.month} ${selectedYear.value}`,
+        appropriation: Number(m.appropriation || 0),
+        expenditure: Number(m.expenditure || 0),
+        expense: Number(m.expenditure || 0),
+        balance: Number(m.balance || 0),
+        utilization: Number(m.utilization || 0),
+    }))
+})
+
+const annualYAxisTicks = computed(() => {
+    const maxVal = maxMultiYearValue.value || 1
+    const steps = 4
+    const ticks = []
+    for (let i = 0; i <= steps; i++) {
+        const value = (maxVal / steps) * (steps - i)
+        ticks.push({
+            value,
+            y: 42 + ((140 / steps) * i),
+        })
+    }
+    return ticks
+})
+
+const annualHoverZones = computed(() => {
+    const items = props.multiYearComparison || []
+    const { apprCoords, expCoords } = multiYearSvgLines.value
+    if (!items.length) return []
+
+    const width = 800
+    const height = 220
+    const chartPadding = 56
+    const usableWidth = width - chartPadding * 2
+    const zoneWidth = items.length > 1 ? usableWidth / items.length : usableWidth
+
+    return items.map((y, idx) => {
+        const anchor = expCoords[idx] || apprCoords[idx] || { x: width / 2, y: 80 }
+        return {
+            year: y.year,
+            left: items.length === 1 ? chartPadding : (idx * zoneWidth) + chartPadding,
+            width: zoneWidth,
+            anchorX: anchor.x,
+            anchorY: anchor.y,
+        }
+    })
+})
+
+function hoverAnnualPoint(idx) {
+    hoveredAnnualPoint.value = idx
+}
+
+function clearAnnualHover() {
+    hoveredAnnualPoint.value = null
+}
 
 const statusBadgeStyles = {
     draft: 'bg-slate-100 text-slate-700',
@@ -277,84 +342,40 @@ const barColors = ['#1e293b', '#d4a843', '#2563eb', '#059669', '#7c3aed', '#db27
                 <p class="text-xs text-gray-500">Comparing budget allocations vs actual posted expenditures</p>
             </div>
             <div class="flex items-center gap-4 text-xs font-semibold text-gray-600 mt-2 sm:mt-0">
-                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-navy-dark"></span> Budget Allocation</span>
-                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-mustard"></span> Actual Expenditures</span>
+                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-navy-dark"></span> Budget Appropriation</span>
+                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm" style="background-color: #0f766e"></span> Expenditures</span>
+                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm" style="background-color: #d4a843"></span> Utilization Rate</span>
             </div>
         </div>
 
         <!-- Monthly Line & Bar Graph Visualizer -->
-        <div v-if="viewMode === 'monthly'" class="space-y-4">
-            <div class="relative h-72 pt-6 pb-2 px-2 border-b border-gray-200 bg-slate-50/50 rounded-lg overflow-visible">
-                <!-- SVG Trend Lines Overlay -->
-                <svg class="absolute inset-0 w-full h-full pointer-events-none z-10" viewBox="0 0 1000 200" preserveAspectRatio="none">
-                    <path class="dashboard-line dashboard-line--appr" :d="monthlySvgLines.apprPath" fill="none" stroke="#1e293b" stroke-width="2" stroke-dasharray="4 2" opacity="0.6" />
-                    <path class="dashboard-line dashboard-line--exp" :d="monthlySvgLines.expPath" fill="none" stroke="#d4a843" stroke-width="3" />
-                    <circle v-for="(p, idx) in monthlySvgLines.expCoords" :key="'e-'+idx" :cx="p.x" :cy="p.y" r="4" fill="#d4a843" stroke="#ffffff" stroke-width="2" />
-                    <circle v-for="(p, idx) in monthlySvgLines.apprCoords" :key="'a-'+idx" :cx="p.x" :cy="p.y" r="3.5" fill="#1e293b" stroke="#ffffff" stroke-width="1.5" />
-                </svg>
-
-                <div class="h-full flex items-end justify-between gap-2 relative z-20">
-                    <div v-for="m in (monthlyBreakdown || [])" :key="m.month_num" class="flex-1 flex flex-col items-center h-full justify-end group relative">
-                        <!-- Tooltip -->
-                        <div class="absolute bottom-full left-1/2 z-30 mb-3 w-60 -translate-x-1/2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[11px] text-slate-700 shadow-2xl opacity-0 transition-all duration-200 group-hover:opacity-100 group-hover:-translate-y-1 pointer-events-none">
-                            <div class="font-bold text-navy-dark border-b border-slate-200 pb-1 mb-1">{{ m.month }} {{ selectedYear }}</div>
-                            <div>Allocation: ₱{{ fmt(m.appropriation) }}</div>
-                            <div>Expenditures: ₱{{ fmt(m.expenditure) }}</div>
-                            <div>Balance: ₱{{ fmt(m.balance) }}</div>
-                            <div class="font-semibold text-emerald-600">Utilization: {{ m.utilization }}%</div>
-                        </div>
-
-                        <!-- Bars Container -->
-                        <div class="w-full flex items-end justify-center gap-1 h-full px-1">
-                            <!-- Allocation Bar -->
-                            <div class="w-1/2 bg-navy-dark/80 group-hover:bg-navy transition-all duration-700 ease-out rounded-t-xs origin-bottom"
-                                :style="{ height: (m.appropriation > 0 ? Math.max(4, (m.appropriation / maxMonthlyValue) * 100) : 0) + '%' }"></div>
-                            <!-- Expense Bar -->
-                            <div class="w-1/2 bg-mustard group-hover:bg-amber-400 transition-all duration-700 ease-out rounded-t-xs origin-bottom"
-                                :style="{ height: (m.expenditure > 0 ? Math.max(4, (m.expenditure / maxMonthlyValue) * 100) : 0) + '%' }"></div>
-                        </div>
-
-                        <span class="text-[11px] font-bold text-slate-600 mt-2">{{ m.month }}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <ComboTrendChart
+            v-if="viewMode === 'monthly'"
+            :items="monthlyCombinedItems"
+            label-key="label"
+            :series="[
+                { key: 'appropriation', label: 'Budget Appropriation', type: 'bar', color: '#1e293b', fadeColor: 'rgba(30, 41, 59, 0.62)', barPercentage: 0.86, categoryPercentage: 0.86, maxBarThickness: 62, yAxisID: 'y' },
+                { key: 'expenditure', label: 'Expenditures', type: 'bar', color: '#0f766e', fadeColor: 'rgba(15, 118, 110, 0.62)', barPercentage: 0.86, categoryPercentage: 0.86, maxBarThickness: 62, yAxisID: 'y' },
+                { key: 'utilization', label: 'Utilization Rate', type: 'line', color: '#d4a843', fadeColor: 'rgba(212, 168, 67, 0.18)', yAxisID: 'y2' },
+            ]"
+            :show-header="false"
+            :show-legend="false"
+            :is-active="viewMode === 'monthly'"
+        />
 
         <!-- Multi-Year Comparative Trends -->
-        <div v-else class="space-y-4">
-            <div class="relative h-72 pt-6 pb-2 px-4 border-b border-gray-200 bg-slate-50/50 rounded-lg overflow-visible">
-                <!-- SVG Trend Lines Overlay for Multi-Year -->
-                <svg class="absolute inset-0 w-full h-full pointer-events-none z-10" viewBox="0 0 800 200" preserveAspectRatio="none">
-                    <path class="dashboard-line dashboard-line--appr" :d="multiYearSvgLines.apprPath" fill="none" stroke="#1e293b" stroke-width="2" stroke-dasharray="4 2" opacity="0.6" />
-                    <path class="dashboard-line dashboard-line--exp" :d="multiYearSvgLines.expPath" fill="none" stroke="#d4a843" stroke-width="3" />
-                    <circle v-for="(p, idx) in multiYearSvgLines.expCoords" :key="'mye-'+idx" :cx="p.x" :cy="p.y" r="5" fill="#d4a843" stroke="#ffffff" stroke-width="2" />
-                    <circle v-for="(p, idx) in multiYearSvgLines.apprCoords" :key="'mya-'+idx" :cx="p.x" :cy="p.y" r="4" fill="#1e293b" stroke="#ffffff" stroke-width="1.5" />
-                </svg>
-
-                <div class="h-full flex items-end justify-around gap-6 relative z-20">
-                    <div v-for="y in (multiYearComparison || [])" :key="y.year" class="flex-1 max-w-[120px] flex flex-col items-center h-full justify-end group relative">
-                        <!-- Tooltip -->
-                        <div class="absolute bottom-full left-1/2 z-30 mb-3 w-60 -translate-x-1/2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[11px] text-slate-700 shadow-2xl opacity-0 transition-all duration-200 group-hover:opacity-100 group-hover:-translate-y-1 pointer-events-none">
-                            <div class="font-bold text-navy-dark border-b border-slate-200 pb-1 mb-1">FY {{ y.year }} Performance</div>
-                            <div>Allocation: ₱{{ fmt(y.appropriation) }}</div>
-                            <div>Expenditures: ₱{{ fmt(y.expenditure) }}</div>
-                            <div>Remaining: ₱{{ fmt(y.balance) }}</div>
-                            <div class="font-semibold text-emerald-600">Util Rate: {{ y.utilization }}%</div>
-                        </div>
-
-                        <!-- Bars Container -->
-                        <div class="w-full flex items-end justify-center gap-2 h-full px-2">
-                            <div class="w-1/2 bg-navy-dark/80 rounded-t-sm transition-all duration-700 ease-out origin-bottom"
-                                :style="{ height: (y.appropriation > 0 ? Math.max(6, (y.appropriation / maxMultiYearValue) * 100) : 0) + '%' }"></div>
-                            <div class="w-1/2 bg-mustard rounded-t-sm transition-all duration-700 ease-out origin-bottom"
-                                :style="{ height: (y.expenditure > 0 ? Math.max(6, (y.expenditure / maxMultiYearValue) * 100) : 0) + '%' }"></div>
-                        </div>
-
-                        <span class="text-xs font-bold text-navy-dark mt-2">FY {{ y.year }}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <YearlyCombinedChart
+            v-else
+            :items="multiYearComparison || []"
+            :show-header="false"
+            :show-legend="false"
+            :is-active="viewMode === 'annual'"
+            :series="[
+                { key: 'appropriation', label: 'Budget Appropriation', type: 'bar', color: '#1e293b', fadeColor: 'rgba(30, 41, 59, 0.62)', barPercentage: 0.84, categoryPercentage: 0.84, maxBarThickness: 64, yAxisID: 'y' },
+                { key: 'expenditure', label: 'Expenditures', type: 'bar', color: '#0f766e', fadeColor: 'rgba(15, 118, 110, 0.62)', barPercentage: 0.84, categoryPercentage: 0.84, maxBarThickness: 64, yAxisID: 'y' },
+                { key: 'utilization', label: 'Utilization Rate', type: 'line', color: '#d4a843', fadeColor: 'rgba(212, 168, 67, 0.18)', yAxisID: 'y2' },
+            ]"
+        />
     </div>
 
     <!-- Bottom Section: Category Breakdown + Recent Posted Transactions -->
@@ -422,6 +443,26 @@ const barColors = ['#1e293b', '#d4a843', '#2563eb', '#059669', '#7c3aed', '#db27
     animation-delay: 0.08s;
 }
 
+.annual-line {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: annual-line-draw 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.annual-line--exp {
+    animation-delay: 0.16s;
+}
+
+.annual-point {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: annual-point-pop 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.annual-point--exp {
+    animation-delay: 0.12s;
+}
+
 @keyframes dashboard-line-draw {
     from {
         opacity: 0;
@@ -433,5 +474,36 @@ const barColors = ['#1e293b', '#d4a843', '#2563eb', '#059669', '#7c3aed', '#db27
         stroke-dasharray: 8 18;
         stroke-dashoffset: 0;
     }
+}
+
+@keyframes annual-line-draw {
+    from {
+        opacity: 0;
+        stroke-dashoffset: 1;
+    }
+    to {
+        opacity: 1;
+        stroke-dashoffset: 0;
+    }
+}
+
+@keyframes annual-point-pop {
+    from {
+        opacity: 0;
+        transform: scale(0.4);
+    }
+    70% {
+        opacity: 1;
+        transform: scale(1.15);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.writing-vertical {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
 }
 </style>
