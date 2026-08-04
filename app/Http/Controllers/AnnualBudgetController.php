@@ -97,6 +97,17 @@ class AnnualBudgetController extends Controller
         }
     }
 
+    protected function hydrateBudgetItemTotals(AnnualBudget $budget): void
+    {
+        $budget->items->each(function (BudgetItem $item) {
+            $expenditure = $item->postedExpenditureTotal();
+            $item->setAttribute('expenditure', $expenditure);
+            $item->setAttribute('balance', round((float) $item->appropriation - $expenditure, 2));
+            $appropriation = (float) $item->appropriation;
+            $item->setAttribute('utilization_rate', $appropriation > 0 ? round(($expenditure / $appropriation) * 100, 2) : 0.0);
+        });
+    }
+
     protected function normalizeHeader(string $header): string
     {
         return trim(Str::lower($header));
@@ -351,6 +362,7 @@ class AnnualBudgetController extends Controller
                     $item->update(['ref_no' => sprintf('MB-%d-%02d-%04d', $b->year, $item->month ?: 1, $item->id)]);
                 }
             }
+            $this->hydrateBudgetItemTotals($b);
         }
 
         return Inertia::render('AnnualBudgets/Index', [
@@ -374,6 +386,7 @@ class AnnualBudgetController extends Controller
                 $item->update(['ref_no' => sprintf('MB-%d-%02d-%04d', $annualBudget->year, $item->month ?: 1, $item->id)]);
             }
         }
+        $this->hydrateBudgetItemTotals($budget);
 
         return Inertia::render('AnnualBudgets/Show', [
             'budget' => $budget,

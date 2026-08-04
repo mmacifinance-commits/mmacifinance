@@ -24,6 +24,12 @@ class BudgetItem extends Model
         'appropriation' => 'decimal:2',
     ];
 
+    protected $appends = [
+        'expenditure',
+        'balance',
+        'utilization_rate',
+    ];
+
     protected static function boot()
     {
         parent::boot();
@@ -119,7 +125,6 @@ class BudgetItem extends Model
     {
         $budgetYear = (int) ($this->budget?->year ?? 0);
         $month = (int) ($this->month ?: 1);
-        $departmentId = $this->particular?->department_id;
         $budgetTitle = $this->normalizedBudgetTitle();
 
         if ($budgetYear <= 0) {
@@ -127,12 +132,7 @@ class BudgetItem extends Model
         }
 
         $query = Disbursement::query()
-            ->where('status', 'posted')
-            ->when($departmentId, function ($query) use ($departmentId) {
-                $query->whereHas('expense.particular', function ($particularQuery) use ($departmentId) {
-                    $particularQuery->where('department_id', $departmentId);
-                });
-            });
+            ->where('status', 'posted');
 
         $baseQuery = function ($query) use ($budgetYear) {
             $query->where('category_id', $this->category_id)
