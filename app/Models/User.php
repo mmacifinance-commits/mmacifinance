@@ -68,7 +68,7 @@ class User extends Authenticatable
 
     public function canManageExpenses(): bool
     {
-        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_DISBURSEMENT_OFFICER]);
+        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_DISBURSEMENT_OFFICER, self::ROLE_CASHIER]);
     }
 
     public function canSubmitExpenses(): bool

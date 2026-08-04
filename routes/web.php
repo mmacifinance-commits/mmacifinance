@@ -75,7 +75,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/expenses', [ExpenseController::class, 'index'])->name('expenses.index');
     Route::get('/disbursements', [DisbursementController::class, 'index'])->name('disbursements.index');
 
-    Route::middleware('role:super_admin,disbursement_officer')->group(function () {
+    Route::middleware('role:super_admin,disbursement_officer,cashier')->group(function () {
         Route::post('/expenses', [ExpenseController::class, 'store']);
         Route::put('/expenses/{expense}', [ExpenseController::class, 'update']);
         Route::delete('/expenses/{expense}', [ExpenseController::class, 'destroy']);
