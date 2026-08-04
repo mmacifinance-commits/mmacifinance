@@ -49,21 +49,50 @@ const importForm = useForm({
 
 const itemForm = useForm({
     category_id: '',
+    department_id: '',
     particular_id: '',
     month: 1,
     appropriation: 0,
 })
 
-const filteredAccountTitles = computed(() => {
+const availableDepartments = computed(() => {
     const titles = props.accountTitles || props.particulars || []
     const categoryId = Number(itemForm.category_id || 0)
 
-    if (!categoryId) return []
+    const departments = titles
+        .filter((title) => categoryId === 0 || Number(title.category_id || title.category?.id || 0) === categoryId)
+        .map((title) => title.department)
+        .filter(Boolean)
+        .reduce((acc, department) => {
+            const id = Number(department.id || 0)
+            if (id && !acc.some((dept) => Number(dept.id) === id)) {
+                acc.push(department)
+            }
+            return acc
+        }, [])
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+    return departments
+})
 
-    return titles.filter((title) => Number(title.category_id || title.category?.id || 0) === categoryId)
+const filteredAccountTitles = computed(() => {
+    const titles = props.accountTitles || props.particulars || []
+    const categoryId = Number(itemForm.category_id || 0)
+    const departmentId = Number(itemForm.department_id || 0)
+
+    if (!categoryId || !departmentId) return []
+
+    return titles.filter((title) =>
+        Number(title.category_id || title.category?.id || 0) === categoryId &&
+        Number(title.department_id || title.department?.id || 0) === departmentId
+    )
 })
 
 watch(() => itemForm.category_id, () => {
+    itemForm.department_id = ''
+    itemForm.particular_id = ''
+})
+
+watch(() => itemForm.department_id, () => {
     itemForm.particular_id = ''
 })
 
@@ -160,6 +189,7 @@ function openAddItem() {
 
 function openEditItem(item) {
     itemForm.category_id = item.category_id
+    itemForm.department_id = Number(item.particular?.department_id || item.particular?.department?.id || 0) || ''
     itemForm.particular_id = item.particular_id
     itemForm.month = item.month || 1
     itemForm.appropriation = item.appropriation
@@ -377,8 +407,15 @@ function catBalancePercent(group) {
                     </select>
                 </div>
                 <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Responsibility Center</label>
+                    <select v-model="itemForm.department_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :disabled="!itemForm.category_id" required>
+                        <option value="">Select responsibility center</option>
+                        <option v-for="d in availableDepartments" :key="d.id" :value="d.id">{{ d.name }}</option>
+                    </select>
+                </div>
+                <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Account Title</label>
-                    <select v-model="itemForm.particular_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :disabled="!itemForm.category_id" required>
+                    <select v-model="itemForm.particular_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :disabled="!itemForm.category_id || !itemForm.department_id" required>
                         <option value="">Select account title</option>
                         <option v-for="p in filteredAccountTitles" :key="p.id" :value="p.id">{{ p.particular }}</option>
                     </select>

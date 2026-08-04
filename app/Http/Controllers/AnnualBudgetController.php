@@ -418,14 +418,23 @@ class AnnualBudgetController extends Controller
     {
         $validated = $request->validate([
             'category_id' => 'required|exists:budget_categories,id',
+            'department_id' => 'required|exists:departments,id',
             'particular_id' => 'required|exists:budget_particulars,id',
             'month' => 'nullable|integer|min:1|max:12',
             'appropriation' => 'required|numeric|min:0',
         ]);
 
+        $particular = BudgetParticular::find($validated['particular_id']);
+        if (!$particular || (int) $particular->category_id !== (int) $validated['category_id'] || (int) $particular->department_id !== (int) $validated['department_id']) {
+            throw ValidationException::withMessages([
+                'particular_id' => 'Selected account title must belong to the chosen category and responsibility center.',
+            ]);
+        }
+
         $this->ensureIncomeExistsForYear((int) $annualBudget->year);
 
         $validated['month'] = $validated['month'] ?: 1;
+        unset($validated['department_id']);
 
         $item = DB::transaction(function () use ($annualBudget, $validated) {
             $item = $annualBudget->items()->create(array_merge($validated, [
@@ -456,14 +465,23 @@ class AnnualBudgetController extends Controller
     {
         $validated = $request->validate([
             'category_id' => 'required|exists:budget_categories,id',
+            'department_id' => 'required|exists:departments,id',
             'particular_id' => 'required|exists:budget_particulars,id',
             'month' => 'nullable|integer|min:1|max:12',
             'appropriation' => 'required|numeric|min:0',
         ]);
 
+        $particular = BudgetParticular::find($validated['particular_id']);
+        if (!$particular || (int) $particular->category_id !== (int) $validated['category_id'] || (int) $particular->department_id !== (int) $validated['department_id']) {
+            throw ValidationException::withMessages([
+                'particular_id' => 'Selected account title must belong to the chosen category and responsibility center.',
+            ]);
+        }
+
         $this->ensureIncomeExistsForYear((int) $annualBudget->year);
 
         $validated['month'] = $validated['month'] ?: $item->month ?: 1;
+        unset($validated['department_id']);
 
         DB::transaction(function () use ($item, $validated) {
             $item->update($validated);

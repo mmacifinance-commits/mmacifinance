@@ -2,7 +2,7 @@
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useOfflineQueue } from '@/composables/useOfflineQueue'
 
 const perms = computed(() => usePage().props.permissions || {})
@@ -11,6 +11,7 @@ const { isOnline, offlinePost, offlinePut, offlineDelete } = useOfflineQueue()
 const props = defineProps({
     expenses: Array,
     categories: Array,
+    budgetedCategories: Array,
     particulars: Array,
     accountTitles: Array,
     budgetYears: Array,
@@ -31,6 +32,29 @@ const filterSearch = ref('')
 const filterCategory = ref('')
 const filterStatus = ref('')
 const filterYear = ref(props.defaultYear ? String(props.defaultYear) : 'all')
+const selectedYear = computed(() => {
+    if (form.date_encoded) {
+        const year = new Date(form.date_encoded).getFullYear()
+        return String(year)
+    }
+    return props.defaultYear ? String(props.defaultYear) : String(new Date().getFullYear())
+})
+
+function hasBudgetForYear(category, year) {
+    const items = category.budget_items || category.budgetItems || []
+    return items.some((item) => String(item?.budget?.year) === String(year))
+}
+
+const categoryOptions = computed(() => {
+    return (props.budgetedCategories || []).filter((category) => hasBudgetForYear(category, selectedYear.value))
+})
+const filterCategoryOptions = computed(() => props.categories || [])
+const selectedCategoryId = computed(() => form.category_id ? String(form.category_id) : '')
+const accountTitleOptions = computed(() => {
+    const items = (props.accountTitles || props.particulars || [])
+    if (!selectedCategoryId.value) return []
+    return items.filter((item) => String(item.category_id ?? item.budget_category_id ?? '') === selectedCategoryId.value)
+})
 
 const filteredExpenses = computed(() => {
     const all = [...props.expenses, ...offlineRows.value]
@@ -57,6 +81,19 @@ function clearFilters() {
     filterStatus.value = ''
     filterYear.value = props.defaultYear ? String(props.defaultYear) : 'all'
 }
+
+watch([selectedYear, categoryOptions], ([year, options]) => {
+    if (form.category_id && !options.some(c => String(c.id) === String(form.category_id))) {
+        form.category_id = ''
+        form.particular_id = ''
+    }
+})
+
+watch([selectedCategoryId, accountTitleOptions], ([categoryId, options]) => {
+    if (categoryId && form.particular_id && !options.some(p => String(p.id) === String(form.particular_id))) {
+        form.particular_id = ''
+    }
+})
 
 function fmt(v) { return new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(v || 0) }
 function fmtDate(d) { return d ? new Date(d).toLocaleString('en-PH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—' }
@@ -231,7 +268,7 @@ function splitDate(d) {
         </select>
         <select v-model="filterCategory" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 min-w-[180px] shadow-sm">
             <option value="">All Categories</option>
-            <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+            <option v-for="c in filterCategoryOptions" :key="c.id" :value="c.id">{{ c.name }}</option>
         </select>
         <select v-model="filterStatus" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 min-w-[160px] shadow-sm">
             <option value="">All Status</option>
@@ -352,8 +389,8 @@ function splitDate(d) {
         <form @submit.prevent="save">
             <div class="grid gap-4 sm:grid-cols-2">
                 <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1.5">Description</label><input v-model="form.description" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
-                <div><label class="block text-sm font-medium mb-1.5">Category</label><select v-model="form.category_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required><option value="">Select Category</option><option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
-                <div><label class="block text-sm font-medium mb-1.5">Account Title</label><select v-model="form.particular_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required><option value="">Select Account Title</option><option v-for="p in (accountTitles || particulars)" :key="p.id" :value="p.id">{{ p.particular }}</option></select></div>
+                <div><label class="block text-sm font-medium mb-1.5">Category</label><select v-model="form.category_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required><option value="">Select Category</option><option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
+                <div><label class="block text-sm font-medium mb-1.5">Account Title</label><select v-model="form.particular_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :disabled="!form.category_id" required><option value="">Select Account Title</option><option v-for="p in accountTitleOptions" :key="p.id" :value="p.id">{{ p.particular }}</option></select></div>
                 <div><label class="block text-sm font-medium mb-1.5">Amount (₱)</label><input v-model.number="form.amount" type="number" step="0.01" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
                 <div class="rounded-lg border border-dashed border-emerald-200 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-800">
                     Paid amounts are controlled by linked disbursements only.

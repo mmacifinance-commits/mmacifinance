@@ -43,9 +43,20 @@ class ExpenseController extends Controller
 
         $defaultYear = $yearsFromExpenses->first() ?? $budgetYears->sortDesc()->values()->first() ?? $currentYear;
 
+        $budgetedCategories = BudgetCategory::query()
+            ->whereHas('budgetItems.budget', function ($query) use ($availableYears) {
+                $query->whereIn('year', $availableYears);
+            })
+            ->with(['budgetItems.budget' => function ($query) use ($availableYears) {
+                $query->whereIn('year', $availableYears);
+            }])
+            ->orderBy('name')
+            ->get();
+
         return Inertia::render('Expenses/Index', [
             'expenses' => $expenses,
             'categories' => BudgetCategory::all(),
+            'budgetedCategories' => $budgetedCategories,
             'particulars' => BudgetParticular::with('category', 'department')->get(),
             'budgetYears' => AnnualBudget::pluck('year')->values()->toArray(),
             'availableYears' => $availableYears,
@@ -70,6 +81,18 @@ class ExpenseController extends Controller
         if (!AnnualBudget::where('year', $year)->exists()) {
             throw ValidationException::withMessages([
                 'date_encoded' => "No annual budget exists for FY {$year}. Please create the annual budget first.",
+            ]);
+        }
+
+        $categoryHasAppropriation = BudgetCategory::whereKey($validated['category_id'])
+            ->whereHas('budgetItems.budget', function ($query) use ($year) {
+                $query->where('year', $year);
+            })
+            ->exists();
+
+        if (! $categoryHasAppropriation) {
+            throw ValidationException::withMessages([
+                'category_id' => "Selected category has no appropriation for FY {$year}. Please choose a category with an approved budget allocation.",
             ]);
         }
 
@@ -111,6 +134,18 @@ class ExpenseController extends Controller
         if (!AnnualBudget::where('year', $year)->exists()) {
             throw ValidationException::withMessages([
                 'date_encoded' => "No annual budget exists for FY {$year}. Please create the annual budget first.",
+            ]);
+        }
+
+        $categoryHasAppropriation = BudgetCategory::whereKey($validated['category_id'])
+            ->whereHas('budgetItems.budget', function ($query) use ($year) {
+                $query->where('year', $year);
+            })
+            ->exists();
+
+        if (! $categoryHasAppropriation) {
+            throw ValidationException::withMessages([
+                'category_id' => "Selected category has no appropriation for FY {$year}. Please choose a category with an approved budget allocation.",
             ]);
         }
 
