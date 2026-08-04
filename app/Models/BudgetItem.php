@@ -124,48 +124,91 @@ class BudgetItem extends Model
     public function postedExpenditureTotal(): float
     {
         $budgetYear = (int) ($this->budget?->year ?? 0);
+        $budgetMonth = (int) ($this->month ?? 0);
         $budgetTitle = $this->normalizedBudgetTitle();
+        $budgetCategory = $this->normalizedBudgetCategory();
+        $budgetDepartment = $this->normalizedBudgetDepartment();
 
         if ($budgetYear <= 0) {
             return 0.0;
         }
 
-        $expenseTotal = (float) Expense::query()
-            ->where('status', 'posted')
-            ->whereYear('date_encoded', $budgetYear)
-            ->where('category_id', $this->category_id)
-            ->where(function ($expenseQuery) use ($budgetTitle) {
-                $expenseQuery->where('particular_id', $this->particular_id)
-                    ->orWhereHas('particular', function ($particularQuery) use ($budgetTitle) {
-                        $particularQuery->whereRaw('LOWER(TRIM(particular)) = ?', [$budgetTitle]);
-                    });
-            })
-            ->sum('paid');
-
-        if ($expenseTotal > 0) {
-            return $expenseTotal;
+        $strictTotal = $this->postedDisbursementTotal($budgetYear, $budgetMonth, $budgetTitle, $budgetCategory, $budgetDepartment, true);
+        if ($strictTotal > 0) {
+            return $strictTotal;
         }
 
-        $disbursementTotal = (float) Disbursement::query()
-            ->where('status', 'posted')
-            ->whereHas('expense', function ($expenseQuery) use ($budgetYear, $budgetTitle) {
-                $expenseQuery->whereYear('date_encoded', $budgetYear)
-                    ->where('category_id', $this->category_id)
-                    ->where(function ($titleQuery) use ($budgetTitle) {
-                        $titleQuery->where('particular_id', $this->particular_id)
+        $relaxedTotal = $this->postedDisbursementTotal($budgetYear, $budgetMonth, $budgetTitle, $budgetCategory, $budgetDepartment, false);
+        if ($relaxedTotal > 0) {
+            return $relaxedTotal;
+        }
+
+        return 0.0;
+    }
+
+    protected function postedDisbursementTotal(
+        int $budgetYear,
+        int $budgetMonth,
+        string $budgetTitle,
+        string $budgetCategory,
+        string $budgetDepartment,
+        bool $matchMonth
+    ): float
+    {
+        return (float) Disbursement::query()
+            ->whereRaw('LOWER(TRIM(COALESCE(status, ""))) LIKE ?', ['%posted%'])
+            ->when($budgetYear > 0, fn ($query) => $query->whereYear('date_encoded', $budgetYear))
+            ->when($matchMonth && $budgetMonth > 0, fn ($query) => $query->whereMonth('date_encoded', $budgetMonth))
+            ->whereHas('expense', function ($expenseQuery) use ($budgetYear, $budgetMonth, $budgetTitle, $matchMonth) {
+                $expenseQuery->where(function ($matchQuery) use ($budgetTitle, $budgetCategory, $budgetDepartment) {
+                    $matchQuery->where('particular_id', $this->particular_id);
+
+                    if ($budgetTitle !== '') {
+                        $matchQuery->orWhereRaw('LOWER(TRIM(COALESCE(description, ""))) = ?', [$budgetTitle])
+                            ->orWhereRaw('LOWER(TRIM(COALESCE(description, ""))) LIKE ?', ['%' . $budgetTitle . '%'])
                             ->orWhereHas('particular', function ($particularQuery) use ($budgetTitle) {
-                                $particularQuery->whereRaw('LOWER(TRIM(particular)) = ?', [$budgetTitle]);
+                                $particularQuery->whereRaw('LOWER(TRIM(COALESCE(particular, account_name, ""))) = ?', [$budgetTitle])
+                                    ->orWhereRaw('LOWER(TRIM(COALESCE(particular, account_name, ""))) LIKE ?', ['%' . $budgetTitle . '%']);
                             });
-                    });
+                    }
+
+                    if ($budgetCategory !== '') {
+                        $matchQuery->orWhereHas('category', function ($categoryQuery) use ($budgetCategory) {
+                            $categoryQuery->whereRaw('LOWER(TRIM(COALESCE(name, ""))) = ?', [$budgetCategory]);
+                        });
+                    }
+
+                    if ($budgetDepartment !== '') {
+                        $matchQuery->orWhereHas('particular.department', function ($departmentQuery) use ($budgetDepartment) {
+                            $departmentQuery->whereRaw('LOWER(TRIM(COALESCE(name, ""))) = ?', [$budgetDepartment]);
+                        });
+                    }
+                });
             })
             ->sum('amount');
-
-        return $disbursementTotal > 0 ? $disbursementTotal : 0.0;
     }
 
     protected function normalizedBudgetTitle(): string
     {
         return Str::of((string) ($this->particular?->particular ?? $this->particular?->account_name ?? ''))
+            ->lower()
+            ->trim()
+            ->replaceMatches('/\s+/', ' ')
+            ->toString();
+    }
+
+    protected function normalizedBudgetCategory(): string
+    {
+        return Str::of((string) ($this->category?->name ?? ''))
+            ->lower()
+            ->trim()
+            ->replaceMatches('/\s+/', ' ')
+            ->toString();
+    }
+
+    protected function normalizedBudgetDepartment(): string
+    {
+        return Str::of((string) ($this->particular?->department?->name ?? ''))
             ->lower()
             ->trim()
             ->replaceMatches('/\s+/', ' ')
