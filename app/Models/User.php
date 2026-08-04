@@ -43,47 +43,56 @@ class User extends Authenticatable
     const ROLE_SUPER_ADMIN = 'super_admin';
     const ROLE_DISBURSEMENT_OFFICER = 'disbursement_officer';
     const ROLE_BUDGET_OFFICER = 'budget_officer';
+    const ROLE_BUDGET_MONITORING_OFFICER = 'budget_monitoring_officer';
     const ROLE_AUDITOR = 'auditor';
     const ROLE_CASHIER = 'cashier';
 
+    public function normalizedRole(): string
+    {
+        return match ($this->role) {
+            self::ROLE_BUDGET_MONITORING_OFFICER => self::ROLE_BUDGET_OFFICER,
+            default => $this->role,
+        };
+    }
+
     public function isSuperAdmin(): bool
     {
-        return $this->role === self::ROLE_SUPER_ADMIN;
+        return $this->normalizedRole() === self::ROLE_SUPER_ADMIN;
     }
 
     public function isCashier(): bool
     {
-        return $this->role === self::ROLE_CASHIER;
+        return $this->normalizedRole() === self::ROLE_CASHIER;
     }
 
     public function canManageBudget(): bool
     {
-        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_BUDGET_OFFICER]);
+        return in_array($this->normalizedRole(), [self::ROLE_SUPER_ADMIN, self::ROLE_BUDGET_OFFICER], true);
     }
 
     public function canManageIncome(): bool
     {
-        return $this->role === self::ROLE_SUPER_ADMIN;
+        return $this->normalizedRole() === self::ROLE_SUPER_ADMIN;
     }
 
     public function canManageExpenses(): bool
     {
-        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_DISBURSEMENT_OFFICER, self::ROLE_CASHIER]);
+        return in_array($this->normalizedRole(), [self::ROLE_SUPER_ADMIN, self::ROLE_DISBURSEMENT_OFFICER, self::ROLE_CASHIER], true);
     }
 
     public function canManageDisbursements(): bool
     {
-        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_DISBURSEMENT_OFFICER, self::ROLE_CASHIER]);
+        return in_array($this->normalizedRole(), [self::ROLE_SUPER_ADMIN, self::ROLE_DISBURSEMENT_OFFICER, self::ROLE_CASHIER], true);
     }
 
     public function canApproveDisbursements(): bool
     {
-        return $this->role === self::ROLE_SUPER_ADMIN;
+        return $this->normalizedRole() === self::ROLE_SUPER_ADMIN;
     }
 
     public function canPostDisbursements(): bool
     {
-        return $this->role === self::ROLE_SUPER_ADMIN;
+        return $this->normalizedRole() === self::ROLE_SUPER_ADMIN;
     }
 
     public function getRoleLabelAttribute(): string
@@ -93,6 +102,7 @@ class User extends Authenticatable
             self::ROLE_CASHIER => 'Cashier',
             self::ROLE_DISBURSEMENT_OFFICER => 'Disbursement Officer',
             self::ROLE_BUDGET_OFFICER => 'Budget Monitoring Officer',
+            self::ROLE_BUDGET_MONITORING_OFFICER => 'Budget Monitoring Officer',
             self::ROLE_AUDITOR => 'Auditor',
             default => ucfirst($this->role),
         };
