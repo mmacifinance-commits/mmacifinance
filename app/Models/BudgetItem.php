@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Str;
 
 class BudgetItem extends Model
 {
@@ -119,25 +120,66 @@ class BudgetItem extends Model
         $budgetYear = (int) ($this->budget?->year ?? 0);
         $month = (int) ($this->month ?: 1);
         $departmentId = $this->particular?->department_id;
+        $budgetTitle = $this->normalizedBudgetTitle();
 
         if ($budgetYear <= 0) {
             return 0.0;
         }
 
-        return (float) Disbursement::query()
+        $query = Disbursement::query()
             ->where('status', 'posted')
-            ->whereHas('expense', function ($query) use ($budgetYear, $month) {
-                $query->where('category_id', $this->category_id)
-                    ->where('particular_id', $this->particular_id)
-                    ->whereYear('date_encoded', $budgetYear)
-                    ->whereMonth('date_encoded', $month);
-            })
             ->when($departmentId, function ($query) use ($departmentId) {
                 $query->whereHas('expense.particular', function ($particularQuery) use ($departmentId) {
                     $particularQuery->where('department_id', $departmentId);
                 });
+            });
+
+        $baseQuery = function ($query) use ($budgetYear) {
+            $query->where('category_id', $this->category_id)
+                ->whereYear('date_encoded', $budgetYear);
+        };
+
+        $strictTotal = (float) (clone $query)
+            ->whereHas('expense', function ($expenseQuery) use ($budgetYear, $month, $baseQuery) {
+                $baseQuery($expenseQuery);
+                $expenseQuery->whereMonth('date_encoded', $month);
+                $this->applyExpenseTitleMatch($expenseQuery, $budgetTitle);
             })
             ->sum('amount');
+
+        if ($strictTotal > 0) {
+            return $strictTotal;
+        }
+
+        return (float) $query
+            ->whereHas('expense', function ($expenseQuery) use ($baseQuery) {
+                $baseQuery($expenseQuery);
+                $this->applyExpenseTitleMatch($expenseQuery, $budgetTitle);
+            })
+            ->sum('amount');
+    }
+
+    protected function applyExpenseTitleMatch($query, string $budgetTitle): void
+    {
+        if ($budgetTitle === '') {
+            return;
+        }
+
+        $query->where(function ($titleQuery) use ($budgetTitle) {
+            $titleQuery->where('particular_id', $this->particular_id)
+                ->orWhereHas('particular', function ($particularQuery) use ($budgetTitle) {
+                    $particularQuery->whereRaw('LOWER(TRIM(particular)) = ?', [$budgetTitle]);
+                });
+        });
+    }
+
+    protected function normalizedBudgetTitle(): string
+    {
+        return Str::of((string) ($this->particular?->particular ?? $this->particular?->account_name ?? ''))
+            ->lower()
+            ->trim()
+            ->replaceMatches('/\s+/', ' ')
+            ->toString();
     }
 
     public function getExpenditureAttribute($value): float
