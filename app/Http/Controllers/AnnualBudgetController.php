@@ -180,10 +180,17 @@ class AnnualBudgetController extends Controller
 
         $lookup = null;
         if ($accountCode !== '') {
-            $lookup = \App\Models\BudgetParticular::where('account_code', $accountCode)->first();
+            $lookup = \App\Models\BudgetParticular::where('account_code', $accountCode)
+                ->when($department, fn ($query) => $query->where('department_id', $department->id))
+                ->when($category, fn ($query) => $query->where('category_id', $category->id))
+                ->first();
         }
+
         if (!$lookup && $accountName !== '') {
-            $lookup = \App\Models\BudgetParticular::whereRaw('LOWER(particular) = ?', [Str::lower($particular ?: $accountName)])->first();
+            $lookup = \App\Models\BudgetParticular::whereRaw('LOWER(particular) = ?', [Str::lower($particular ?: $accountName)])
+                ->when($department, fn ($query) => $query->where('department_id', $department->id))
+                ->when($category, fn ($query) => $query->where('category_id', $category->id))
+                ->first();
         }
 
         if ($lookup) {
@@ -270,7 +277,7 @@ class AnnualBudgetController extends Controller
         }
 
         $headers = array_map(fn ($header) => $this->normalizeHeader((string) $header), $headers);
-        $required = ['month', 'budget_category', 'account_title', 'appropriation'];
+        $required = ['month', 'budget_category', 'responsibility_center', 'account_title', 'appropriation'];
         foreach ($required as $column) {
             if (!in_array($column, $headers, true)) {
                 fclose($handle);

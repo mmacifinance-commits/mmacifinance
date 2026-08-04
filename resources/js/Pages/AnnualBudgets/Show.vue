@@ -441,10 +441,10 @@ function catBalancePercent(group) {
                 <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
                     <p class="font-semibold text-slate-900 mb-2">Required columns</p>
                     <p class="text-xs leading-6">
-                        <span class="font-semibold">month</span>, <span class="font-semibold">budget_category</span>, <span class="font-semibold">account_title</span>, <span class="font-semibold">appropriation</span>
+                        <span class="font-semibold">month</span>, <span class="font-semibold">budget_category</span>, <span class="font-semibold">responsibility_center</span>, <span class="font-semibold">account_title</span>, <span class="font-semibold">appropriation</span>
                     </p>
                     <p class="mt-2 text-xs leading-6">
-                    Optional columns: <span class="font-semibold">fiscal_year</span>, <span class="font-semibold">semester</span>, <span class="font-semibold">responsibility_center</span>, <span class="font-semibold">account_code</span>, <span class="font-semibold">description</span>. Expenditure is recalculated automatically and ignored on import.
+                    Optional columns: <span class="font-semibold">fiscal_year</span>, <span class="font-semibold">semester</span>, <span class="font-semibold">account_code</span>, <span class="font-semibold">description</span>. Expenditure is recalculated automatically and ignored on import.
                 </p>
             </div>
                 <div>
