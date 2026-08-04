@@ -54,6 +54,21 @@ const itemForm = useForm({
     appropriation: 0,
 })
 
+const filteredAccountTitles = computed(() => {
+    const titles = props.accountTitles || props.particulars || []
+    const categoryId = Number(itemForm.category_id || 0)
+
+    if (!categoryId) {
+        return titles
+    }
+
+    return titles.filter((title) => Number(title.category_id || title.category?.id || 0) === categoryId)
+})
+
+watch(() => itemForm.category_id, () => {
+    itemForm.particular_id = ''
+})
+
 // Filters
 const selectedYear = ref(props.budget.year)
 const selectedSemester = ref(normalizeSemester(props.budget.semester))
@@ -367,7 +382,7 @@ function catBalancePercent(group) {
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Account Title</label>
                     <select v-model="itemForm.particular_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required>
                         <option value="">Select account title</option>
-                        <option v-for="p in (accountTitles || particulars)" :key="p.id" :value="p.id">{{ p.particular }}</option>
+                        <option v-for="p in filteredAccountTitles" :key="p.id" :value="p.id">{{ p.particular }}</option>
                     </select>
                 </div>
                 <div>
