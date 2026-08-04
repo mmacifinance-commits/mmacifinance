@@ -30,37 +30,46 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        $cashier = User::updateOrCreate(
-            ['email' => 'cashier@mmac.edu.ph'],
+        $janzeSuperAdmin = User::updateOrCreate(
+            ['email' => 'janzedoysabas@gmail.com'],
             [
-                'name' => 'Juan Dela Cruz',
+                'name' => 'Janze Salva',
+                'password' => Hash::make('password'),
+                'role' => 'super_admin',
+            ]
+        );
+
+        $cashier = User::updateOrCreate(
+            ['email' => 'evanjel.tolentino@gmail.com'],
+            [
+                'name' => 'Evan Tolentino',
                 'password' => Hash::make('password'),
                 'role' => 'cashier',
             ]
         );
 
         $disbursementOfficer = User::updateOrCreate(
-            ['email' => 'disbursement@mmac.edu.ph'],
+            ['email' => 'jakemandam09@gmail.com'],
             [
-                'name' => 'Ana Reyes',
+                'name' => 'Cara Jake Mandam',
                 'password' => Hash::make('password'),
                 'role' => 'disbursement_officer',
             ]
         );
 
         $budgetOfficer = User::updateOrCreate(
-            ['email' => 'budget@mmac.edu.ph'],
+            ['email' => 'gomezmarlon439@gmail.com'],
             [
-                'name' => 'Carlos Gomez',
+                'name' => 'Marlon Gomez',
                 'password' => Hash::make('password'),
                 'role' => 'budget_officer',
             ]
         );
 
         $auditor = User::updateOrCreate(
-            ['email' => 'auditor@mmac.edu.ph'],
+            ['email' => 'jennyrosegonzales168@gmail.com'],
             [
-                'name' => 'Elena Torres',
+                'name' => 'Jenny Rose Dr.',
                 'password' => Hash::make('password'),
                 'role' => 'auditor',
             ]
