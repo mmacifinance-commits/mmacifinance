@@ -58,9 +58,7 @@ const filteredAccountTitles = computed(() => {
     const titles = props.accountTitles || props.particulars || []
     const categoryId = Number(itemForm.category_id || 0)
 
-    if (!categoryId) {
-        return titles
-    }
+    if (!categoryId) return []
 
     return titles.filter((title) => Number(title.category_id || title.category?.id || 0) === categoryId)
 })
@@ -380,7 +378,7 @@ function catBalancePercent(group) {
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Account Title</label>
-                    <select v-model="itemForm.particular_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required>
+                    <select v-model="itemForm.particular_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :disabled="!itemForm.category_id" required>
                         <option value="">Select account title</option>
                         <option v-for="p in filteredAccountTitles" :key="p.id" :value="p.id">{{ p.particular }}</option>
                     </select>
