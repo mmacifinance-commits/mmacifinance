@@ -101,7 +101,7 @@ async function save() {
         status: form.status,
         notes: form.notes,
         date_encoded: form.date_encoded,
-        date_approved: form.date_approved,
+        date_approved: perms.value.isSuperAdmin ? form.date_approved : '',
     }
 
     if (editing.value) {
@@ -305,9 +305,9 @@ function splitDate(d) {
                                 View Stamps
                             </button>
                         </td>
-                        <td v-if="perms.canManageExpenses" class="px-5 py-4 text-center align-middle">
+                        <td v-if="perms.canManageExpenses || perms.canSubmitExpenses" class="px-5 py-4 text-center align-middle">
                             <div class="inline-flex items-center gap-2">
-                                <button v-if="['pending', 'returned_for_revision'].includes(e.status) && !e._offline"
+                                <button v-if="perms.canSubmitExpenses && ['pending', 'returned_for_revision'].includes(e.status) && !e._offline"
                                     @click="submitForApproval(e)"
                                     class="px-3 py-1.5 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-md text-xs font-semibold shadow-sm transition-all duration-150 border border-amber-200">
                                     {{ e.status === 'returned_for_revision' ? 'Resubmit for Approval' : 'Submit for Approval' }}
@@ -327,10 +327,10 @@ function splitDate(d) {
                                     class="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-md text-xs font-semibold shadow-sm transition-all duration-150 border border-rose-200">
                                     Reject
                                 </button>
-                                <button @click="openEdit(e)" class="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md text-xs font-semibold shadow-sm transition-all duration-150 border border-indigo-200" :disabled="e._offline">
+                                <button v-if="perms.canManageExpenses" @click="openEdit(e)" class="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md text-xs font-semibold shadow-sm transition-all duration-150 border border-indigo-200" :disabled="e._offline">
                                     Edit
                                 </button>
-                                <button @click="remove(e.id)" class="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-md text-xs font-semibold shadow-sm transition-all duration-150 border border-rose-200">
+                                <button v-if="perms.canManageExpenses" @click="remove(e.id)" class="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-md text-xs font-semibold shadow-sm transition-all duration-150 border border-rose-200">
                                     Delete
                                 </button>
                             </div>
@@ -371,7 +371,10 @@ function splitDate(d) {
                     </p>
                 </div>
                 <div><label class="block text-sm font-medium mb-1.5">Date Encoded</label><input v-model="form.date_encoded" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
-                <div><label class="block text-sm font-medium mb-1.5">Date Approved</label><input v-model="form.date_approved" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" /></div>
+                <div v-if="perms.isSuperAdmin">
+                    <label class="block text-sm font-medium mb-1.5">Date Approved</label>
+                    <input v-model="form.date_approved" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" />
+                </div>
                 <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1.5">Notes</label><input v-model="form.notes" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" placeholder="Optional expense notes" /></div>
             </div>
             <div class="flex items-center justify-end gap-3 pt-5 border-t mt-4">

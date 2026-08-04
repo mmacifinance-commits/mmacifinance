@@ -32,6 +32,7 @@ class HandleInertiaRequests extends Middleware
             'permissions' => $user ? [
                 'canManageBudget' => $user->canManageBudget(),
                 'canManageExpenses' => $user->canManageExpenses(),
+                'canSubmitExpenses' => $user->canSubmitExpenses(),
                 'canManageDisbursements' => $user->canManageDisbursements(),
                 'canManageIncome' => $user->canManageIncome(),
                 'isSuperAdmin' => $user->isSuperAdmin(),

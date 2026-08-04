@@ -147,7 +147,7 @@ class ExpenseController extends Controller
             'remarks' => 'nullable|string|max:500',
         ]);
 
-        if (!auth()->user()?->canManageExpenses()) {
+        if (!auth()->user()?->canSubmitExpenses()) {
             abort(403, 'You are not allowed to submit expenses for approval.');
         }
 
