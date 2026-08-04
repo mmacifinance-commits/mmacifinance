@@ -58,10 +58,6 @@ Route::middleware('auth')->group(function () {
         Route::delete('annual-budgets/{annual_budget}/items/{item}', [AnnualBudgetController::class, 'destroyItem'])->name('annual-budgets.items.destroy');
         Route::post('annual-budgets/{annual_budget}/import-csv', [AnnualBudgetController::class, 'importCsv'])->name('annual-budgets.import-csv');
 
-        Route::post('/departments', [DepartmentController::class, 'store']);
-        Route::put('/departments/{department}', [DepartmentController::class, 'update']);
-        Route::delete('/departments/{department}', [DepartmentController::class, 'destroy']);
-
         Route::post('/budget-categories', [BudgetCategoryController::class, 'store']);
         Route::put('/budget-categories/{budget_category}', [BudgetCategoryController::class, 'update']);
         Route::delete('/budget-categories/{budget_category}', [BudgetCategoryController::class, 'destroy']);
@@ -69,6 +65,13 @@ Route::middleware('auth')->group(function () {
         Route::post('/budget-particulars', [BudgetParticularController::class, 'store']);
         Route::put('/budget-particulars/{budget_particular}', [BudgetParticularController::class, 'update']);
         Route::delete('/budget-particulars/{budget_particular}', [BudgetParticularController::class, 'destroy']);
+    });
+
+    // Responsibility centers are organization-wide setup data. Head of Finance only.
+    Route::middleware('role:super_admin')->group(function () {
+        Route::post('/departments', [DepartmentController::class, 'store'])->name('departments.store');
+        Route::put('/departments/{department}', [DepartmentController::class, 'update'])->name('departments.update');
+        Route::delete('/departments/{department}', [DepartmentController::class, 'destroy'])->name('departments.destroy');
     });
 
     // --- Expenditures & Disbursements: Super Admin + Disbursement Officer + Cashier can view/CRUD disbursements ---

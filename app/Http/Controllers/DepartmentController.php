@@ -8,15 +8,18 @@ use Inertia\Inertia;
 
 class DepartmentController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         return Inertia::render('Departments/Index', [
-            'departments' => Department::with('particulars')->withCount('particulars')->latest()->get(),
+            'departments' => Department::with('particulars')->withCount('particulars')->orderBy('name')->get(),
+            'canManageResponsibilityCenters' => $request->user()?->isSuperAdmin() ?? false,
         ]);
     }
 
     public function store(Request $request)
     {
+        $this->authorizeManagement($request);
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'code' => 'required|string|max:10|unique:departments,code',
@@ -24,11 +27,13 @@ class DepartmentController extends Controller
 
         Department::create($validated);
 
-        return redirect()->route('departments.index')->with('success', 'Department created.');
+        return redirect()->route('departments.index')->with('success', 'Responsibility center created.');
     }
 
     public function update(Request $request, Department $department)
     {
+        $this->authorizeManagement($request);
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'code' => 'required|string|max:10|unique:departments,code,' . $department->id,
@@ -36,13 +41,26 @@ class DepartmentController extends Controller
 
         $department->update($validated);
 
-        return redirect()->route('departments.index')->with('success', 'Department updated.');
+        return redirect()->route('departments.index')->with('success', 'Responsibility center updated.');
     }
 
-    public function destroy(Department $department)
+    public function destroy(Request $request, Department $department)
     {
+        $this->authorizeManagement($request);
+
+        if ($department->particulars()->exists()) {
+            return redirect()
+                ->route('departments.index')
+                ->with('error', 'This responsibility center is used by account titles. Reassign or delete those account titles first.');
+        }
+
         $department->delete();
 
-        return redirect()->route('departments.index')->with('success', 'Department deleted.');
+        return redirect()->route('departments.index')->with('success', 'Responsibility center deleted.');
+    }
+
+    private function authorizeManagement(Request $request): void
+    {
+        abort_unless($request->user()?->isSuperAdmin(), 403);
     }
 }
