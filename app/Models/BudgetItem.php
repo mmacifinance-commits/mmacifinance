@@ -159,7 +159,7 @@ class BudgetItem extends Model
             ->whereRaw('LOWER(TRIM(COALESCE(status, ""))) LIKE ?', ['%posted%'])
             ->when($budgetYear > 0, fn ($query) => $query->whereYear('date_encoded', $budgetYear))
             ->when($matchMonth && $budgetMonth > 0, fn ($query) => $query->whereMonth('date_encoded', $budgetMonth))
-            ->whereHas('expense', function ($expenseQuery) use ($budgetYear, $budgetMonth, $budgetTitle, $matchMonth) {
+            ->whereHas('expense', function ($expenseQuery) use ($budgetYear, $budgetMonth, $budgetTitle, $budgetCategory, $budgetDepartment, $matchMonth) {
                 $expenseQuery->where(function ($matchQuery) use ($budgetTitle, $budgetCategory, $budgetDepartment) {
                     $matchQuery->where('particular_id', $this->particular_id);
 
@@ -235,4 +235,5 @@ class BudgetItem extends Model
         return round(($this->postedExpenditureTotal() / $appropriation) * 100, 2);
     }
 }
+
 
