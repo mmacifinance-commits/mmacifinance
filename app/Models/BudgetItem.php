@@ -235,3 +235,4 @@ class BudgetItem extends Model
         return round(($this->postedExpenditureTotal() / $appropriation) * 100, 2);
     }
 }
+
