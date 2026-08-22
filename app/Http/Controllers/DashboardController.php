@@ -19,6 +19,7 @@ class DashboardController extends Controller
         $budgets = AnnualBudget::with('items.category', 'items.particular.department')
             ->latest('year')
             ->get();
+        $budgets->each(fn ($budget) => BudgetItem::hydrateDerivedTotals($budget->items));
 
         $availableYears = AnnualBudget::pluck('year')
             ->concat([2024, 2025, 2026, (int) date('Y')])
@@ -60,6 +61,7 @@ class DashboardController extends Controller
         }
 
         $budgetItems = $itemsQuery->get();
+        BudgetItem::hydrateDerivedTotals($budgetItems);
 
         $totalAppropriation = (float) $budgetItems->sum('appropriation');
         $annualAppropriation = $selectedBudget ? (float) $selectedBudget->items->sum('appropriation') : $totalAppropriation;

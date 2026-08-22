@@ -94,6 +94,7 @@ class ReportController extends Controller
         }
 
         $annualBudgetItems = $annualBudgetItemsQuery->get();
+        BudgetItem::hydrateDerivedTotals($annualBudgetItems);
 
         $selectedBudgetItemsQuery = BudgetItem::query()
             ->with(['budget', 'category', 'particular.department'])
@@ -112,6 +113,7 @@ class ReportController extends Controller
         }
 
         $selectedBudgetItems = $selectedBudgetItemsQuery->get();
+        BudgetItem::hydrateDerivedTotals($selectedBudgetItems);
 
         $monthItemsQuery = BudgetItem::query()
             ->whereHas('budget', fn ($q) => $q->where('year', $selectedYear));
@@ -138,6 +140,7 @@ class ReportController extends Controller
         }
 
         $monthItems = $monthItemsQuery->get();
+        BudgetItem::hydrateDerivedTotals($monthItems);
         $monthAppropriation = (float) $monthItems->sum('appropriation');
         $monthExpenditure = (float) $monthItems->sum(fn ($item) => $item->postedExpenditureTotal());
 
@@ -169,6 +172,7 @@ class ReportController extends Controller
             }
 
             $items = $query->get();
+            BudgetItem::hydrateDerivedTotals($items);
             $appropriation = (float) $items->sum('appropriation');
             $expenditure = (float) $items->sum(fn ($item) => $item->postedExpenditureTotal());
 
@@ -184,7 +188,7 @@ class ReportController extends Controller
         $selectedMonthLabel = $selectedMonthPerformance['month_label'] ?? ($selectedMonth ? date('F', mktime(0, 0, 0, $selectedMonth, 1)) : 'All Months');
 
         return Inertia::render('Reports/Index', [
-            'budgets' => AnnualBudget::with(['items.category', 'items.particular.department'])->get(),
+            'budgets' => tap(AnnualBudget::with(['items.category', 'items.particular.department'])->get(), fn ($budgets) => $budgets->each(fn ($budget) => BudgetItem::hydrateDerivedTotals($budget->items))),
             'categories' => BudgetCategory::all(),
             'accountTitles' => BudgetParticular::with('category', 'department')->get(),
             'particulars' => BudgetParticular::with('category', 'department')->get(),

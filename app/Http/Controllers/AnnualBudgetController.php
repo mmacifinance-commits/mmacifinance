@@ -369,8 +369,8 @@ class AnnualBudgetController extends Controller
                     $item->update(['ref_no' => sprintf('MB-%d-%02d-%04d', $b->year, $item->month ?: 1, $item->id)]);
                 }
             }
-            $this->hydrateBudgetItemTotals($b);
         }
+        $budgets->each(fn ($budget) => BudgetItem::hydrateDerivedTotals($budget->items));
 
         return Inertia::render('AnnualBudgets/Index', [
             'budgets' => $budgets,
@@ -393,7 +393,7 @@ class AnnualBudgetController extends Controller
                 $item->update(['ref_no' => sprintf('MB-%d-%02d-%04d', $annualBudget->year, $item->month ?: 1, $item->id)]);
             }
         }
-        $this->hydrateBudgetItemTotals($budget);
+        BudgetItem::hydrateDerivedTotals($budget->items);
 
         return Inertia::render('AnnualBudgets/Show', [
             'budget' => $budget,

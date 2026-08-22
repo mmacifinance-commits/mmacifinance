@@ -43,6 +43,7 @@ class RevenueController extends Controller
             $budgetItemsQuery->where('month', $selectedMonth);
         }
         $budgetItems = $budgetItemsQuery->with(['budget', 'category', 'particular.department'])->get();
+        BudgetItem::hydrateDerivedTotals($budgetItems);
 
         $incomeQuery = Income::query()->whereYear('date_encoded', $selectedYear);
         if ($startDate && $endDate) {

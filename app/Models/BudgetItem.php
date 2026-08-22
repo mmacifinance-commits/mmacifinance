@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Str;
+use Illuminate\Support\Collection;
 
 class BudgetItem extends Model
 {
@@ -123,6 +124,10 @@ class BudgetItem extends Model
 
     public function postedExpenditureTotal(): float
     {
+        if ($this->offsetExists('expenditure') && $this->getAttribute('expenditure') !== null) {
+            return (float) $this->getAttribute('expenditure');
+        }
+
         $budgetYear = $this->budgetFiscalYear();
 
         if ($budgetYear <= 0) {
@@ -278,6 +283,54 @@ class BudgetItem extends Model
         return $this->relationLoaded('particular')
             ? $this->particular
             : ($this->particular_id ? BudgetParticular::with('department')->find($this->particular_id) : null);
+    }
+
+    public static function hydrateDerivedTotals(Collection $items): void
+    {
+        if ($items->isEmpty()) {
+            return;
+        }
+
+        $itemsByYear = $items->groupBy(fn (self $item) => (int) $item->budgetFiscalYear())
+            ->filter(fn (Collection $group, $year) => (int) $year > 0);
+
+        foreach ($itemsByYear as $year => $yearItems) {
+            $categoryIds = $yearItems->pluck('category_id')->filter()->unique()->values();
+            $particularIds = $yearItems->pluck('particular_id')->filter()->unique()->values();
+
+            $expenseTotals = Expense::query()
+                ->selectRaw('category_id, particular_id, SUM(CASE WHEN COALESCE(NULLIF(paid, 0), 0) > 0 THEN paid ELSE amount END) as total')
+                ->whereYear('date_encoded', $year)
+                ->whereRaw('LOWER(TRIM(COALESCE(status, ""))) LIKE ?', ['%posted%'])
+                ->when($categoryIds->isNotEmpty(), fn ($q) => $q->whereIn('category_id', $categoryIds))
+                ->when($particularIds->isNotEmpty(), fn ($q) => $q->whereIn('particular_id', $particularIds))
+                ->groupBy('category_id', 'particular_id')
+                ->get()
+                ->keyBy(fn ($row) => ($row->category_id ?? 0) . ':' . ($row->particular_id ?? 0));
+
+            $disbursementTotals = Disbursement::query()
+                ->selectRaw('expenses.category_id as category_id, expenses.particular_id as particular_id, SUM(disbursements.amount) as total')
+                ->join('expenses', 'disbursements.expense_id', '=', 'expenses.id')
+                ->whereYear('disbursements.date_encoded', $year)
+                ->whereRaw('LOWER(TRIM(COALESCE(disbursements.status, ""))) LIKE ?', ['%posted%'])
+                ->when($categoryIds->isNotEmpty(), fn ($q) => $q->whereIn('expenses.category_id', $categoryIds))
+                ->when($particularIds->isNotEmpty(), fn ($q) => $q->whereIn('expenses.particular_id', $particularIds))
+                ->groupBy('expenses.category_id', 'expenses.particular_id')
+                ->get()
+                ->keyBy(fn ($row) => ($row->category_id ?? 0) . ':' . ($row->particular_id ?? 0));
+
+            $yearItems->each(function (self $item) use ($expenseTotals, $disbursementTotals) {
+                $key = ($item->category_id ?? 0) . ':' . ($item->particular_id ?? 0);
+                $expenseTotal = (float) ($expenseTotals[$key]->total ?? 0);
+                $disbursementTotal = (float) ($disbursementTotals[$key]->total ?? 0);
+                $expenditure = max($expenseTotal, $disbursementTotal);
+                $appropriation = (float) $item->appropriation;
+
+                $item->setAttribute('expenditure', $expenditure);
+                $item->setAttribute('balance', round($appropriation - $expenditure, 2));
+                $item->setAttribute('utilization_rate', $appropriation > 0 ? round(($expenditure / $appropriation) * 100, 2) : 0.0);
+            });
+        }
     }
 
     public function getExpenditureAttribute($value): float
