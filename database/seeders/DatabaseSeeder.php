@@ -30,6 +30,33 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
+        $financeDirector = User::updateOrCreate(
+            ['email' => 'finance.dir@mmacibutuan.edu.ph'],
+            [
+                'name' => 'Finance Director',
+                'password' => Hash::make('password'),
+                'role' => 'super_admin',
+            ]
+        );
+
+        $financeCashier = User::updateOrCreate(
+            ['email' => 'finance@mmacibutuan.edu.ph'],
+            [
+                'name' => 'Finance Cashier',
+                'password' => Hash::make('password'),
+                'role' => 'cashier',
+            ]
+        );
+
+        $budgetOfficerMmac = User::updateOrCreate(
+            ['email' => 'budget@mmacibutuan.edu.ph'],
+            [
+                'name' => 'Budget Officer',
+                'password' => Hash::make('password'),
+                'role' => 'budget_officer',
+            ]
+        );
+
         $janzeSuperAdmin = User::updateOrCreate(
             ['email' => 'janzedoysabas@gmail.com'],
             [
