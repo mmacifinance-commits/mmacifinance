@@ -101,6 +101,24 @@ async function refreshCount() {
   }
 }
 
+export async function queueOfflineAction(method, url, data = {}, label = '') {
+  const item = {
+    id: uuid(),
+    method: method.toUpperCase(),
+    url,
+    data,
+    label: label || `${method.toUpperCase()} ${url}`,
+    timestamp: Date.now(),
+    status: 'pending',
+    ownerId: window.__BUDGET_TRACKER_USER_ID__ || null,
+  }
+
+  await dbPut(item)
+  await refreshCount()
+  window.dispatchEvent(new CustomEvent('offline:queued', { detail: item }))
+  return item
+}
+
 // ─── Send one action to server ────────────────────────────────────────────────
 //
 // KEY: We do NOT send X-Inertia headers here.
@@ -113,6 +131,11 @@ async function refreshCount() {
 //   only works for form-encoded bodies, not JSON.
 //
 async function sendAction(item) {
+  const activeUserId = window.__BUDGET_TRACKER_USER_ID__ || null
+  if (item.ownerId && String(item.ownerId) !== String(activeUserId)) {
+    throw new Error('Queued by another account. Log in with the original account to sync this action.')
+  }
+
   const headers = {
     'Content-Type': 'application/json',
     'Accept': 'application/json, text/plain, */*',
@@ -185,18 +208,7 @@ export function useOfflineQueue() {
    * @param {string} label  - human-readable description for the queue UI
    */
   async function enqueue(method, url, data = {}, label = '') {
-    const item = {
-      id: uuid(),
-      method,
-      url,
-      data,
-      label: label || `${method} ${url}`,
-      timestamp: Date.now(),
-      status: 'pending',
-    }
-    await dbPut(item)
-    await refreshCount()
-    return item
+    return queueOfflineAction(method, url, data, label)
   }
 
   /**

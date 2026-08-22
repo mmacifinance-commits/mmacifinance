@@ -330,7 +330,10 @@ async function persist(endpoint, payload = {}) {
 }
 
 function refreshTarget() {
-    const el = document.querySelector(currentStep.value.target)
+    const el = [...document.querySelectorAll(currentStep.value.target)].find((candidate) => {
+        const rect = candidate.getBoundingClientRect()
+        return rect.width > 0 && rect.height > 0
+    })
     if (!el) {
         targetRect.value = null
         return

@@ -62,20 +62,30 @@ const formatTime = (seconds) => {
 
 const handleInput = (index, event) => {
     let val = event.target.value.replace(/[^0-9]/g, '')
+
+    if (val.length > 1) {
+        const code = val.slice(0, 6).split('')
+        code.forEach((digit, digitIndex) => {
+            digits.value[digitIndex] = digit
+        })
+        inputs.value[Math.min(code.length, 6) - 1]?.focus()
+        return
+    }
+
     digits.value[index] = val.substring(0, 1)
 
     if (val && index < 5) {
-        inputs.value[index + 1].focus()
+        inputs.value[index + 1]?.focus()
     }
 }
 
 const handleKeydown = (index, event) => {
     if (event.key === 'Backspace' && !digits.value[index] && index > 0) {
-        inputs.value[index - 1].focus()
+        inputs.value[index - 1]?.focus()
     } else if (event.key === 'ArrowLeft' && index > 0) {
-        inputs.value[index - 1].focus()
+        inputs.value[index - 1]?.focus()
     } else if (event.key === 'ArrowRight' && index < 5) {
-        inputs.value[index + 1].focus()
+        inputs.value[index + 1]?.focus()
     }
 }
 
@@ -125,24 +135,24 @@ function resendCode() {
 
 <template>
     <Head title="Verify Your Identity" />
-    <div class="flex min-h-screen items-center justify-center bg-[#253955] px-4 font-sans">
+    <div class="flex min-h-[100dvh] items-start justify-center bg-[#253955] px-3 pb-6 pt-14 font-sans sm:items-center sm:px-4 sm:py-14">
         <div class="w-full max-w-md">
             <!-- Card -->
-            <div class="rounded-2xl bg-white p-8 sm:px-12 shadow-2xl relative pt-12 text-center pb-10">
+            <div class="relative bg-white px-4 pb-6 pt-10 text-center shadow-2xl sm:px-10 sm:pb-10 sm:pt-12">
                 <!-- Icon top center -->
-                <div class="absolute -top-10 left-1/2 -translate-x-1/2 flex items-center justify-center h-[5.5rem] w-[5.5rem] rounded-full bg-[#1b2b41] border-[5px] border-[#253955]">
-                    <svg class="w-8 h-8 text-mustard" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="absolute -top-8 left-1/2 flex h-16 w-16 -translate-x-1/2 items-center justify-center border-4 border-[#253955] bg-[#1b2b41] sm:-top-10 sm:h-[5.5rem] sm:w-[5.5rem] sm:border-[5px]">
+                    <svg class="h-7 w-7 text-mustard sm:h-8 sm:w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
                     </svg>
                 </div>
 
-                <h1 class="mt-4 text-[1.4rem] font-medium text-[#1b2b41] tracking-normal mb-3">Verify Your Identity</h1>
-                <p class="text-[0.95rem] text-gray-400 mt-2 mb-4 leading-relaxed font-light px-2">
+                <h1 class="mb-2 mt-3 text-xl font-medium tracking-normal text-[#1b2b41] sm:mb-3 sm:mt-4 sm:text-[1.4rem]">Verify Your Identity</h1>
+                <p class="mb-4 px-1 text-sm font-light leading-6 text-gray-400 sm:px-2 sm:text-[0.95rem]">
                     We've sent a 6-digit verification code to your email address. Enter the code below to continue.
                 </p>
 
                 <!-- Dev Mode OTP Display Banner -->
-                <div v-if="devOtp" class="mb-6 rounded-xl bg-amber-50 p-3 text-xs font-sans text-amber-900 border border-amber-300 shadow-sm text-left flex items-center gap-3">
+                <div v-if="devOtp" class="mb-4 flex items-center gap-2 border border-amber-300 bg-amber-50 p-3 text-left font-sans text-xs text-amber-900 shadow-sm sm:mb-6 sm:gap-3">
                     <span class="text-xl">🔑</span>
                     <div>
                         <div class="font-bold text-amber-900">Local Dev Verification Code</div>
@@ -151,20 +161,24 @@ function resendCode() {
                 </div>
 
                 <!-- Form -->
-                <form @submit.prevent="submit" class="space-y-7">
-                    <div class="flex justify-between gap-2 sm:gap-3 px-1">
+                <form @submit.prevent="submit" class="space-y-5 sm:space-y-7">
+                    <div class="grid grid-cols-6 gap-1.5 sm:gap-3 sm:px-1">
                         <input
                             v-for="(digit, index) in digits"
                             :key="index"
-                            ref="el => { if(el) inputs[index] = el }"
+                            :ref="el => { if (el) inputs[index] = el }"
                             v-model="digits[index]"
                             @input="e => handleInput(index, e)"
                             @keydown="e => handleKeydown(index, e)"
                             @paste="handlePaste"
-                            type="text"
+                            type="tel"
                             inputmode="numeric"
+                            pattern="[0-9]*"
+                            :autocomplete="index === 0 ? 'one-time-code' : 'off'"
+                            :enterkeyhint="index === 5 ? 'done' : 'next'"
+                            :aria-label="`Verification code digit ${index + 1}`"
                             maxlength="1"
-                            class="w-[3.1rem] h-[3.8rem] rounded-xl border border-gray-200 bg-white text-center text-3xl font-medium text-[#1b2b41] shadow-sm focus:border-mustard focus:ring-1 focus:ring-mustard/50 transition-all outline-none"
+                            class="otp-digit h-12 min-w-0 w-full border border-gray-200 bg-white p-0 text-center text-2xl font-medium text-[#1b2b41] shadow-sm outline-none transition-all focus:border-mustard focus:ring-1 focus:ring-mustard/50 sm:h-[3.8rem] sm:text-3xl"
                         />
                     </div>
                     
@@ -179,7 +193,7 @@ function resendCode() {
                         {{ form.processing ? 'Verifying...' : 'VERIFY & LOGIN' }}
                     </button>
                     
-                    <div class="mt-8 text-center text-[0.95rem]">
+                    <div class="mt-6 text-center text-sm leading-6 sm:mt-8 sm:text-[0.95rem]">
                         <span class="text-gray-400 font-light">Didn't receive the code? </span><br class="sm:hidden">
                         <button 
                             type="button" 
@@ -197,7 +211,7 @@ function resendCode() {
                 </form>
             </div>
             
-            <div class="mt-10 text-center text-[0.85rem] text-white/50 font-light tracking-wide">
+            <div class="mt-6 text-center text-xs font-light tracking-wide text-white/50 sm:mt-10 sm:text-[0.85rem]">
                 &copy; {{ new Date().getFullYear() }} MMACI. All rights reserved.
             </div>
         </div>

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Illuminate\Http\Request;
 
 class TutorialController extends Controller
@@ -10,7 +11,12 @@ class TutorialController extends Controller
     {
         $user = $request->user();
 
+        if (!$this->canUseTutorial($user)) {
+            return response()->json(['available' => false, 'show' => false]);
+        }
+
         return response()->json([
+            'available' => true,
             'status' => $user?->tutorial_status ?? 'pending',
             'version' => $user?->tutorial_version,
             'current_step' => $user?->tutorial_current_step,
@@ -27,7 +33,7 @@ class TutorialController extends Controller
         ]);
 
         $user = $request->user();
-        if (!$user || $user->tutorial_status === 'skipped' || $user->tutorial_completed_at) {
+        if (!$this->canUseTutorial($user) || $user->tutorial_status === 'skipped' || $user->tutorial_completed_at) {
             return response()->json(['show' => false], 403);
         }
 
@@ -43,7 +49,7 @@ class TutorialController extends Controller
     public function skip(Request $request)
     {
         $user = $request->user();
-        if (!$user) {
+        if (!$this->canUseTutorial($user)) {
             return response()->json(['show' => false], 403);
         }
 
@@ -61,7 +67,7 @@ class TutorialController extends Controller
     public function complete(Request $request)
     {
         $user = $request->user();
-        if (!$user) {
+        if (!$this->canUseTutorial($user)) {
             return response()->json(['show' => false], 403);
         }
 
@@ -74,5 +80,10 @@ class TutorialController extends Controller
         ])->save();
 
         return response()->json(['ok' => true]);
+    }
+
+    private function canUseTutorial(?User $user): bool
+    {
+        return $user && $user->role !== User::ROLE_AUDITOR;
     }
 }

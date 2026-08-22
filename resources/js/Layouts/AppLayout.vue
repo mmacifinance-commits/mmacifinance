@@ -16,6 +16,7 @@ const tutorial = computed(() => {
 })
 const flash = computed(() => page.props.flash)
 const tutorialRoleLabel = computed(() => auth.value?.user?.role_label || 'Tutorial')
+const canUseTutorial = computed(() => auth.value?.user?.role !== 'auditor')
 
 const mainNavItems = [
     { href: '/', label: 'DASHBOARD', icon: '', section: 'dashboard' },
@@ -73,6 +74,7 @@ function logout() {
 }
 
 function openTutorial() {
+    if (!canUseTutorial.value) return
     tutorialController.value?.openTutorial?.()
 }
 
@@ -86,16 +88,17 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
 
         <!-- Header -->
         <header class="bg-navy-dark">
-            <div class="flex items-center justify-between px-4 py-3 md:px-6">
-                <div class="flex items-center gap-3">
-                    <img src="/images/logo.png" alt="MMAC Logo" class="h-11 w-11 object-contain" />
-                    <div>
-                        <h1 class="text-base font-bold text-white leading-tight tracking-wide">Budget Fund Utilization Report</h1>
-                        <p class="text-xs text-mustard mt-0.5">Merchant Marine Academy of Caraga, Inc.</p>
+            <div class="flex items-center justify-between gap-3 px-3 py-3 sm:px-4 md:px-6">
+                <div class="flex min-w-0 items-center gap-2 sm:gap-3">
+                    <img src="/images/logo.png" alt="MMAC Logo" class="h-9 w-9 flex-none object-contain sm:h-11 sm:w-11" />
+                    <div class="min-w-0">
+                        <h1 class="truncate text-sm font-bold leading-tight tracking-wide text-white sm:text-base">Budget Fund Utilization Report</h1>
+                        <p class="mt-0.5 truncate text-[10px] text-mustard sm:text-xs">Merchant Marine Academy of Caraga, Inc.</p>
                     </div>
                 </div>
                 <div class="flex items-center gap-3">
                     <button
+                        v-if="canUseTutorial"
                         type="button"
                         class="hidden md:inline-flex items-center rounded-md bg-white/10 px-3 py-1.5 text-xs font-medium text-white border border-white/10 hover:bg-white/15 transition"
                         title="Open tutorial"
@@ -140,10 +143,23 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
             </div>
             <!-- Mobile nav -->
             <div v-if="mobileMenuOpen" class="md:hidden">
+                <div class="flex items-center justify-between border-b border-navy-light px-4 py-3">
+                    <span class="text-xs font-semibold text-mustard">{{ tutorialRoleLabel }}</span>
+                    <button
+                        v-if="canUseTutorial"
+                        type="button"
+                        class="border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white"
+                        @click="openTutorial(); mobileMenuOpen = false"
+                    >
+                        Tutorial
+                    </button>
+                </div>
                 <Link
                     v-for="item in mainNavItems"
                     :key="item.section"
                     :href="item.href"
+                    :data-onboarding-target="`nav-${item.section}`"
+                    :data-onboarding-click="`nav-${item.section}`"
                     @click="mobileMenuOpen = false"
                     :class="[
                         'block px-4 py-3 text-xs font-bold uppercase tracking-wider border-b border-navy-light',
@@ -200,8 +216,8 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
             </aside>
 
             <!-- Main Content -->
-        <main class="flex-1 p-6 min-w-0">
-                <OnboardingController ref="tutorialController" :tutorial="tutorial" />
+        <main class="mobile-app-content min-w-0 flex-1 p-3 sm:p-4 md:p-6">
+                <OnboardingController v-if="canUseTutorial" ref="tutorialController" :tutorial="tutorial" />
                 <slot />
         </main>
         </div>

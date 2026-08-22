@@ -7,7 +7,7 @@
  *  - Never intercept POST/PUT/DELETE (those go through the offline queue)
  */
 
-const CACHE_NAME = 'budget-tracker-v2'
+const CACHE_NAME = 'budget-tracker-v3'
 
 // Assets to pre-cache on install
 const PRECACHE_URLS = [
@@ -51,9 +51,6 @@ self.addEventListener('fetch', (event) => {
   // Never intercept non-GET requests (POST, PUT, DELETE go through fetch normally)
   if (request.method !== 'GET') return
 
-  // Never intercept Inertia XHR data calls (they have X-Inertia header)
-  if (request.headers.get('X-Inertia')) return
-
   // Never cache auth/onboarding routes so session changes are always fresh
   if (
     url.pathname.startsWith('/login') ||
@@ -63,6 +60,27 @@ self.addEventListener('fetch', (event) => {
     url.pathname.startsWith('/reset-password')
   ) {
     event.respondWith(fetch(request))
+    return
+  }
+
+  // Inertia page data -> network-first, then the last successful page snapshot.
+  if (request.headers.get('X-Inertia')) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone()
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+          }
+          return response
+        })
+        .catch(() => caches.match(request).then((cached) => cached || new Response(JSON.stringify({
+          message: 'This page has not been cached for offline use yet.'
+        }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' }
+        })))
+    )
     return
   }
 

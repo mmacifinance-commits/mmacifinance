@@ -60,8 +60,21 @@ async function handleClearQueue() {
 
 // When coming back online, refresh queue display
 watch(isOnline, async (online) => {
-  if (online && showQueue.value) {
+  if (!online) return
+
+  if (showQueue.value) {
     queueItems.value = await getQueue()
+  }
+
+  if (queueCount.value > 0 && !isSyncing.value) {
+    await handleSync()
+  }
+})
+
+// Also covers reopening the app after connectivity was restored.
+watch(queueCount, async (count, previousCount) => {
+  if (count > 0 && previousCount === 0 && isOnline.value && !isSyncing.value) {
+    await handleSync()
   }
 })
 
