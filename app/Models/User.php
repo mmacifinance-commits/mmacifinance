@@ -21,6 +21,11 @@ class User extends Authenticatable
         'lockout_level',
         'locked_until',
         'otp_sent_at',
+        'tutorial_status',
+        'tutorial_version',
+        'tutorial_current_step',
+        'tutorial_completed_at',
+        'tutorial_skipped_at',
     ];
 
     protected $hidden = [
@@ -36,6 +41,8 @@ class User extends Authenticatable
             'otp_expires_at' => 'datetime',
             'locked_until' => 'datetime',
             'otp_sent_at' => 'datetime',
+            'tutorial_completed_at' => 'datetime',
+            'tutorial_skipped_at' => 'datetime',
         ];
     }
 
@@ -101,5 +108,14 @@ class User extends Authenticatable
             self::ROLE_AUDITOR => 'Auditor',
             default => ucfirst($this->role),
         };
+    }
+
+    public function shouldShowTutorial(string $routeName): bool
+    {
+        return auth()->check()
+            && $routeName === 'dashboard'
+            && !in_array($this->tutorial_status, ['skipped', 'completed'], true)
+            && !$this->tutorial_completed_at
+            && !$this->tutorial_skipped_at;
     }
 }

@@ -13,6 +13,7 @@ use App\Http\Controllers\IncomeController;
 use App\Http\Controllers\RevenueController;
 use App\Http\Controllers\Auth\TwoFactorController;
 use App\Http\Controllers\Auth\PasswordResetController;
+use App\Http\Controllers\TutorialController;
 use Illuminate\Support\Facades\Route;
 
 // --- Guest Routes ---
@@ -40,6 +41,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/income', [IncomeController::class, 'index'])->name('income.index');
     Route::get('/iaeo', [RevenueController::class, 'index'])->name('iaeo.index');
     Route::redirect('/revenue', '/iaeo', 301);
+    Route::get('/tutorial/state', [TutorialController::class, 'state'])->name('tutorial.state');
+    Route::post('/tutorial/step', [TutorialController::class, 'step'])->name('tutorial.step');
+    Route::post('/tutorial/skip', [TutorialController::class, 'skip'])->name('tutorial.skip');
+    Route::post('/tutorial/complete', [TutorialController::class, 'complete'])->name('tutorial.complete');
 
     // --- Budget section: Super Admin + Budget Officer can CRUD, others can only view ---
     Route::get('/annual-budgets', [AnnualBudgetController::class, 'index'])->name('annual-budgets.index');

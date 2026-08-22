@@ -219,6 +219,16 @@ class DashboardController extends Controller
             'multiYearComparison' => $multiYearComparison,
             'monthlyBreakdown' => $monthlyBreakdown,
             'recentDisbursements' => $recentDisbursements,
+            'tutorial' => [
+                'show' => $request->user()?->shouldShowTutorial('dashboard') ?? false,
+                'state' => [
+                    'status' => $request->user()?->tutorial_status ?? 'pending',
+                    'version' => $request->user()?->tutorial_version,
+                    'current_step' => $request->user()?->tutorial_current_step,
+                    'completed_at' => $request->user()?->tutorial_completed_at?->toISOString(),
+                    'skipped_at' => $request->user()?->tutorial_skipped_at?->toISOString(),
+                ],
+            ],
         ]);
     }
 }

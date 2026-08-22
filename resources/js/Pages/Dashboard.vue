@@ -274,7 +274,11 @@ const barColors = ['#1e293b', '#d4a843', '#2563eb', '#059669', '#7c3aed', '#db27
     </div>
 
     <!-- 6 Core KPI Summary Cards -->
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-6 mb-6">
+    <div
+        class="grid gap-4 sm:grid-cols-2 lg:grid-cols-6 mb-6"
+        data-onboarding-target="dashboard-summary"
+        data-onboarding-click="dashboard-summary"
+    >
         <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-visible">
             <div class="h-1 bg-navy-dark"></div>
             <div class="p-3.5">

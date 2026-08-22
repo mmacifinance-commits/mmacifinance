@@ -43,8 +43,16 @@ class TwoFactorController extends Controller
 
     public function verify(Request $request)
     {
+        Log::info('2FA verify request received', [
+            'session_id' => $request->session()->getId(),
+            'has_2fa_user_id' => $request->session()->has('2fa_user_id'),
+            'user_id' => $request->session()->get('2fa_user_id'),
+            'submitted_otp' => $request->input('otp'),
+            'url' => $request->fullUrl(),
+        ]);
+
         $request->validate([
-            'otp' => 'required|numeric|digits:6',
+            'otp' => ['required', 'regex:/^\d{6}$/'],
         ]);
 
         $userId = $request->session()->get('2fa_user_id');
@@ -55,16 +63,44 @@ class TwoFactorController extends Controller
 
         $user = User::find($userId);
 
-        if (!$user || $user->otp_code !== $request->otp || now()->greaterThan($user->otp_expires_at)) {
+        if (!$user) {
+            Log::warning('2FA verify aborted: user not found', [
+                'session_id' => $request->session()->getId(),
+                'user_id' => $userId,
+            ]);
+            return redirect()->route('login')->withErrors([
+                'otp' => 'Your login session expired. Please sign in again.',
+            ]);
+        }
+
+        $submittedOtp = trim((string) $request->otp);
+        $storedOtp = trim((string) ($user->otp_code ?? ''));
+
+        Log::info('2FA verify comparison', [
+            'email' => $user->email,
+            'submitted_len' => strlen($submittedOtp),
+            'stored_len' => strlen($storedOtp),
+            'otp_exists' => !empty($storedOtp),
+            'expires_at' => optional($user->otp_expires_at)?->toDateTimeString(),
+            'is_expired' => $user->otp_expires_at ? now()->greaterThan($user->otp_expires_at) : null,
+        ]);
+
+        if (!hash_equals($storedOtp, $submittedOtp) || (!$user->otp_expires_at || now()->greaterThan($user->otp_expires_at))) {
+            Log::warning('2FA verify failed', [
+                'email' => $user->email,
+                'submitted' => $submittedOtp,
+                'stored' => $storedOtp,
+                'expired' => !$user->otp_expires_at || now()->greaterThan($user->otp_expires_at),
+            ]);
             return back()->withErrors(['otp' => 'The provided OTP is invalid or expired.']);
         }
 
         // Login user
         $remember = $request->session()->get('2fa_remember', false);
         Auth::login($user, $remember);
+        $request->session()->put('login_web_user_id', $user->id);
 
-        // Clear 2FA data from session and DB
-        $request->session()->forget(['2fa_user_id', '2fa_remember']);
+        // Clear 2FA data from session and DB after login is established
         $user->otp_code = null;
         $user->otp_expires_at = null;
         
@@ -76,6 +112,8 @@ class TwoFactorController extends Controller
         $user->save();
 
         $request->session()->regenerate();
+        $request->session()->forget(['2fa_user_id', '2fa_remember']);
+        $request->session()->regenerateToken();
 
         return redirect()->intended(route('dashboard'));
     }

@@ -7,7 +7,7 @@
  *  - Never intercept POST/PUT/DELETE (those go through the offline queue)
  */
 
-const CACHE_NAME = 'budget-tracker-v1'
+const CACHE_NAME = 'budget-tracker-v2'
 
 // Assets to pre-cache on install
 const PRECACHE_URLS = [
@@ -53,6 +53,18 @@ self.addEventListener('fetch', (event) => {
 
   // Never intercept Inertia XHR data calls (they have X-Inertia header)
   if (request.headers.get('X-Inertia')) return
+
+  // Never cache auth/onboarding routes so session changes are always fresh
+  if (
+    url.pathname.startsWith('/login') ||
+    url.pathname.startsWith('/logout') ||
+    url.pathname.startsWith('/2fa') ||
+    url.pathname.startsWith('/forgot-password') ||
+    url.pathname.startsWith('/reset-password')
+  ) {
+    event.respondWith(fetch(request))
+    return
+  }
 
   // Static assets (JS, CSS, fonts, images) → Cache-first
   if (
@@ -114,5 +126,11 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('message', (event) => {
   if (event.data === 'SKIP_WAITING') {
     self.skipWaiting()
+  }
+
+  if (event.data === 'CLEAR_CACHES') {
+    event.waitUntil(
+      caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+    )
   }
 })

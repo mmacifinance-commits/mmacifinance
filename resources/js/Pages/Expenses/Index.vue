@@ -258,7 +258,7 @@ function splitDate(d) {
 <AppLayout>
     <div class="flex items-center justify-between mb-6">
         <div><h2 class="text-xl font-bold text-gray-900">Expenditures</h2><p class="text-sm text-gray-500">Track and manage official expenditures</p></div>
-        <button v-if="perms.canManageExpenses" @click="openCreate" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">Add Expense</button>
+        <button v-if="perms.canManageExpenses" @click="openCreate" data-onboarding-target="expense-add" data-onboarding-click="expense-add" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">Add Expense</button>
     </div>
     <div class="flex flex-col sm:flex-row gap-4 mb-6">
         <input v-model="filterSearch" type="text" placeholder="Search by ref no or description..." class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm w-full max-w-sm shadow-sm" />
@@ -416,7 +416,7 @@ function splitDate(d) {
             </div>
             <div class="flex items-center justify-end gap-3 pt-5 border-t mt-4">
                 <button type="button" @click="showModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button type="submit" :disabled="form.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy shadow-sm">{{ form.processing ? 'Saving...' : (editing ? 'Update' : 'Create Expense') }}</button>
+                <button type="submit" :disabled="form.processing" data-onboarding-target="expense-save" data-onboarding-click="expense-save" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy shadow-sm">{{ form.processing ? 'Saving...' : (editing ? 'Update' : 'Create Expense') }}</button>
             </div>
         </form>
     </Modal>

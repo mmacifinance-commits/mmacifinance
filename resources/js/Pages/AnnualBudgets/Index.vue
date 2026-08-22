@@ -66,13 +66,13 @@ function utilRate(items) {
             <h2 class="text-xl font-bold text-gray-900">Annual Budget Records</h2>
             <p class="text-sm text-gray-500">Manage annual reference numbers and monthly allocations</p>
         </div>
-        <button v-if="perms.canManageBudget" @click="showNewBudget = true" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
+        <button v-if="perms.canManageBudget" @click="showNewBudget = true" data-onboarding-target="budget-open" data-onboarding-click="budget-open" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
             New Annual Budget
         </button>
     </div>
 
     <!-- Budget Table -->
-    <div class="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden">
+    <div class="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden" data-onboarding-target="budget-table" data-onboarding-click="budget-table">
         <div class="overflow-x-auto w-full pb-4">
             <table class="w-full text-sm min-w-max whitespace-nowrap">
                 <thead>
@@ -140,7 +140,7 @@ function utilRate(items) {
             </div>
             <div class="flex items-center justify-end gap-3 pt-4 border-t">
                 <button type="button" @click="showNewBudget = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button type="submit" :disabled="budgetForm.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">Create Annual Budget</button>
+                <button type="submit" :disabled="budgetForm.processing" data-onboarding-target="budget-create" data-onboarding-click="budget-create" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">Create Annual Budget</button>
             </div>
         </form>
     </Modal>

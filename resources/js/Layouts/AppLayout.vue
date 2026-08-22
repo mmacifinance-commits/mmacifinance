@@ -2,10 +2,20 @@
 import { ref, computed, watch } from 'vue'
 import { Link, usePage, router } from '@inertiajs/vue3'
 import OfflineBanner from '@/Components/OfflineBanner.vue'
+import OnboardingController from '@/Components/Onboarding/OnboardingController.vue'
 
 const page = usePage()
 const auth = computed(() => page.props.auth)
+const tutorial = computed(() => {
+    if (page.props.tutorial) return page.props.tutorial
+    const state = page.props.auth?.user?.tutorial_state
+    return {
+        show: state?.show || state?.status === 'active' || state?.status === 'pending',
+        state: state || {},
+    }
+})
 const flash = computed(() => page.props.flash)
+const tutorialRoleLabel = computed(() => auth.value?.user?.role_label || 'Tutorial')
 
 const mainNavItems = [
     { href: '/', label: 'DASHBOARD', icon: '', section: 'dashboard' },
@@ -28,6 +38,7 @@ const sidebarMenus = {
 
 const mobileMenuOpen = ref(false)
 const showFlash = ref(true)
+const tutorialController = ref(null)
 
 const currentPath = computed(() => page.url)
 
@@ -61,6 +72,10 @@ function logout() {
     router.post('/logout')
 }
 
+function openTutorial() {
+    tutorialController.value?.openTutorial?.()
+}
+
 watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value = false }, 4000) }, { deep: true })
 </script>
 
@@ -80,9 +95,18 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
                     </div>
                 </div>
                 <div class="flex items-center gap-3">
+                    <button
+                        type="button"
+                        class="hidden md:inline-flex items-center rounded-md bg-white/10 px-3 py-1.5 text-xs font-medium text-white border border-white/10 hover:bg-white/15 transition"
+                        title="Open tutorial"
+                        aria-label="Open tutorial"
+                        @click="openTutorial"
+                    >
+                        Tutorial
+                    </button>
                     <div class="hidden md:flex items-center gap-2 rounded-md bg-white/10 px-3 py-1.5">
                         <span class="text-mustard text-sm"></span>
-                        <span class="text-sm font-medium text-white">{{ auth.user?.role_label || auth.user?.name }}</span>
+                        <span class="text-sm font-medium text-white">{{ tutorialRoleLabel }}</span>
                     </div>
                     <button @click="logout" class="rounded-md bg-red-500/20 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/30 transition hidden md:block">
                         Logout
@@ -101,6 +125,8 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
                     v-for="item in mainNavItems"
                     :key="item.section"
                     :href="item.href"
+                    :data-onboarding-target="`nav-${item.section}`"
+                    :data-onboarding-click="`nav-${item.section}`"
                     :class="[
                         'flex items-center gap-2 px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition-all',
                         isMainActive(item)
@@ -156,10 +182,10 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
                     <h3 class="text-[11px] font-bold uppercase tracking-widest text-white">Sub Menu</h3>
                 </div>
                 <nav class="py-1">
-                    <Link
-                        v-for="item in currentSidebar"
-                        :key="item.href"
-                        :href="item.href"
+                <Link
+                    v-for="item in currentSidebar"
+                    :key="item.href"
+                    :href="item.href"
                         :class="[
                             'flex items-center gap-2 px-3 py-2 text-[13px] transition-colors border-l-[3px]',
                             isSideActive(item.href)
@@ -174,9 +200,10 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
             </aside>
 
             <!-- Main Content -->
-            <main class="flex-1 p-6 min-w-0">
+        <main class="flex-1 p-6 min-w-0">
+                <OnboardingController ref="tutorialController" :tutorial="tutorial" />
                 <slot />
-            </main>
+        </main>
         </div>
 
         <!-- Footer -->

@@ -83,7 +83,7 @@ function remove(id) {
             <h2 class="text-xl font-bold text-gray-900">Income</h2>
             <p class="text-sm text-gray-500">Record collections and income entries</p>
         </div>
-        <button v-if="perms.canManageIncome" @click="openCreate" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
+        <button v-if="perms.canManageIncome" @click="openCreate" data-onboarding-target="income-add" data-onboarding-click="income-add" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
             Add Income
         </button>
     </div>
@@ -185,7 +185,7 @@ function remove(id) {
             </div>
             <div class="flex items-center justify-end gap-3 pt-5 border-t mt-4">
                 <button type="button" @click="showModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
-                <button type="submit" :disabled="form.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">{{ form.processing ? 'Saving...' : (editing ? 'Update' : 'Save Income') }}</button>
+                <button type="submit" :disabled="form.processing" data-onboarding-target="income-save" data-onboarding-click="income-save" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">{{ form.processing ? 'Saving...' : (editing ? 'Update' : 'Save Income') }}</button>
             </div>
         </form>
     </Modal>
