@@ -44,7 +44,8 @@ class IncomeController extends Controller
             $query->whereYear('date_encoded', $selectedYear);
         }
 
-        $incomeRecords = $query->latest('date_encoded')->get();
+        $recordCount = (clone $query)->count();
+        $incomeRecords = $query->latest('date_encoded')->paginate(25)->withQueryString();
         $totalRevenue = (float) Income::query()
             ->whereYear('date_encoded', $selectedYear)
             ->sum('amount');
@@ -61,7 +62,7 @@ class IncomeController extends Controller
             ],
             'stats' => [
                 'totalRevenue' => $totalRevenue,
-                'recordCount' => $incomeRecords->count(),
+                'recordCount' => $recordCount,
             ],
         ]);
     }

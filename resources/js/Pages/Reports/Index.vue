@@ -64,38 +64,20 @@ function asArray(value) {
 }
 
 const yearlyBudgetPerformance = computed(() => {
-    const grouped = new Map()
-
-    asArray(props.budgets).forEach((budget) => {
-        const year = Number(budget.year)
-        const records = grouped.get(year) || {
-            year,
-            records: [],
-            appropriation: 0,
-            expenditure: 0,
-        }
-
-        const semester = normalizeSemester(budget.semester)
-        const appropriation = Number((budget.items || []).reduce((sum, item) => sum + Number(item.appropriation || 0), 0))
-        const expenditure = Number((budget.items || []).reduce((sum, item) => sum + Number(item.expenditure || 0), 0))
-
-        records.records.push({
-            id: budget.id,
-            ref_no: budget.ref_no || `AB-${budget.year}-${String(budget.id).padStart(4, '0')}`,
-            semester,
-            appropriation,
-            expenditure,
-        })
-        records.appropriation += appropriation
-        records.expenditure += expenditure
-        grouped.set(year, records)
-    })
-
-    return [...grouped.values()]
+    return asArray(props.budgetPerformanceByYear)
+        .map((row) => ({
+            ...row,
+            records: (asArray(props.budgets).filter((budget) => Number(budget.year) === Number(row.year)).map((budget) => ({
+                id: budget.id,
+                ref_no: budget.ref_no || `AB-${budget.year}-${String(budget.id).padStart(4, '0')}`,
+                semester: normalizeSemester(budget.semester),
+                appropriation: Number((budget.items || []).reduce((sum, item) => sum + Number(item.appropriation || 0), 0)),
+                expenditure: Number((budget.items || []).reduce((sum, item) => sum + Number(item.expenditure || 0), 0)),
+            }))),
+        }))
         .map((row) => ({
             ...row,
             records: row.records.sort((a, b) => (SEMESTER_ORDER[a.semester] ?? 99) - (SEMESTER_ORDER[b.semester] ?? 99)),
-            utilizationRate: row.appropriation > 0 ? ((row.expenditure / row.appropriation) * 100).toFixed(1) : '0.0',
         }))
         .sort((a, b) => b.year - a.year)
 })
@@ -518,4 +500,3 @@ function utilRate(app, exp) { return Number(app || 0) > 0 ? ((Number(exp || 0) /
 
 </AppLayout>
 </template>
-

@@ -14,6 +14,8 @@ const props = defineProps({
     stats: Object,
 })
 
+const incomeItems = computed(() => props.incomeRecords?.data || props.incomeRecords || [])
+
 const showModal = ref(false)
 const editing = ref(null)
 const form = useForm({ source: '', description: '', amount: 0, date_encoded: '', notes: '' })
@@ -137,7 +139,7 @@ function remove(id) {
                 <div class="text-right">Amount</div>
                 <div class="text-right">Actions</div>
             </div>
-            <div v-for="item in incomeRecords" :key="item.id" class="grid grid-cols-1 gap-3 px-5 py-4 sm:grid-cols-[1.15fr_1.9fr_0.9fr_0.85fr_auto] sm:items-center sm:gap-4">
+            <div v-for="item in incomeItems" :key="item.id" class="grid grid-cols-1 gap-3 px-5 py-4 sm:grid-cols-[1.15fr_1.9fr_0.9fr_0.85fr_auto] sm:items-center sm:gap-4">
                 <div class="min-w-0">
                     <p class="text-sm font-bold text-gray-900">{{ item.income_no }}</p>
                     <p class="mt-1 text-[11px] text-gray-400 sm:hidden">{{ item.date_encoded?.slice?.(0, 10) }}</p>
@@ -156,8 +158,20 @@ function remove(id) {
                     <button @click="remove(item.id)" class="px-3 py-1.5 bg-rose-50 text-rose-700 rounded-md text-xs font-semibold border border-rose-200">Delete</button>
                 </div>
             </div>
-            <div v-if="!incomeRecords?.length" class="px-5 py-8 text-center text-gray-400">No income records found.</div>
+            <div v-if="!incomeItems?.length" class="px-5 py-8 text-center text-gray-400">No income records found.</div>
         </div>
+    </div>
+
+    <div v-if="incomeRecords?.links?.length" class="mt-4 flex flex-wrap gap-2">
+        <button
+            v-for="link in incomeRecords.links"
+            :key="link.label"
+            :disabled="!link.url"
+            @click="link.url && router.visit(link.url, { preserveState: true, preserveScroll: true })"
+            v-html="link.label"
+            class="rounded-md border px-3 py-1.5 text-xs font-semibold transition"
+            :class="link.active ? 'border-navy-dark bg-navy-dark text-white' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50'"
+        />
     </div>
 
     <Modal :show="showModal" :title="editing ? 'Edit Income' : 'Add Income'" :subtitle="editing ? 'Update income details.' : 'Create a new income item.'" max-width="lg" @close="showModal = false">

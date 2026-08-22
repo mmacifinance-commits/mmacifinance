@@ -14,7 +14,7 @@ class DisbursementController extends Controller
 {
     public function index(Request $request)
     {
-        $disbursements = Disbursement::with([
+        $disbursementQuery = Disbursement::with([
             'expense.category',
             'expense.particular',
             'preparedBy',
@@ -24,14 +24,25 @@ class DisbursementController extends Controller
             'rejectedBy',
             'postedBy',
             'auditTrails',
-        ])->latest()->get();
+        ])->latest();
 
-        $yearsFromDsb = $disbursements->pluck('date_encoded')
+        $disbursements = $disbursementQuery->paginate(25)->withQueryString();
+        $yearsFromDsb = Disbursement::query()
+            ->selectRaw('YEAR(date_encoded) as year')
+            ->distinct()
+            ->pluck('year')
             ->filter()
-            ->map(fn($d) => (int) date('Y', strtotime($d)))
+            ->map(fn ($year) => (int) $year)
             ->unique()
             ->sortDesc()
             ->values();
+
+        $pageItems = collect($disbursements->items());
+        $yearsFromDsb = $yearsFromDsb->concat($pageItems->pluck('date_encoded')
+            ->filter()
+            ->map(fn($d) => (int) date('Y', strtotime($d)))
+            ->unique()
+            ->values())->unique()->sortDesc()->values();
 
         $budgetYears = AnnualBudget::pluck('year');
         $currentYear = (int) date('Y');
@@ -56,7 +67,7 @@ class DisbursementController extends Controller
                 'date_encoded',
                 'created_at',
                 'status'
-            )->get(),
+            )->latest('date_encoded')->get(),
             'budgetYears' => AnnualBudget::pluck('year')->values()->toArray(),
             'availableYears' => $availableYears,
             'defaultYear' => $defaultYear,

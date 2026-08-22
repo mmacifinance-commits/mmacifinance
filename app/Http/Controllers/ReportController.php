@@ -188,7 +188,13 @@ class ReportController extends Controller
         $selectedMonthLabel = $selectedMonthPerformance['month_label'] ?? ($selectedMonth ? date('F', mktime(0, 0, 0, $selectedMonth, 1)) : 'All Months');
 
         return Inertia::render('Reports/Index', [
-            'budgets' => tap(AnnualBudget::with(['items.category', 'items.particular.department'])->get(), fn ($budgets) => $budgets->each(fn ($budget) => BudgetItem::hydrateDerivedTotals($budget->items))),
+            'budgets' => tap(
+                AnnualBudget::query()
+                    ->where('year', $selectedYear)
+                    ->with(['items.category', 'items.particular.department'])
+                    ->get(),
+                fn ($budgets) => $budgets->each(fn ($budget) => BudgetItem::hydrateDerivedTotals($budget->items))
+            ),
             'categories' => BudgetCategory::all(),
             'accountTitles' => BudgetParticular::with('category', 'department')->get(),
             'particulars' => BudgetParticular::with('category', 'department')->get(),

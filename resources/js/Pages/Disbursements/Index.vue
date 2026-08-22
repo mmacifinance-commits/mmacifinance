@@ -22,6 +22,8 @@ const props = defineProps({
     userPermissions: Object,
 })
 
+const disbursementItems = computed(() => props.disbursements?.data || props.disbursements || [])
+
 const showModal = ref(false)
 const showAuditModal = ref(false)
 const showActionModal = ref(false)
@@ -82,7 +84,7 @@ function expensePaymentBadgeClass(expense) {
 }
 
 const filteredDisbursements = computed(() => {
-    const all = [...(props.disbursements || []), ...offlineRows.value]
+    const all = [...disbursementItems.value, ...offlineRows.value]
     return all.filter(d => {
         const matchSearch = filterSearch.value ?
             ((d.disbursement_no || '').toLowerCase().includes(filterSearch.value.toLowerCase()) ||
@@ -419,6 +421,18 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
         </div>
     </div>
 
+    <div v-if="disbursements?.links?.length" class="mt-4 flex flex-wrap gap-2">
+        <button
+            v-for="link in disbursements.links"
+            :key="link.label"
+            :disabled="!link.url"
+            @click="link.url && router.visit(link.url, { preserveState: true, preserveScroll: true })"
+            v-html="link.label"
+            class="rounded-md border px-3 py-1.5 text-xs font-semibold transition"
+            :class="link.active ? 'border-navy-dark bg-navy-dark text-white' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50'"
+        />
+    </div>
+
     <!-- Create/Edit Disbursement Modal -->
     <Modal :show="showModal" :title="editing ? 'Edit Disbursement' : 'Create Disbursement'" :subtitle="editing ? 'Update disbursement release details.' : 'Enter release details and submit for approval.'" max-width="5xl" @close="showModal = false">
         <form @submit.prevent="save">
@@ -632,4 +646,3 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
     </Modal>
 </AppLayout>
 </template>
-

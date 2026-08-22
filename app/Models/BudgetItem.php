@@ -124,8 +124,8 @@ class BudgetItem extends Model
 
     public function postedExpenditureTotal(): float
     {
-        if ($this->offsetExists('expenditure') && $this->getAttribute('expenditure') !== null) {
-            return (float) $this->getAttribute('expenditure');
+        if (array_key_exists('expenditure', $this->attributes) && $this->attributes['expenditure'] !== null) {
+            return (float) $this->attributes['expenditure'];
         }
 
         $budgetYear = $this->budgetFiscalYear();
