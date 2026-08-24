@@ -462,7 +462,6 @@ function catBalancePercent(group) {
                         @change="(e) => importForm.csv_file = e.target.files?.[0] || null"
                         required
                     />
-                    <p v-if="importForm.errors.csv_file" class="mt-1 text-xs text-red-500">{{ importForm.errors.csv_file }}</p>
                 </div>
                 <div v-if="importForm.errors.csv_file" class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
                     {{ importForm.errors.csv_file }}
