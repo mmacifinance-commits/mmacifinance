@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AnnualBudget;
 use App\Models\Expense;
+use App\Models\BudgetItem;
+use App\Models\Disbursement;
 use App\Models\Income;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
@@ -47,9 +50,28 @@ class IncomeController extends Controller
 
         $recordCount = (clone $query)->count();
         $incomeRecords = $query->latest('date_encoded')->paginate(25)->withQueryString();
-        $totalRevenue = (float) Income::query()
-            ->whereYear('date_encoded', $selectedYear)
-            ->sum('amount');
+        $incomeTotalQuery = Income::query()->whereYear('date_encoded', $selectedYear);
+        $expenseTotalQuery = Disbursement::query()
+            ->where('status', 'posted')
+            ->whereYear('date_encoded', $selectedYear);
+        $appropriationTotalQuery = BudgetItem::query()
+            ->whereHas('budget', fn ($q) => $q->where('year', $selectedYear));
+
+        if ($startDate && $endDate) {
+            $incomeTotalQuery->whereBetween('date_encoded', [$startDate, $endDate]);
+            $expenseTotalQuery->whereBetween('date_encoded', [$startDate, $endDate]);
+            $appropriationTotalQuery->whereHas('budget', fn ($q) => $q->where('year', $selectedYear));
+        } elseif ($selectedMonth) {
+            $incomeTotalQuery->whereMonth('date_encoded', $selectedMonth);
+            $expenseTotalQuery->whereMonth('date_encoded', $selectedMonth);
+            $appropriationTotalQuery->where('month', $selectedMonth);
+        }
+
+        $totalRevenue = (float) $incomeTotalQuery->sum('amount');
+        $totalAppropriation = (float) $appropriationTotalQuery->sum('appropriation');
+        $totalExpense = (float) $expenseTotalQuery->sum('amount');
+        $remainingIncome = $totalRevenue - $totalAppropriation;
+        $remainingIncomeAfterExpense = $totalRevenue - $totalExpense;
 
         return Inertia::render('Income/Index', [
             'incomeRecords' => $incomeRecords,
@@ -64,6 +86,10 @@ class IncomeController extends Controller
             'stats' => [
                 'totalRevenue' => $totalRevenue,
                 'recordCount' => $recordCount,
+                'totalAppropriation' => $totalAppropriation,
+                'totalExpense' => $totalExpense,
+                'remainingIncome' => $remainingIncome,
+                'remainingIncomeAfterExpense' => $remainingIncomeAfterExpense,
             ],
         ]);
     }

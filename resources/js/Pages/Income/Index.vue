@@ -116,7 +116,7 @@ function importCsv() {
             </div>
             <button @click="resetFilters" class="text-sm font-semibold text-indigo-600 hover:text-indigo-800">Reset All Filters</button>
         </div>
-        <div class="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div class="space-y-1">
                 <label class="block text-[11px] font-bold uppercase tracking-wide text-gray-700">Fiscal Year</label>
                 <select v-model="selectedYear" @change="applyFilters" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm">
@@ -131,19 +131,28 @@ function importCsv() {
                 </select>
             </div>
             <div class="space-y-1">
-                <label class="block text-[11px] font-bold uppercase tracking-wide text-gray-700">Search</label>
-                <input v-model="searchQuery" @input="applyFilters" type="text" placeholder="Search source or description..." class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm" />
-            </div>
-            <div class="space-y-1">
                 <label class="block text-[11px] font-bold uppercase tracking-wide text-gray-700">Start Date</label>
                 <input v-model="startDate" @change="applyFilters" type="date" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm" />
+            </div>
+            <div class="space-y-1">
+                <label class="block text-[11px] font-bold uppercase tracking-wide text-gray-700">End Date</label>
+                <input v-model="endDate" @change="applyFilters" type="date" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm" />
             </div>
         </div>
     </div>
 
-    <div class="grid gap-4 md:grid-cols-2 mb-6">
+    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4 mb-6">
         <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden"><div class="h-1 bg-navy-dark"></div><div class="p-4"><p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Total Income</p><p class="text-xl font-extrabold text-navy-dark mt-0.5">{{ PESO }}{{ fmt(stats?.totalRevenue) }}</p></div></div>
-        <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden"><div class="h-1 bg-slate-700"></div><div class="p-4"><p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Income Records</p><p class="text-xl font-extrabold text-slate-800 mt-0.5">{{ stats?.recordCount || 0 }}</p></div></div>
+        <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden"><div class="h-1 bg-slate-700"></div><div class="p-4"><p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Remaining Income After Appropriation</p><p class="text-xl font-extrabold text-slate-800 mt-0.5">{{ PESO }}{{ fmt(stats?.remainingIncome) }}</p><p class="mt-1 text-xs text-gray-500">Income less approved appropriation.</p></div></div>
+        <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden"><div class="h-1 bg-amber-500"></div><div class="p-4"><p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Remaining Income After Expense</p><p class="text-xl font-extrabold text-amber-700 mt-0.5">{{ PESO }}{{ fmt(stats?.remainingIncomeAfterExpense) }}</p><p class="mt-1 text-xs text-gray-500">Income less posted expenditures.</p></div></div>
+        <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden"><div class="h-1 bg-emerald-500"></div><div class="p-4"><p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Income Records</p><p class="text-xl font-extrabold text-slate-800 mt-0.5">{{ stats?.recordCount || 0 }}</p></div></div>
+    </div>
+
+    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm mb-6">
+        <label class="block text-[11px] font-bold uppercase tracking-wide text-gray-700">Search</label>
+        <div class="mt-1 flex gap-3">
+            <input v-model="searchQuery" @input="applyFilters" type="text" placeholder="Search source or description..." class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm" />
+        </div>
     </div>
 
     <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
