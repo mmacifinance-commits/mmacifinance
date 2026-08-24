@@ -9,6 +9,7 @@ const props = defineProps({
 })
 
 const form = useForm({
+    email: props.email,
     code: '',
     password: '',
     password_confirmation: '',
@@ -30,7 +31,10 @@ function submit() {
 }
 
 function resendCode() {
-    resendForm.post('/forgot-password')
+    resendForm.email = props.email
+    resendForm.post('/forgot-password', {
+        preserveScroll: true,
+    })
 }
 </script>
 
@@ -55,6 +59,7 @@ function resendCode() {
 
                 <!-- Form -->
                 <form @submit.prevent="submit" class="space-y-5">
+                    <input v-model="form.email" type="hidden" />
                     <div>
                         <label class="block text-sm font-medium text-white/80 mb-1">Verification Code</label>
                         <input
