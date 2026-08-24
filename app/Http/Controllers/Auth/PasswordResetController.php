@@ -9,10 +9,17 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Inertia\Inertia;
+use Illuminate\Validation\ValidationException;
 
 class PasswordResetController extends Controller
 {
+    private const RESET_REQUEST_LIMIT = 5;
+    private const RESET_REQUEST_DECAY = 10;
+    private const RESET_VERIFY_LIMIT = 10;
+    private const RESET_VERIFY_DECAY = 10;
+
     public function showForgotForm()
     {
         return Inertia::render('Auth/ForgotPassword');
@@ -34,15 +41,17 @@ class PasswordResetController extends Controller
 
         $email = $request->email;
         $user = User::where('email', $email)->first();
+        $this->ensureResetRequestNotThrottled($request, $email);
 
         // Generate 6 digit code
         $code = (string) rand(100000, 999999);
+        $codeHash = Hash::make($code);
 
         // Persist in database so the reset flow survives reloads, tab changes, and browser restarts
         DB::table('password_reset_tokens')->updateOrInsert(
             ['email' => $email],
             [
-                'token' => $code,
+                'token' => $codeHash,
                 'created_at' => now(),
             ]
         );
@@ -96,15 +105,9 @@ class PasswordResetController extends Controller
             ->where('email', $request->email)
             ->first();
 
-        if (!$tokenRow || (string) $tokenRow->token !== (string) $request->code) {
-            return back()->withErrors([
-                'code' => 'The verification code is invalid or has expired.',
-            ]);
-        }
-
-        if ($tokenRow->created_at && now()->diffInMinutes($tokenRow->created_at) > 10) {
-            DB::table('password_reset_tokens')->where('email', $request->email)->delete();
-            return back()->withErrors([
+        if (!$tokenRow || !$tokenRow->token || !$tokenRow->created_at || now()->diffInMinutes($tokenRow->created_at) > 10 || !Hash::check($request->code, $tokenRow->token)) {
+            $this->hitResetVerifyThrottle($request, $request->email);
+            throw ValidationException::withMessages([
                 'code' => 'The verification code is invalid or has expired.',
             ]);
         }
@@ -156,10 +159,46 @@ class PasswordResetController extends Controller
             DB::table('password_reset_tokens')->where('email', $email)->delete();
             $request->session()->forget('password_reset_email');
             $request->session()->forget('password_reset_verified_email');
+            $this->clearResetThrottles($request, $email);
 
             return redirect()->route('login')->with('message', 'Your password has been changed successfully. You can now log in.');
         }
 
         return redirect()->route('password.request')->withErrors(['email' => 'User not found.']);
+    }
+
+    private function ensureResetRequestNotThrottled(Request $request, string $email): void
+    {
+        $key = $this->resetRequestKey($request, $email);
+
+        if (RateLimiter::tooManyAttempts($key, self::RESET_REQUEST_LIMIT)) {
+            $seconds = RateLimiter::availableIn($key);
+            throw ValidationException::withMessages([
+                'email' => 'Too many reset requests. Please try again in ' . ceil($seconds / 60) . ' minute(s).',
+            ]);
+        }
+
+        RateLimiter::hit($key, self::RESET_REQUEST_DECAY * 60);
+    }
+
+    private function hitResetVerifyThrottle(Request $request, string $email): void
+    {
+        RateLimiter::hit($this->resetVerifyKey($request, $email), self::RESET_VERIFY_DECAY * 60);
+    }
+
+    private function clearResetThrottles(Request $request, string $email): void
+    {
+        RateLimiter::clear($this->resetRequestKey($request, $email));
+        RateLimiter::clear($this->resetVerifyKey($request, $email));
+    }
+
+    private function resetRequestKey(Request $request, string $email): string
+    {
+        return 'password-reset-request:' . strtolower($email) . '|' . $request->ip();
+    }
+
+    private function resetVerifyKey(Request $request, string $email): string
+    {
+        return 'password-reset-verify:' . strtolower($email) . '|' . $request->ip();
     }
 }

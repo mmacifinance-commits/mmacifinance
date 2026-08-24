@@ -26,10 +26,16 @@ Route::middleware('guest')->group(function () {
     Route::post('/2fa/resend', [TwoFactorController::class, 'resend'])->name('2fa.resend');
 
     Route::get('/forgot-password', [PasswordResetController::class, 'showForgotForm'])->name('password.request');
-    Route::post('/forgot-password', [PasswordResetController::class, 'sendResetCode'])->name('password.email');
+    Route::post('/forgot-password', [PasswordResetController::class, 'sendResetCode'])
+        ->middleware('throttle:5,10')
+        ->name('password.email');
     Route::get('/reset-password', [PasswordResetController::class, 'showResetForm'])->name('password.reset');
-    Route::post('/reset-password/verify', [PasswordResetController::class, 'verifyResetCode'])->name('password.verify');
-    Route::post('/reset-password', [PasswordResetController::class, 'resetPassword'])->name('password.update');
+    Route::post('/reset-password/verify', [PasswordResetController::class, 'verifyResetCode'])
+        ->middleware('throttle:10,10')
+        ->name('password.verify');
+    Route::post('/reset-password', [PasswordResetController::class, 'resetPassword'])
+        ->middleware('throttle:10,10')
+        ->name('password.update');
 });
 
 // --- Authenticated Routes ---
