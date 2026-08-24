@@ -92,7 +92,7 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
                 <div class="flex min-w-0 items-center gap-2 sm:gap-3">
                     <img src="/images/logo.png" alt="MMAC Logo" class="h-9 w-9 flex-none object-contain sm:h-11 sm:w-11" />
                     <div class="min-w-0">
-                        <h1 class="truncate text-sm font-bold leading-tight tracking-wide text-white sm:text-base">Budget Fund Utilization Report</h1>
+                        <h1 class="truncate text-sm font-bold leading-tight tracking-wide text-white sm:text-base">Budget Fund Utilization System</h1>
                         <p class="mt-0.5 truncate text-[10px] text-mustard sm:text-xs">Merchant Marine Academy of Caraga, Inc.</p>
                     </div>
                 </div>
