@@ -215,9 +215,14 @@ function exportCsv() {
 
 function handleImportCsv() {
     importForm.post(`/annual-budgets/${props.budget.id}/import-csv`, {
+        forceFormData: true,
+        preserveScroll: true,
         onSuccess: () => {
             showImportModal.value = false
             importForm.reset()
+        },
+        onError: () => {
+            showImportModal.value = true
         },
     })
 }
