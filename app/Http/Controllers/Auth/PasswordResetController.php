@@ -64,6 +64,7 @@ class PasswordResetController extends Controller
     public function showResetForm(Request $request)
     {
         $email = $request->session()->get('password_reset_email') ?: $request->query('email');
+        $verified = $request->query('verified') === '1';
 
         if (!$email) {
             return redirect()->route('password.request');
@@ -71,7 +72,49 @@ class PasswordResetController extends Controller
 
         return Inertia::render('Auth/ResetPassword', [
             'email' => $email,
+            'verified' => $verified,
         ]);
+    }
+
+    public function verifyResetCode(Request $request)
+    {
+        $request->merge([
+            'email' => strtolower(trim((string) $request->input('email'))),
+            'code' => preg_replace('/\D/', '', (string) $request->input('code')),
+        ]);
+
+        $request->validate([
+            'email' => 'required|email|exists:users,email',
+            'code' => 'required|numeric|digits:6',
+        ], [
+            'email.exists' => 'No account found with this email address.',
+            'code.required' => 'Please enter the 6-digit verification code.',
+            'code.digits' => 'The verification code must be 6 digits.',
+        ]);
+
+        $tokenRow = DB::table('password_reset_tokens')
+            ->where('email', $request->email)
+            ->first();
+
+        if (!$tokenRow || (string) $tokenRow->token !== (string) $request->code) {
+            return back()->withErrors([
+                'code' => 'The verification code is invalid or has expired.',
+            ]);
+        }
+
+        if ($tokenRow->created_at && now()->diffInMinutes($tokenRow->created_at) > 10) {
+            DB::table('password_reset_tokens')->where('email', $request->email)->delete();
+            return back()->withErrors([
+                'code' => 'The verification code is invalid or has expired.',
+            ]);
+        }
+
+        $request->session()->put('password_reset_email', $request->email);
+
+        return redirect()->route('password.reset', [
+            'email' => $request->email,
+            'verified' => 1,
+        ])->with('message', 'Code verified. Now create your new password.');
     }
 
     public function resetPassword(Request $request)
@@ -85,6 +128,13 @@ class PasswordResetController extends Controller
         if ($request->has('code')) {
             $cleanedCode = preg_replace('/\D/', '', (string) $request->code);
             $request->merge(['code' => $cleanedCode]);
+        }
+
+        if (!$request->boolean('verified')) {
+            return redirect()->route('password.reset', [
+                'email' => $email,
+                'verified' => 1,
+            ]);
         }
 
         $request->validate([
