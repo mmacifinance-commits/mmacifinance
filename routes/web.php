@@ -73,10 +73,14 @@ Route::middleware('auth')->group(function () {
         Route::post('/budget-categories', [BudgetCategoryController::class, 'store']);
         Route::put('/budget-categories/{budget_category}', [BudgetCategoryController::class, 'update']);
         Route::delete('/budget-categories/{budget_category}', [BudgetCategoryController::class, 'destroy']);
+        Route::get('/budget-categories/export-csv', [BudgetCategoryController::class, 'exportCsv'])->name('budget-categories.export-csv');
+        Route::post('/budget-categories/import-csv', [BudgetCategoryController::class, 'importCsv'])->name('budget-categories.import-csv');
 
         Route::post('/budget-particulars', [BudgetParticularController::class, 'store']);
         Route::put('/budget-particulars/{budget_particular}', [BudgetParticularController::class, 'update']);
         Route::delete('/budget-particulars/{budget_particular}', [BudgetParticularController::class, 'destroy']);
+        Route::get('/budget-particulars/export-csv', [BudgetParticularController::class, 'exportCsv'])->name('budget-particulars.export-csv');
+        Route::post('/budget-particulars/import-csv', [BudgetParticularController::class, 'importCsv'])->name('budget-particulars.import-csv');
     });
 
     // Responsibility centers are organization-wide setup data. Head of Finance only.
@@ -84,6 +88,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/departments', [DepartmentController::class, 'store'])->name('departments.store');
         Route::put('/departments/{department}', [DepartmentController::class, 'update'])->name('departments.update');
         Route::delete('/departments/{department}', [DepartmentController::class, 'destroy'])->name('departments.destroy');
+        Route::get('/departments/export-csv', [DepartmentController::class, 'exportCsv'])->name('departments.export-csv');
+        Route::post('/departments/import-csv', [DepartmentController::class, 'importCsv'])->name('departments.import-csv');
     });
 
     // --- Expenditures & Disbursements: Super Admin + Disbursement Officer + Cashier can view/CRUD disbursements ---
@@ -102,6 +108,10 @@ Route::middleware('auth')->group(function () {
 
     // Cashier, Disbursement Officer, and Super Admin can manage disbursements & submit for approval
     Route::middleware('role:super_admin,disbursement_officer,cashier')->group(function () {
+        Route::get('/expenses/export-csv', [ExpenseController::class, 'exportCsv'])->name('expenses.export-csv');
+        Route::post('/expenses/import-csv', [ExpenseController::class, 'importCsv'])->name('expenses.import-csv');
+        Route::get('/disbursements/export-csv', [DisbursementController::class, 'exportCsv'])->name('disbursements.export-csv');
+        Route::post('/disbursements/import-csv', [DisbursementController::class, 'importCsv'])->name('disbursements.import-csv');
         Route::post('/disbursements', [DisbursementController::class, 'store']);
         Route::put('/disbursements/{disbursement}', [DisbursementController::class, 'update']);
         Route::delete('/disbursements/{disbursement}', [DisbursementController::class, 'destroy']);
@@ -110,6 +120,8 @@ Route::middleware('auth')->group(function () {
 
     // Income management: Head Admin only
     Route::middleware('role:super_admin')->group(function () {
+        Route::get('/income/export-csv', [IncomeController::class, 'exportCsv'])->name('income.export-csv');
+        Route::post('/income/import-csv', [IncomeController::class, 'importCsv'])->name('income.import-csv');
         Route::post('/income', [IncomeController::class, 'store'])->name('income.store');
         Route::put('/income/{income}', [IncomeController::class, 'update'])->name('income.update');
         Route::delete('/income/{income}', [IncomeController::class, 'destroy'])->name('income.destroy');

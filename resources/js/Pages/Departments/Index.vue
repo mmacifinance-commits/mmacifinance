@@ -13,8 +13,10 @@ const props = defineProps({
 
 const canManage = computed(() => props.canManageResponsibilityCenters || perms.value.isSuperAdmin)
 const showModal = ref(false)
+const showImportModal = ref(false)
 const editing = ref(null)
 const form = useForm({ name: '', code: '' })
+const importForm = useForm({ csv_file: null })
 
 function openCreate() {
     form.reset()
@@ -43,6 +45,19 @@ function remove(id) {
         router.delete(`/departments/${id}`)
     }
 }
+
+function exportCsv() {
+    window.location.href = '/departments/export-csv'
+}
+
+function importCsv() {
+    importForm.post('/departments/import-csv', {
+        onSuccess: () => {
+            showImportModal.value = false
+            importForm.reset()
+        },
+    })
+}
 </script>
 
 <template>
@@ -55,13 +70,29 @@ function remove(id) {
                     Manage programs and centers used across account titles, budgets, expenses, and reports.
                 </p>
             </div>
-            <button
-                v-if="canManage"
-                @click="openCreate"
-                class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-navy"
-            >
-                Add Responsibility Center
-            </button>
+            <div class="flex flex-wrap items-center gap-2">
+                <button
+                    v-if="canManage"
+                    @click="exportCsv"
+                    class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50"
+                >
+                    Export CSV
+                </button>
+                <button
+                    v-if="canManage"
+                    @click="showImportModal = true"
+                    class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100"
+                >
+                    Import CSV
+                </button>
+                <button
+                    v-if="canManage"
+                    @click="openCreate"
+                    class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-navy"
+                >
+                    Add Responsibility Center
+                </button>
+            </div>
         </div>
 
         <div
@@ -198,6 +229,35 @@ function remove(id) {
                     >
                         {{ form.processing ? 'Saving...' : (editing ? 'Update Responsibility Center' : 'Save Responsibility Center') }}
                     </button>
+                </div>
+            </form>
+        </Modal>
+
+        <Modal
+            :show="showImportModal"
+            title="Import Responsibility Centers CSV"
+            subtitle="Required columns: name, code"
+            @close="showImportModal = false"
+        >
+            <form @submit.prevent="importCsv" class="space-y-4">
+                <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                    <p class="font-semibold text-slate-900">CSV columns</p>
+                    <p class="mt-1">`name` and `code` are required.</p>
+                    <p class="mt-1 text-xs text-slate-500">Example: Finance Office, FIN</p>
+                </div>
+                <div>
+                    <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV File</label>
+                    <input
+                        type="file"
+                        accept=".csv,text/csv"
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+                        @change="(e) => importForm.csv_file = e.target.files?.[0] || null"
+                    />
+                    <p v-if="importForm.errors.csv_file" class="mt-1 text-xs text-red-500">{{ importForm.errors.csv_file }}</p>
+                </div>
+                <div class="flex items-center justify-end gap-3 border-t pt-5">
+                    <button type="button" @click="showImportModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
+                    <button type="submit" :disabled="importForm.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">{{ importForm.processing ? 'Importing...' : 'Import CSV' }}</button>
                 </div>
             </form>
         </Modal>

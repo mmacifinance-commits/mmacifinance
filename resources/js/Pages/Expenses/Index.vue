@@ -20,10 +20,12 @@ const props = defineProps({
 })
 
 const showModal = ref(false)
+const showImportModal = ref(false)
 const showAuditModal = ref(false)
 const editing = ref(null)
 const selectedExpense = ref(null)
 const form = useForm({ description: '', category_id: '', particular_id: '', amount: 0, date_encoded: '', date_approved: '', status: 'pending', notes: '' })
+const importForm = useForm({ csv_file: null })
 
 // Local optimistic list for offline-queued items
 const offlineRows = ref([])
@@ -225,6 +227,14 @@ function rejectExpense(expense) {
     })
 }
 
+function exportCsv() { window.location.href = '/expenses/export-csv' }
+function importCsv() {
+    importForm.post('/expenses/import-csv', {
+        forceFormData: true,
+        onSuccess: () => { showImportModal.value = false; importForm.reset() },
+    })
+}
+
 const statusColors = {
     pending: 'bg-yellow-100 text-yellow-800 border border-yellow-200',
     for_approval: 'bg-amber-100 text-amber-800 border border-amber-200',
@@ -258,7 +268,11 @@ function splitDate(d) {
 <AppLayout>
     <div class="flex items-center justify-between mb-6">
         <div><h2 class="text-xl font-bold text-gray-900">Expenditures</h2><p class="text-sm text-gray-500">Track and manage official expenditures</p></div>
-        <button v-if="perms.canManageExpenses" @click="openCreate" data-onboarding-target="expense-add" data-onboarding-click="expense-add" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">Add Expense</button>
+        <div v-if="perms.canManageExpenses" class="flex flex-wrap gap-2">
+            <button @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">Export CSV</button>
+            <button @click="showImportModal = true" class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Import CSV</button>
+            <button @click="openCreate" data-onboarding-target="expense-add" data-onboarding-click="expense-add" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">Add Expense</button>
+        </div>
     </div>
     <div class="flex flex-col sm:flex-row gap-4 mb-6">
         <input v-model="filterSearch" type="text" placeholder="Search by ref no or description..." class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm w-full max-w-sm shadow-sm" />
@@ -454,6 +468,23 @@ function splitDate(d) {
                 </div>
             </div>
         </div>
+    </Modal>
+
+    <Modal :show="showImportModal" title="Import Expenditures CSV" subtitle="Required columns: ref_no, description, category_id, particular_id, amount, date_encoded, date_approved, status, notes" max-width="lg" @close="showImportModal = false">
+        <form @submit.prevent="importCsv" class="space-y-4">
+            <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <p class="font-semibold">Required columns</p>
+                <p class="mt-1 font-mono text-xs">ref_no, description, category_id, particular_id, amount, date_encoded, date_approved, status, notes</p>
+            </div>
+            <div>
+                <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV File</label>
+                <input type="file" accept=".csv,text/csv" @change="e => importForm.csv_file = e.target.files[0]" class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm" required />
+            </div>
+            <div class="flex items-center justify-end gap-3 border-t pt-5">
+                <button type="button" @click="showImportModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
+                <button type="submit" :disabled="importForm.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">{{ importForm.processing ? 'Importing...' : 'Import CSV' }}</button>
+            </div>
+        </form>
     </Modal>
 </AppLayout>
 </template>

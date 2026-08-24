@@ -6,6 +6,7 @@ use App\Models\AuditTrail;
 use App\Models\AnnualBudget;
 use App\Models\Disbursement;
 use App\Models\Expense;
+use Illuminate\Support\Facades\Response;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -361,6 +362,135 @@ class DisbursementController extends Controller
         }
 
         return redirect()->route('disbursements.index')->with('success', 'Disbursement deleted.');
+    }
+
+    public function exportCsv()
+    {
+        $fileName = 'disbursements-export-' . now()->format('Y-m-d_His') . '.csv';
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+        ];
+
+        $callback = function () {
+            $handle = fopen('php://output', 'w');
+            fwrite($handle, "\xEF\xBB\xBF");
+            fputcsv($handle, ['disbursement_no', 'expense_ref_no', 'description', 'source', 'pay_to', 'amount', 'method', 'date_encoded', 'status', 'notes', 'remarks']);
+
+            Disbursement::with('expense:id,ref_no')->orderBy('id')->chunk(200, function ($rows) use ($handle) {
+                foreach ($rows as $dsb) {
+                    fputcsv($handle, [
+                        $dsb->disbursement_no,
+                        $dsb->expense?->ref_no,
+                        $dsb->description,
+                        $dsb->source,
+                        $dsb->pay_to,
+                        $dsb->amount,
+                        $dsb->method,
+                        optional($dsb->date_encoded)->format('Y-m-d'),
+                        $dsb->status,
+                        $dsb->notes,
+                        $dsb->remarks,
+                    ]);
+                }
+            });
+
+            fclose($handle);
+        };
+
+        return Response::streamDownload($callback, $fileName, $headers);
+    }
+
+    public function importCsv(Request $request)
+    {
+        $request->validate([
+            'csv_file' => 'required|file|mimes:csv,txt|max:10240',
+        ]);
+
+        $handle = fopen($request->file('csv_file')->getRealPath(), 'r');
+        if ($handle === false) {
+            return back()->withErrors(['csv_file' => 'Unable to read the uploaded CSV file.']);
+        }
+
+        $header = fgetcsv($handle);
+        if (!$header) {
+            fclose($handle);
+            return back()->withErrors(['csv_file' => 'CSV file is empty.']);
+        }
+
+        $header = array_map(fn ($value) => trim((string) $value), $header);
+        $required = ['disbursement_no', 'expense_ref_no', 'description', 'source', 'pay_to', 'amount', 'method', 'date_encoded', 'status', 'notes', 'remarks'];
+        foreach ($required as $column) {
+            if (!in_array($column, $header, true)) {
+                fclose($handle);
+                return back()->withErrors(['csv_file' => "Missing required column: {$column}"]);
+            }
+        }
+
+        $index = array_flip($header);
+        $created = 0;
+        $updated = 0;
+        $allowedStatuses = ['draft', 'for_release', 'for_approval'];
+
+        while (($row = fgetcsv($handle)) !== false) {
+            if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
+                continue;
+            }
+
+            $disbursementNo = trim((string) ($row[$index['disbursement_no']] ?? ''));
+            $expenseRef = trim((string) ($row[$index['expense_ref_no']] ?? ''));
+            $description = trim((string) ($row[$index['description']] ?? ''));
+            $source = trim((string) ($row[$index['source']] ?? ''));
+            $payTo = trim((string) ($row[$index['pay_to']] ?? ''));
+            $amount = (float) ($row[$index['amount']] ?? 0);
+            $method = trim((string) ($row[$index['method']] ?? 'check'));
+            $dateEncoded = trim((string) ($row[$index['date_encoded']] ?? ''));
+            $status = strtolower(trim((string) ($row[$index['status']] ?? 'draft')));
+            $notes = trim((string) ($row[$index['notes']] ?? ''));
+            $remarks = trim((string) ($row[$index['remarks']] ?? ''));
+
+            if ($disbursementNo === '' || $expenseRef === '' || $description === '' || $source === '' || $payTo === '' || $dateEncoded === '') {
+                continue;
+            }
+
+            if (!in_array($status, $allowedStatuses, true)) {
+                $status = 'draft';
+            }
+
+            $expense = Expense::where('ref_no', $expenseRef)->where('status', 'approved')->first();
+            if (! $expense) {
+                continue;
+            }
+
+            $disbursement = Disbursement::firstOrNew(['disbursement_no' => $disbursementNo]);
+
+            $isNew = !$disbursement->exists;
+            $disbursement->disbursement_no = $disbursementNo;
+            $disbursement->expense_id = $expense->id;
+            $disbursement->description = $description;
+            $disbursement->source = $source;
+            $disbursement->pay_to = $payTo;
+            $disbursement->amount = $amount;
+            $disbursement->method = in_array($method, ['check', 'cash', 'bank_transfer'], true) ? $method : 'check';
+            $disbursement->date_encoded = $dateEncoded;
+            $disbursement->status = $status;
+            $disbursement->notes = $notes !== '' ? $notes : null;
+            $disbursement->remarks = $remarks !== '' ? $remarks : null;
+            $disbursement->prepared_by_id = auth()->id();
+
+            $disbursement->save();
+            AuditTrail::log($disbursement, $isNew ? 'created' : 'modified', auth()->user(), $remarks !== '' ? $remarks : ($isNew ? 'Disbursement imported from CSV.' : 'Disbursement updated from CSV.'));
+
+            if ($disbursement->status === 'posted') {
+                $this->syncExpensePaidAmount($disbursement->expense_id);
+            }
+
+            $isNew ? $created++ : $updated++;
+        }
+
+        fclose($handle);
+
+        return redirect()->back()->with('success', "Disbursement CSV imported successfully. Created: {$created}, Updated: {$updated}");
     }
 
     protected function syncExpensePaidAmount(?int $expenseId)

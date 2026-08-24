@@ -8,8 +8,10 @@ const perms = computed(() => usePage().props.permissions || {})
 
 const props = defineProps({ categories: Array })
 const showModal = ref(false)
+const showImportModal = ref(false)
 const editing = ref(null)
 const form = useForm({ name: '', description: '' })
+const importForm = useForm({ csv_file: null })
 
 function openCreate() { form.reset(); editing.value = null; showModal.value = true }
 function openEdit(c) { form.name = c.name; form.description = c.description || ''; editing.value = c.id; showModal.value = true }
@@ -18,6 +20,12 @@ function save() {
     else form.post('/budget-categories', { onSuccess: () => { showModal.value = false } })
 }
 function remove(id) { if (confirm('Delete category?')) router.delete(`/budget-categories/${id}`) }
+function exportCsv() { window.location.href = '/budget-categories/export-csv' }
+function importCsv() {
+    importForm.post('/budget-categories/import-csv', {
+        onSuccess: () => { showImportModal.value = false; importForm.reset() },
+    })
+}
 </script>
 
 <template>
@@ -25,7 +33,11 @@ function remove(id) { if (confirm('Delete category?')) router.delete(`/budget-ca
 <AppLayout>
     <div class="flex items-center justify-between mb-6">
         <div><h2 class="text-xl font-bold text-gray-900">Budget Categories</h2><p class="text-sm text-gray-500">Manage budget classification categories</p></div>
-        <button v-if="perms.canManageBudget" @click="openCreate" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">Add Category</button>
+        <div class="flex flex-wrap items-center gap-2">
+            <button v-if="perms.canManageBudget" @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">Export CSV</button>
+            <button v-if="perms.canManageBudget" @click="showImportModal = true" class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Import CSV</button>
+            <button v-if="perms.canManageBudget" @click="openCreate" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">Add Category</button>
+        </div>
     </div>
     <div class="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden">
         <div class="overflow-x-auto w-full pb-4">
@@ -73,6 +85,24 @@ function remove(id) { if (confirm('Delete category?')) router.delete(`/budget-ca
             <div class="flex items-center justify-end gap-3 pt-5 border-t mt-4">
                 <button type="button" @click="showModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
                 <button type="submit" :disabled="form.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">{{ form.processing ? 'Saving...' : (editing ? 'Update' : 'Create') }}</button>
+            </div>
+        </form>
+    </Modal>
+
+    <Modal :show="showImportModal" title="Import Budget Categories CSV" subtitle="Required columns: name, description" @close="showImportModal = false">
+        <form @submit.prevent="importCsv" class="space-y-4">
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                <p class="font-semibold text-slate-900">CSV columns</p>
+                <p class="mt-1">`name` and `description` are required.</p>
+            </div>
+            <div>
+                <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV File</label>
+                <input type="file" accept=".csv,text/csv" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" @change="(e) => importForm.csv_file = e.target.files?.[0] || null" />
+                <p v-if="importForm.errors.csv_file" class="mt-1 text-xs text-red-500">{{ importForm.errors.csv_file }}</p>
+            </div>
+            <div class="flex items-center justify-end gap-3 border-t pt-5">
+                <button type="button" @click="showImportModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
+                <button type="submit" :disabled="importForm.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">{{ importForm.processing ? 'Importing...' : 'Import CSV' }}</button>
             </div>
         </form>
     </Modal>

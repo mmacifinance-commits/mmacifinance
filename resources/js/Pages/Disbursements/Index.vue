@@ -25,6 +25,7 @@ const props = defineProps({
 const disbursementItems = computed(() => props.disbursements?.data || props.disbursements || [])
 
 const showModal = ref(false)
+const showImportModal = ref(false)
 const showAuditModal = ref(false)
 const showActionModal = ref(false)
 const actionType = ref('') // 'approve', 'post', 'reject', 'return'
@@ -33,6 +34,7 @@ const selectedDsb = ref(null)
 const actionForm = useForm({
     remarks: ''
 })
+const importForm = useForm({ csv_file: null })
 
 const editing = ref(null)
 const form = useForm({
@@ -229,6 +231,14 @@ function submitForApproval(d) {
     }
 }
 
+function exportCsv() { window.location.href = '/disbursements/export-csv' }
+function importCsv() {
+    importForm.post('/disbursements/import-csv', {
+        forceFormData: true,
+        onSuccess: () => { showImportModal.value = false; importForm.reset() },
+    })
+}
+
 function openActionModal(d, type) {
     selectedDsb.value = d
     actionType.value = type
@@ -284,9 +294,13 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
             <h2 class="text-xl font-bold text-gray-900">Disbursements & Workflow</h2>
             <p class="text-sm text-gray-500">Manage payment release, approval, and posting of linked expenses to General Ledger</p>
         </div>
-        <button v-if="perms.canManageDisbursements || perms.isCashier || perms.isSuperAdmin" @click="openCreate" data-onboarding-target="disbursement-create" data-onboarding-click="disbursement-create" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
-            Create Payment Release
-        </button>
+        <div v-if="perms.canManageDisbursements || perms.isCashier || perms.isSuperAdmin" class="flex flex-wrap gap-2">
+            <button @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">Export CSV</button>
+            <button @click="showImportModal = true" class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Import CSV</button>
+            <button @click="openCreate" data-onboarding-target="disbursement-create" data-onboarding-click="disbursement-create" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
+                Create Payment Release
+            </button>
+        </div>
     </div>
 
     <!-- Filters -->
@@ -649,6 +663,24 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
         <div class="flex justify-end pt-4 border-t mt-4">
             <button type="button" @click="showAuditModal = false" class="rounded-lg bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-300">Close</button>
         </div>
+    </Modal>
+
+    <Modal :show="showImportModal" title="Import Disbursements CSV" subtitle="Required columns: disbursement_no, expense_ref_no, description, source, pay_to, amount, method, date_encoded, status, notes, remarks" max-width="lg" @close="showImportModal = false">
+        <form @submit.prevent="importCsv" class="space-y-4">
+            <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <p class="font-semibold">Required columns</p>
+                <p class="mt-1 font-mono text-xs">disbursement_no, expense_ref_no, description, source, pay_to, amount, method, date_encoded, status, notes, remarks</p>
+                <p class="mt-2 text-xs">Only approved expenses can be linked. Import status is limited to draft, for_release, or for_approval so workflow stamps stay intact.</p>
+            </div>
+            <div>
+                <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV File</label>
+                <input type="file" accept=".csv,text/csv" @change="e => importForm.csv_file = e.target.files[0]" class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm" required />
+            </div>
+            <div class="flex items-center justify-end gap-3 border-t pt-5">
+                <button type="button" @click="showImportModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
+                <button type="submit" :disabled="importForm.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">{{ importForm.processing ? 'Importing...' : 'Import CSV' }}</button>
+            </div>
+        </form>
     </Modal>
 </AppLayout>
 </template>

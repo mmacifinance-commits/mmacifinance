@@ -17,8 +17,10 @@ const props = defineProps({
 const incomeItems = computed(() => props.incomeRecords?.data || props.incomeRecords || [])
 
 const showModal = ref(false)
+const showImportModal = ref(false)
 const editing = ref(null)
 const form = useForm({ source: '', description: '', amount: 0, date_encoded: '', notes: '' })
+const importForm = useForm({ csv_file: null })
 const PESO = '\u20b1'
 
 const selectedYear = ref(props.filters?.year || new Date().getFullYear())
@@ -73,6 +75,20 @@ function save() {
 function remove(id) {
     if (confirm('Delete this income item?')) router.delete(`/income/${id}`)
 }
+
+function exportCsv() {
+    window.location.href = '/income/export-csv'
+}
+
+function importCsv() {
+    importForm.post('/income/import-csv', {
+        forceFormData: true,
+        onSuccess: () => {
+            showImportModal.value = false
+            importForm.reset()
+        },
+    })
+}
 </script>
 
 <template>
@@ -83,9 +99,13 @@ function remove(id) {
             <h2 class="text-xl font-bold text-gray-900">Income</h2>
             <p class="text-sm text-gray-500">Record collections and income entries</p>
         </div>
-        <button v-if="perms.canManageIncome" @click="openCreate" data-onboarding-target="income-add" data-onboarding-click="income-add" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
-            Add Income
-        </button>
+        <div v-if="perms.canManageIncome" class="flex flex-wrap gap-2">
+            <button @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">Export CSV</button>
+            <button @click="showImportModal = true" class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Import CSV</button>
+            <button @click="openCreate" data-onboarding-target="income-add" data-onboarding-click="income-add" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
+                Add Income
+            </button>
+        </div>
     </div>
 
     <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm mb-6 space-y-4">
@@ -186,6 +206,23 @@ function remove(id) {
             <div class="flex items-center justify-end gap-3 pt-5 border-t mt-4">
                 <button type="button" @click="showModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
                 <button type="submit" :disabled="form.processing" data-onboarding-target="income-save" data-onboarding-click="income-save" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">{{ form.processing ? 'Saving...' : (editing ? 'Update' : 'Save Income') }}</button>
+            </div>
+        </form>
+    </Modal>
+
+    <Modal :show="showImportModal" title="Import Income CSV" subtitle="Upload a CSV with required columns: source, description, amount, date_encoded, notes." max-width="lg" @close="showImportModal = false">
+        <form @submit.prevent="importCsv" class="space-y-4">
+            <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <p class="font-semibold">Required columns</p>
+                <p class="mt-1 font-mono text-xs">source, description, amount, date_encoded, notes</p>
+            </div>
+            <div>
+                <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV File</label>
+                <input type="file" accept=".csv,text/csv" @change="e => importForm.csv_file = e.target.files[0]" class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm" required />
+            </div>
+            <div class="flex items-center justify-end gap-3 border-t pt-5">
+                <button type="button" @click="showImportModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
+                <button type="submit" :disabled="importForm.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">{{ importForm.processing ? 'Importing...' : 'Import CSV' }}</button>
             </div>
         </form>
     </Modal>
