@@ -20,7 +20,6 @@ const verifyForm = useForm({
 const resetForm = useForm({
     email: props.email,
     verified: props.verified ? 1 : 0,
-    code: '',
     password: '',
     password_confirmation: '',
 })
@@ -124,7 +123,6 @@ function resendCode() {
                     <form @submit.prevent="submitPassword" class="space-y-5">
                         <input v-model="resetForm.email" type="hidden" />
                         <input v-model="resetForm.verified" type="hidden" />
-                        <input v-model="resetForm.code" type="hidden" />
 
                         <div>
                             <label class="mb-1 block text-sm font-medium text-white/80">New Password</label>

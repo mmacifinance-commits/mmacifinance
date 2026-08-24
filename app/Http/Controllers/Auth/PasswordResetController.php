@@ -110,6 +110,7 @@ class PasswordResetController extends Controller
         }
 
         $request->session()->put('password_reset_email', $request->email);
+        $request->session()->put('password_reset_verified_email', $request->email);
 
         return redirect()->route('password.reset', [
             'email' => $request->email,
@@ -119,52 +120,20 @@ class PasswordResetController extends Controller
 
     public function resetPassword(Request $request)
     {
-        $email = $request->session()->get('password_reset_email') ?: $request->input('email');
+        $email = $request->session()->get('password_reset_verified_email') ?: $request->input('email') ?: $request->session()->get('password_reset_email');
 
         if (!$email) {
             return redirect()->route('password.request');
         }
 
-        if ($request->has('code')) {
-            $cleanedCode = preg_replace('/\D/', '', (string) $request->code);
-            $request->merge(['code' => $cleanedCode]);
-        }
-
-        if (!$request->boolean('verified')) {
-            return redirect()->route('password.reset', [
-                'email' => $email,
-                'verified' => 1,
-            ]);
-        }
-
         $request->validate([
             'email' => 'required|email|exists:users,email',
-            'code' => 'required|numeric|digits:6',
             'password' => 'required|string|min:8|confirmed',
         ], [
             'email.exists' => 'No account found with this email address.',
-            'code.required' => 'Please enter the 6-digit verification code.',
-            'code.digits' => 'The verification code must be 6 digits.',
             'password.confirmed' => 'The password confirmation does not match.',
             'password.min' => 'The password must be at least 8 characters.',
         ]);
-
-        $tokenRow = DB::table('password_reset_tokens')
-            ->where('email', $email)
-            ->first();
-
-        if (!$tokenRow || (string) $tokenRow->token !== (string) $request->code) {
-            return back()->withErrors([
-                'code' => 'The verification code is invalid or has expired.',
-            ]);
-        }
-
-        if ($tokenRow->created_at && now()->diffInMinutes($tokenRow->created_at) > 10) {
-            DB::table('password_reset_tokens')->where('email', $email)->delete();
-            return back()->withErrors([
-                'code' => 'The verification code is invalid or has expired.',
-            ]);
-        }
 
         $user = User::where('email', $email)->first();
 
@@ -186,6 +155,7 @@ class PasswordResetController extends Controller
             // Clear database token and session
             DB::table('password_reset_tokens')->where('email', $email)->delete();
             $request->session()->forget('password_reset_email');
+            $request->session()->forget('password_reset_verified_email');
 
             return redirect()->route('login')->with('message', 'Your password has been changed successfully. You can now log in.');
         }
