@@ -185,6 +185,34 @@ class ReportController extends Controller
             ];
         })->values();
 
+        $yearEndUnusedBalances = $annualBudgetItems
+            ->filter(fn ($item) => (float) $item->appropriation - (float) $item->postedExpenditureTotal() > 0)
+            ->map(function ($item) {
+                $appropriation = (float) $item->appropriation;
+                $expenditure = (float) $item->postedExpenditureTotal();
+
+                return [
+                    'budget_ref_no' => $item->budget?->ref_no ?: sprintf('AB-%d-%04d', $item->budget?->year ?: 0, $item->budget?->id ?: 0),
+                    'budget_year' => (int) ($item->budget?->year ?: 0),
+                    'semester' => $item->budget?->semester,
+                    'month' => (int) $item->month,
+                    'month_label' => date('F', mktime(0, 0, 0, max(1, (int) $item->month), 1)),
+                    'category' => $item->category?->name ?: 'Uncategorized',
+                    'account_title' => $item->particular?->particular ?: 'Untitled',
+                    'responsibility_center' => $item->particular?->department?->name ?: 'No RC',
+                    'appropriation' => $appropriation,
+                    'expenditure' => $expenditure,
+                    'balance' => round($appropriation - $expenditure, 2),
+                    'utilization_rate' => $appropriation > 0 ? round(($expenditure / $appropriation) * 100, 2) : 0,
+                ];
+            })
+            ->sortBy([
+                ['category', 'asc'],
+                ['account_title', 'asc'],
+                ['month', 'asc'],
+            ])
+            ->values();
+
         $selectedMonthLabel = $selectedMonthPerformance['month_label'] ?? ($selectedMonth ? date('F', mktime(0, 0, 0, $selectedMonth, 1)) : 'All Months');
 
         return Inertia::render('Reports/Index', [
@@ -205,6 +233,7 @@ class ReportController extends Controller
             'budgetItems' => $selectedBudgetItems,
             'selectedMonthPerformance' => $selectedMonthPerformance,
             'budgetPerformanceByYear' => $budgetPerformanceByYear,
+            'yearEndUnusedBalances' => $yearEndUnusedBalances,
             'selectedMonthLabel' => $selectedMonthLabel,
             'availableYears' => $availableYears,
             'filters' => [

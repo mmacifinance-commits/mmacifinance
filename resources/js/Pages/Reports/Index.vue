@@ -16,6 +16,7 @@ const props = defineProps({
     budgetItems: Array,
     selectedMonthPerformance: Object,
     budgetPerformanceByYear: Array,
+    yearEndUnusedBalances: Array,
     selectedMonthLabel: String,
     availableYears: Array,
     filters: Object,
@@ -223,6 +224,32 @@ function clearFilters() {
 function totalApp() { return asArray(props.annualBudgetItems).reduce((s, i) => s + Number(i.appropriation || 0), 0) }
 function totalExp() { return asArray(props.budgetItems).reduce((s, i) => s + Number(i.expenditure || 0), 0) }
 function utilRate(app, exp) { return Number(app || 0) > 0 ? ((Number(exp || 0) / Number(app || 0)) * 100).toFixed(1) : '0.0' }
+
+const yearEndSummary = computed(() => {
+    return asArray(props.yearEndUnusedBalances)
+        .map((item) => ({
+            ...item,
+            category: item.category || 'Uncategorized',
+            account_title: item.account_title || 'Untitled',
+            responsibility_center: item.responsibility_center || 'No RC',
+        }))
+        .sort((a, b) => {
+            const cat = String(a.category).localeCompare(String(b.category))
+            if (cat !== 0) return cat
+            const acc = String(a.account_title).localeCompare(String(b.account_title))
+            if (acc !== 0) return acc
+            return Number(a.month || 0) - Number(b.month || 0)
+        })
+})
+
+const yearEndSummaryTotals = computed(() => {
+    const items = asArray(props.yearEndUnusedBalances)
+    return {
+        balance: items.reduce((sum, item) => sum + Number(item.balance || 0), 0),
+        appropriation: items.reduce((sum, item) => sum + Number(item.appropriation || 0), 0),
+        expenditure: items.reduce((sum, item) => sum + Number(item.expenditure || 0), 0),
+    }
+})
 </script>
 
 <template>
@@ -319,6 +346,56 @@ function utilRate(app, exp) { return Number(app || 0) > 0 ? ((Number(exp || 0) /
                 <p class="text-xs font-bold uppercase text-gray-500 mb-1">Total Expenditure (Posted)</p>
                 <p class="text-2xl font-bold text-gray-900 font-sans tabular-nums">{{ PESO }}{{ fmt(totalExp()) }}</p>
             </div>
+        </div>
+    </div>
+
+    <!-- Year-End Unused Balance Summary -->
+    <div class="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden mb-6">
+        <div class="px-5 py-3 border-b bg-gray-50 flex flex-wrap items-center justify-between gap-2">
+            <div>
+                <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wider">Year-End Unused Balance Summary</h3>
+                <p class="text-xs text-gray-500 mt-1">Balances remaining after posted expenditures. Rollover stays manual and is not automatic.</p>
+            </div>
+            <div class="flex gap-2 text-xs">
+                <span class="rounded-full bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">Unused: {{ PESO }}{{ fmt(yearEndSummaryTotals.balance) }}</span>
+                <span class="rounded-full bg-slate-50 px-3 py-1 font-semibold text-slate-700">Appropriation: {{ PESO }}{{ fmt(yearEndSummaryTotals.appropriation) }}</span>
+                <span class="rounded-full bg-rose-50 px-3 py-1 font-semibold text-rose-700">Expenditure: {{ PESO }}{{ fmt(yearEndSummaryTotals.expenditure) }}</span>
+            </div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="bg-navy-dark text-white border-b-2 border-mustard">
+                        <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Category</th>
+                        <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Account Title</th>
+                        <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Responsibility Center</th>
+                        <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Month</th>
+                        <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-wider text-white">Appropriation</th>
+                        <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-wider text-white">Posted Expenditure</th>
+                        <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-wider text-white">Unused Balance</th>
+                        <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-white">Utilization</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="item in yearEndSummary" :key="`${item.budget_ref_no}-${item.category}-${item.account_title}-${item.month}`" class="border-b hover:bg-gray-50/50 transition-colors">
+                        <td class="px-5 py-3 font-medium text-gray-900">{{ item.category }}</td>
+                        <td class="px-5 py-3 font-medium text-gray-800">{{ item.account_title }}</td>
+                        <td class="px-5 py-3 text-gray-700">{{ item.responsibility_center }}</td>
+                        <td class="px-5 py-3 text-gray-700">{{ item.month_label }}</td>
+                        <td class="px-5 py-3 text-right font-medium font-sans tabular-nums">{{ PESO }}{{ fmt(item.appropriation) }}</td>
+                        <td class="px-5 py-3 text-right font-medium font-sans tabular-nums">{{ PESO }}{{ fmt(item.expenditure) }}</td>
+                        <td class="px-5 py-3 text-right font-semibold text-emerald-700 font-sans tabular-nums">{{ PESO }}{{ fmt(item.balance) }}</td>
+                        <td class="px-5 py-3 text-center">
+                            <span class="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
+                                {{ item.utilization_rate }}%
+                            </span>
+                        </td>
+                    </tr>
+                    <tr v-if="!yearEndSummary.length">
+                        <td colspan="8" class="px-5 py-8 text-center text-gray-400">No unused balances found for this fiscal year.</td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </div>
 
