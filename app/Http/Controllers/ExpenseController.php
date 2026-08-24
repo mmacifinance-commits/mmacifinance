@@ -12,6 +12,7 @@ use App\Models\BudgetParticular;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class ExpenseController extends Controller
@@ -364,65 +365,79 @@ class ExpenseController extends Controller
         }
 
         $index = array_flip($header);
-        $created = 0;
-        $updated = 0;
         $allowedStatuses = ['pending', 'cancelled'];
+        $rows = [];
+        $years = [];
 
         while (($row = fgetcsv($handle)) !== false) {
             if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
                 continue;
             }
 
-            $refNo = trim((string) ($row[$index['ref_no']] ?? ''));
-            $categoryId = (int) ($row[$index['category_id']] ?? 0);
-            $particularId = (int) ($row[$index['particular_id']] ?? 0);
-            $description = trim((string) ($row[$index['description']] ?? ''));
-            $amount = (float) ($row[$index['amount']] ?? 0);
-            $dateEncoded = trim((string) ($row[$index['date_encoded']] ?? ''));
-            $dateApproved = trim((string) ($row[$index['date_approved']] ?? ''));
-            $status = strtolower(trim((string) ($row[$index['status']] ?? 'pending')));
-            $notes = trim((string) ($row[$index['notes']] ?? ''));
+            $rows[] = [
+                'ref_no' => trim((string) ($row[$index['ref_no']] ?? '')),
+                'category_id' => (int) ($row[$index['category_id']] ?? 0),
+                'particular_id' => (int) ($row[$index['particular_id']] ?? 0),
+                'description' => trim((string) ($row[$index['description']] ?? '')),
+                'amount' => (float) ($row[$index['amount']] ?? 0),
+                'date_encoded' => trim((string) ($row[$index['date_encoded']] ?? '')),
+                'date_approved' => trim((string) ($row[$index['date_approved']] ?? '')),
+                'status' => strtolower(trim((string) ($row[$index['status']] ?? 'pending'))),
+                'notes' => trim((string) ($row[$index['notes']] ?? '')),
+            ];
+        }
 
-            if ($refNo === '' || $description === '' || !$categoryId || !$particularId || $dateEncoded === '') {
-                continue;
+        fclose($handle);
+
+        foreach ($rows as $i => $row) {
+            if ($row['ref_no'] === '' || $row['description'] === '' || !$row['category_id'] || !$row['particular_id'] || $row['date_encoded'] === '') {
+                return back()->withErrors(['csv_file' => 'Row ' . ($i + 2) . ' is missing required data.']);
             }
 
-            if (!in_array($status, $allowedStatuses, true)) {
-                $status = 'pending';
+            if (!in_array($row['status'], $allowedStatuses, true)) {
+                return back()->withErrors(['csv_file' => 'Row ' . ($i + 2) . ' has an invalid status.']);
             }
 
-            $year = (int) date('Y', strtotime($dateEncoded));
+            $year = (int) date('Y', strtotime($row['date_encoded']));
+            $years[] = $year;
+
             if (!AnnualBudget::where('year', $year)->exists()) {
-                continue;
+                return back()->withErrors(['csv_file' => "Annual budget for FY {$year} is required before importing expenditures."]);
             }
 
-            $categoryHasAppropriation = BudgetCategory::whereKey($categoryId)
+            $categoryHasAppropriation = BudgetCategory::whereKey($row['category_id'])
                 ->whereHas('budgetItems.budget', function ($query) use ($year) {
                     $query->where('year', $year);
                 })
                 ->exists();
 
             if (! $categoryHasAppropriation) {
-                continue;
+                return back()->withErrors(['csv_file' => "Category ID {$row['category_id']} has no appropriation for FY {$year}."]);
             }
-
-            $expense = Expense::firstOrNew(['ref_no' => $refNo]);
-
-            $isNew = !$expense->exists;
-            $expense->ref_no = $refNo;
-            $expense->description = $description;
-            $expense->category_id = $categoryId;
-            $expense->particular_id = $particularId;
-            $expense->amount = $amount;
-            $expense->date_approved = $dateApproved !== '' ? $dateApproved : null;
-            $expense->status = $status;
-            $expense->notes = $notes !== '' ? $notes : null;
-            $expense->save();
-
-            $isNew ? $created++ : $updated++;
         }
 
-        fclose($handle);
+        $created = 0;
+        $updated = 0;
+
+        DB::transaction(function () use ($rows, &$created, &$updated) {
+            foreach ($rows as $row) {
+                $expense = Expense::firstOrNew(['ref_no' => $row['ref_no']]);
+
+                $isNew = !$expense->exists;
+                $expense->ref_no = $row['ref_no'];
+                $expense->description = $row['description'];
+                $expense->category_id = $row['category_id'];
+                $expense->particular_id = $row['particular_id'];
+                $expense->amount = $row['amount'];
+                $expense->date_encoded = $row['date_encoded'];
+                $expense->date_approved = $row['date_approved'] !== '' ? $row['date_approved'] : null;
+                $expense->status = $row['status'];
+                $expense->notes = $row['notes'] !== '' ? $row['notes'] : null;
+                $expense->save();
+
+                $isNew ? $created++ : $updated++;
+            }
+        });
 
         return redirect()->back()->with('success', "Expense CSV imported successfully. Created: {$created}, Updated: {$updated}");
     }

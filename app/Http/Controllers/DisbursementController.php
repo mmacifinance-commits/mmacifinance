@@ -6,6 +6,7 @@ use App\Models\AuditTrail;
 use App\Models\AnnualBudget;
 use App\Models\Disbursement;
 use App\Models\Expense;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -428,67 +429,84 @@ class DisbursementController extends Controller
         }
 
         $index = array_flip($header);
-        $created = 0;
-        $updated = 0;
         $allowedStatuses = ['draft', 'for_release', 'for_approval'];
+        $rows = [];
 
         while (($row = fgetcsv($handle)) !== false) {
             if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
                 continue;
             }
-
-            $disbursementNo = trim((string) ($row[$index['disbursement_no']] ?? ''));
-            $expenseRef = trim((string) ($row[$index['expense_ref_no']] ?? ''));
-            $description = trim((string) ($row[$index['description']] ?? ''));
-            $source = trim((string) ($row[$index['source']] ?? ''));
-            $payTo = trim((string) ($row[$index['pay_to']] ?? ''));
-            $amount = (float) ($row[$index['amount']] ?? 0);
-            $method = trim((string) ($row[$index['method']] ?? 'check'));
-            $dateEncoded = trim((string) ($row[$index['date_encoded']] ?? ''));
-            $status = strtolower(trim((string) ($row[$index['status']] ?? 'draft')));
-            $notes = trim((string) ($row[$index['notes']] ?? ''));
-            $remarks = trim((string) ($row[$index['remarks']] ?? ''));
-
-            if ($disbursementNo === '' || $expenseRef === '' || $description === '' || $source === '' || $payTo === '' || $dateEncoded === '') {
-                continue;
-            }
-
-            if (!in_array($status, $allowedStatuses, true)) {
-                $status = 'draft';
-            }
-
-            $expense = Expense::where('ref_no', $expenseRef)->where('status', 'approved')->first();
-            if (! $expense) {
-                continue;
-            }
-
-            $disbursement = Disbursement::firstOrNew(['disbursement_no' => $disbursementNo]);
-
-            $isNew = !$disbursement->exists;
-            $disbursement->disbursement_no = $disbursementNo;
-            $disbursement->expense_id = $expense->id;
-            $disbursement->description = $description;
-            $disbursement->source = $source;
-            $disbursement->pay_to = $payTo;
-            $disbursement->amount = $amount;
-            $disbursement->method = in_array($method, ['check', 'cash', 'bank_transfer'], true) ? $method : 'check';
-            $disbursement->date_encoded = $dateEncoded;
-            $disbursement->status = $status;
-            $disbursement->notes = $notes !== '' ? $notes : null;
-            $disbursement->remarks = $remarks !== '' ? $remarks : null;
-            $disbursement->prepared_by_id = auth()->id();
-
-            $disbursement->save();
-            AuditTrail::log($disbursement, $isNew ? 'created' : 'modified', auth()->user(), $remarks !== '' ? $remarks : ($isNew ? 'Disbursement imported from CSV.' : 'Disbursement updated from CSV.'));
-
-            if ($disbursement->status === 'posted') {
-                $this->syncExpensePaidAmount($disbursement->expense_id);
-            }
-
-            $isNew ? $created++ : $updated++;
+            $rows[] = [
+                'disbursement_no' => trim((string) ($row[$index['disbursement_no']] ?? '')),
+                'expense_ref_no' => trim((string) ($row[$index['expense_ref_no']] ?? '')),
+                'description' => trim((string) ($row[$index['description']] ?? '')),
+                'source' => trim((string) ($row[$index['source']] ?? '')),
+                'pay_to' => trim((string) ($row[$index['pay_to']] ?? '')),
+                'amount' => (float) ($row[$index['amount']] ?? 0),
+                'method' => trim((string) ($row[$index['method']] ?? 'check')),
+                'date_encoded' => trim((string) ($row[$index['date_encoded']] ?? '')),
+                'status' => strtolower(trim((string) ($row[$index['status']] ?? 'draft'))),
+                'notes' => trim((string) ($row[$index['notes']] ?? '')),
+                'remarks' => trim((string) ($row[$index['remarks']] ?? '')),
+            ];
         }
 
         fclose($handle);
+
+        foreach ($rows as $i => $row) {
+            if ($row['disbursement_no'] === '' || $row['expense_ref_no'] === '' || $row['description'] === '' || $row['source'] === '' || $row['pay_to'] === '' || $row['date_encoded'] === '') {
+                return back()->withErrors(['csv_file' => 'Row ' . ($i + 2) . ' is missing required data.']);
+            }
+
+            if (!in_array($row['status'], $allowedStatuses, true)) {
+                return back()->withErrors(['csv_file' => 'Row ' . ($i + 2) . ' has an invalid status.']);
+            }
+
+            $expense = Expense::where('ref_no', $row['expense_ref_no'])->where('status', 'approved')->first();
+            if (! $expense) {
+                return back()->withErrors(['csv_file' => "Row " . ($i + 2) . " requires an approved expense with ref_no {$row['expense_ref_no']} before importing disbursements."]);
+            }
+
+            $year = (int) date('Y', strtotime($expense->date_encoded ?: $row['date_encoded']));
+            if (!AnnualBudget::where('year', $year)->exists()) {
+                return back()->withErrors(['csv_file' => "Annual budget for FY {$year} is required before importing disbursements."]);
+            }
+        }
+
+        $created = 0;
+        $updated = 0;
+
+        DB::transaction(function () use ($rows, &$created, &$updated) {
+            foreach ($rows as $row) {
+                $expense = Expense::where('ref_no', $row['expense_ref_no'])->where('status', 'approved')->first();
+                if (! $expense) {
+                    continue;
+                }
+
+                $disbursement = Disbursement::firstOrNew(['disbursement_no' => $row['disbursement_no']]);
+                $isNew = !$disbursement->exists;
+                $disbursement->disbursement_no = $row['disbursement_no'];
+                $disbursement->expense_id = $expense->id;
+                $disbursement->description = $row['description'];
+                $disbursement->source = $row['source'];
+                $disbursement->pay_to = $row['pay_to'];
+                $disbursement->amount = $row['amount'];
+                $disbursement->method = in_array($row['method'], ['check', 'cash', 'bank_transfer'], true) ? $row['method'] : 'check';
+                $disbursement->date_encoded = $row['date_encoded'];
+                $disbursement->status = $row['status'];
+                $disbursement->notes = $row['notes'] !== '' ? $row['notes'] : null;
+                $disbursement->remarks = $row['remarks'] !== '' ? $row['remarks'] : null;
+                $disbursement->prepared_by_id = auth()->id();
+                $disbursement->save();
+
+                AuditTrail::log($disbursement, $isNew ? 'created' : 'modified', auth()->user(), $row['remarks'] !== '' ? $row['remarks'] : ($isNew ? 'Disbursement imported from CSV.' : 'Disbursement updated from CSV.'));
+                if ($disbursement->status === 'posted') {
+                    $this->syncExpensePaidAmount($disbursement->expense_id);
+                }
+
+                $isNew ? $created++ : $updated++;
+            }
+        });
 
         return redirect()->back()->with('success', "Disbursement CSV imported successfully. Created: {$created}, Updated: {$updated}");
     }
