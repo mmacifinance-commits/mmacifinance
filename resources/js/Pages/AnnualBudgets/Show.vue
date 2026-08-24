@@ -217,6 +217,7 @@ function handleImportCsv() {
     importForm.post(`/annual-budgets/${props.budget.id}/import-csv`, {
         forceFormData: true,
         preserveScroll: true,
+        preserveState: true,
         onSuccess: () => {
             showImportModal.value = false
             importForm.reset()
@@ -462,6 +463,12 @@ function catBalancePercent(group) {
                         required
                     />
                     <p v-if="importForm.errors.csv_file" class="mt-1 text-xs text-red-500">{{ importForm.errors.csv_file }}</p>
+                </div>
+                <div v-if="importForm.errors.csv_file" class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                    {{ importForm.errors.csv_file }}
+                </div>
+                <div v-if="importForm.processing" class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800">
+                    Importing CSV... please wait.
                 </div>
             </div>
             <div class="flex items-center justify-end gap-3 pt-5 border-t mt-4">

@@ -322,20 +322,46 @@ class AnnualBudgetController extends Controller
             }
         }
 
+        $rows = [];
+        $csvTotalAppropriation = 0.0;
+
+        while (($row = fgetcsv($handle)) !== false) {
+            if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
+                continue;
+            }
+
+            $data = [];
+            foreach ($headers as $index => $header) {
+                $data[$header] = $row[$index] ?? null;
+            }
+
+            $amount = $this->parseMoney($data['appropriation'] ?? 0);
+            $rows[] = $data;
+            $csvTotalAppropriation += $amount;
+        }
+
+        rewind($handle);
+        fgetcsv($handle); // skip header row
+
+        $year = (int) $annualBudget->year;
+        $availableIncome = (float) Income::whereYear('date_encoded', $year)->sum('amount');
+        $allocatedIncome = (float) IncomeAllocation::query()
+            ->whereHas('annualBudget', fn ($q) => $q->where('year', $year))
+            ->sum('amount');
+        $remainingIncome = round($availableIncome - $allocatedIncome, 2);
+
+        if ($csvTotalAppropriation > $remainingIncome) {
+            fclose($handle);
+            throw ValidationException::withMessages([
+                'csv_file' => 'Appropriation must not be more than the income. Available income balance is ' . number_format($remainingIncome, 2) . '.',
+            ]);
+        }
+
         $rowsCreated = 0;
         $rowsUpdated = 0;
 
-        DB::transaction(function () use ($handle, $headers, $annualBudget, &$rowsCreated, &$rowsUpdated) {
-            while (($row = fgetcsv($handle)) !== false) {
-                if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
-                    continue;
-                }
-
-                $data = [];
-                foreach ($headers as $index => $header) {
-                    $data[$header] = $row[$index] ?? null;
-                }
-
+        DB::transaction(function () use ($rows, $annualBudget, &$rowsCreated, &$rowsUpdated) {
+            foreach ($rows as $data) {
                 $csvYear = isset($data['fiscal_year']) && $data['fiscal_year'] !== '' ? (int) $data['fiscal_year'] : (int) $annualBudget->year;
                 if ($csvYear !== (int) $annualBudget->year) {
                     throw ValidationException::withMessages([
@@ -383,8 +409,6 @@ class AnnualBudgetController extends Controller
 
                 $this->reallocateBudgetItemIncome($item, (float) $itemData['appropriation']);
             }
-
-            fclose($handle);
         });
 
         if (($rowsCreated + $rowsUpdated) === 0) {
