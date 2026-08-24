@@ -67,7 +67,7 @@ class DepartmentController extends Controller
 
         return Response::streamDownload(function () use ($departments) {
             $out = fopen('php://output', 'w');
-            fputcsv($out, ['name', 'code']);
+            fputcsv($out, ['responsibility_center', 'code']);
 
             foreach ($departments as $department) {
                 fputcsv($out, [$department->name, $department->code]);
@@ -87,11 +87,11 @@ class DepartmentController extends Controller
 
         $handle = fopen($validated['csv_file']->getRealPath(), 'r');
         $headers = array_map(fn ($value) => strtolower(trim((string) $value)), fgetcsv($handle) ?: []);
-        $required = ['name', 'code'];
+        $required = ['responsibility_center', 'code'];
         $missing = array_diff($required, $headers);
         if ($missing) {
             fclose($handle);
-            return back()->withErrors(['csv_file' => 'CSV must contain these columns: name, code.']);
+            return back()->withErrors(['csv_file' => 'CSV must contain these columns: responsibility_center, code.']);
         }
 
         $index = array_flip($headers);
@@ -104,7 +104,7 @@ class DepartmentController extends Controller
                 continue;
             }
 
-            $name = trim((string) ($row[$index['name']] ?? ''));
+            $name = trim((string) ($row[$index['responsibility_center']] ?? ''));
             $code = strtoupper(trim((string) ($row[$index['code']] ?? '')));
 
             if ($name === '' || $code === '') {

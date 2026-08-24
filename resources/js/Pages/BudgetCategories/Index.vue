@@ -89,11 +89,14 @@ function importCsv() {
         </form>
     </Modal>
 
-    <Modal :show="showImportModal" title="Import Budget Categories CSV" subtitle="Required columns: name, description" @close="showImportModal = false">
+    <Modal :show="showImportModal" title="Import Budget Categories CSV" subtitle="Required columns: budget_category, description" @close="showImportModal = false">
         <form @submit.prevent="importCsv" class="space-y-4">
-            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                <p class="font-semibold text-slate-900">CSV columns</p>
-                <p class="mt-1">`name` and `description` are required.</p>
+            <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <p class="font-semibold">Required columns</p>
+                <p class="mt-1 font-mono text-xs">budget_category, description</p>
+                <p class="mt-2 text-xs">
+                    Budget Categories group Account Titles and Annual Budget Allocations. Use clear category names because Expenditures depend on these categories later.
+                </p>
             </div>
             <div>
                 <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV File</label>

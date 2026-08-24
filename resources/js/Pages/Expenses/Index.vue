@@ -231,6 +231,8 @@ function exportCsv() { window.location.href = '/expenses/export-csv' }
 function importCsv() {
     importForm.post('/expenses/import-csv', {
         forceFormData: true,
+        preserveScroll: true,
+        preserveState: true,
         onSuccess: () => { showImportModal.value = false; importForm.reset() },
     })
 }
@@ -470,11 +472,18 @@ function splitDate(d) {
         </div>
     </Modal>
 
-    <Modal :show="showImportModal" title="Import Expenditures CSV" subtitle="Required columns: ref_no, description, category_id, particular_id, amount, date_encoded, date_approved, status, notes" max-width="lg" @close="showImportModal = false">
+    <Modal :show="showImportModal" title="Import Expenditures CSV" subtitle="Use readable category and account title names from the system." max-width="lg" @close="showImportModal = false">
         <form @submit.prevent="importCsv" class="space-y-4">
             <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 <p class="font-semibold">Required columns</p>
-                <p class="mt-1 font-mono text-xs">ref_no, description, category_id, particular_id, amount, date_encoded, date_approved, status, notes</p>
+                <p class="mt-1 font-mono text-xs">ref_no, description, category, account_title, amount, date_encoded, date_approved, status, notes</p>
+                <p class="mt-2 text-xs">
+                    Expenditures can only be imported for categories and account titles that already have Annual Budget Allocations for the expense fiscal year.
+                    Import status is limited to pending or cancelled so workflow stamps stay intact.
+                </p>
+            </div>
+            <div v-if="importForm.errors.csv_file" class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                {{ importForm.errors.csv_file }}
             </div>
             <div>
                 <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV File</label>

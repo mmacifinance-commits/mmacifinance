@@ -235,6 +235,8 @@ function exportCsv() { window.location.href = '/disbursements/export-csv' }
 function importCsv() {
     importForm.post('/disbursements/import-csv', {
         forceFormData: true,
+        preserveScroll: true,
+        preserveState: true,
         onSuccess: () => { showImportModal.value = false; importForm.reset() },
     })
 }
@@ -671,6 +673,9 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                 <p class="font-semibold">Required columns</p>
                 <p class="mt-1 font-mono text-xs">disbursement_no, expense_ref_no, description, source, pay_to, amount, method, date_encoded, status, notes, remarks</p>
                 <p class="mt-2 text-xs">Only approved expenses can be linked. Import status is limited to draft, for_release, or for_approval so workflow stamps stay intact.</p>
+            </div>
+            <div v-if="importForm.errors.csv_file" class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                {{ importForm.errors.csv_file }}
             </div>
             <div>
                 <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV File</label>

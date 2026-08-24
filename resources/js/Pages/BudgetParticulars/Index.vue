@@ -142,12 +142,14 @@ function importCsv() {
         </form>
     </Modal>
 
-    <Modal :show="showImportModal" title="Import Account Titles CSV" subtitle="Required columns: category, department, account_code, account_name, particular, description" max-width="lg" @close="showImportModal = false">
+    <Modal :show="showImportModal" title="Import Account Titles CSV" subtitle="Required columns: budget_category, responsibility_center, account_code, account_name, account_title, description" max-width="lg" @close="showImportModal = false">
         <form @submit.prevent="importCsv" class="space-y-4">
-            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                <p class="font-semibold text-slate-900">CSV columns</p>
-                <p class="mt-1">`category`, `department`, `account_code`, `account_name`, `particular`, `description` are required.</p>
-                <p class="mt-1 text-xs text-slate-500">`category` can be the category name or category ID. `department` can be the responsibility center code, name, or ID.</p>
+            <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <p class="font-semibold">Required columns</p>
+                <p class="mt-1 font-mono text-xs">budget_category, responsibility_center, account_code, account_name, account_title, description</p>
+                <p class="mt-2 text-xs">
+                    Account Titles must match an existing Budget Category and Responsibility Center. Annual Budget Allocations and Expenditures use these account titles later.
+                </p>
             </div>
             <div>
                 <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV File</label>

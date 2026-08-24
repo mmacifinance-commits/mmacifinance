@@ -70,7 +70,7 @@ class BudgetParticularController extends Controller
 
         return Response::streamDownload(function () use ($particulars) {
             $out = fopen('php://output', 'w');
-            fputcsv($out, ['category', 'department', 'account_code', 'account_name', 'particular', 'description']);
+            fputcsv($out, ['budget_category', 'responsibility_center', 'account_code', 'account_name', 'account_title', 'description']);
 
             foreach ($particulars as $particular) {
                 fputcsv($out, [
@@ -95,10 +95,10 @@ class BudgetParticularController extends Controller
 
         $handle = fopen($validated['csv_file']->getRealPath(), 'r');
         $headers = array_map(fn ($value) => strtolower(trim((string) $value)), fgetcsv($handle) ?: []);
-        $required = ['category', 'department', 'account_code', 'account_name', 'particular', 'description'];
+        $required = ['budget_category', 'responsibility_center', 'account_code', 'account_name', 'account_title', 'description'];
         if (array_diff($required, $headers)) {
             fclose($handle);
-            return back()->withErrors(['csv_file' => 'CSV must contain these columns: category, department, account_code, account_name, particular, description.']);
+            return back()->withErrors(['csv_file' => 'CSV must contain these columns: budget_category, responsibility_center, account_code, account_name, account_title, description.']);
         }
 
         $index = array_flip($headers);
@@ -111,11 +111,11 @@ class BudgetParticularController extends Controller
                 continue;
             }
 
-            $categoryRef = trim((string) ($row[$index['category']] ?? ''));
-            $departmentRef = trim((string) ($row[$index['department']] ?? ''));
+            $categoryRef = trim((string) ($row[$index['budget_category']] ?? ''));
+            $departmentRef = trim((string) ($row[$index['responsibility_center']] ?? ''));
             $accountCode = trim((string) ($row[$index['account_code']] ?? ''));
             $accountName = trim((string) ($row[$index['account_name']] ?? ''));
-            $particular = trim((string) ($row[$index['particular']] ?? ''));
+            $particular = trim((string) ($row[$index['account_title']] ?? ''));
             $description = trim((string) ($row[$index['description']] ?? ''));
 
             if ($categoryRef === '' || $departmentRef === '' || $accountCode === '' || $accountName === '' || $particular === '') {

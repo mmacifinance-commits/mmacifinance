@@ -236,14 +236,16 @@ function importCsv() {
         <Modal
             :show="showImportModal"
             title="Import Responsibility Centers CSV"
-            subtitle="Required columns: name, code"
+            subtitle="Required columns: responsibility_center, code"
             @close="showImportModal = false"
         >
             <form @submit.prevent="importCsv" class="space-y-4">
-                <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                    <p class="font-semibold text-slate-900">CSV columns</p>
-                    <p class="mt-1">`name` and `code` are required.</p>
-                    <p class="mt-1 text-xs text-slate-500">Example: Finance Office, FIN</p>
+                <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <p class="font-semibold">Required columns</p>
+                    <p class="mt-1 font-mono text-xs">responsibility_center, code</p>
+                    <p class="mt-2 text-xs">
+                        Responsibility Centers are used by Account Titles and Annual Budget Allocations. Codes should be short and unique, like FIN.
+                    </p>
                 </div>
                 <div>
                     <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV File</label>

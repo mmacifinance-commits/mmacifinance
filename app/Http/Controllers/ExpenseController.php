@@ -356,7 +356,7 @@ class ExpenseController extends Controller
         }
 
         $header = array_map(fn ($value) => trim((string) $value), $header);
-        $required = ['ref_no', 'description', 'category_id', 'particular_id', 'amount', 'date_encoded', 'date_approved', 'status', 'notes'];
+        $required = ['ref_no', 'description', 'category', 'account_title', 'amount', 'date_encoded', 'date_approved', 'status', 'notes'];
         foreach ($required as $column) {
             if (!in_array($column, $header, true)) {
                 fclose($handle);
@@ -374,10 +374,13 @@ class ExpenseController extends Controller
                 continue;
             }
 
+            $categoryRaw = trim((string) ($row[$index['category']] ?? ''));
+            $particularRaw = trim((string) ($row[$index['account_title']] ?? ''));
+
             $rows[] = [
                 'ref_no' => trim((string) ($row[$index['ref_no']] ?? '')),
-                'category_id' => (int) ($row[$index['category_id']] ?? 0),
-                'particular_id' => (int) ($row[$index['particular_id']] ?? 0),
+                'category_raw' => $categoryRaw,
+                'particular_raw' => $particularRaw,
                 'description' => trim((string) ($row[$index['description']] ?? '')),
                 'amount' => (float) ($row[$index['amount']] ?? 0),
                 'date_encoded' => trim((string) ($row[$index['date_encoded']] ?? '')),
@@ -390,7 +393,7 @@ class ExpenseController extends Controller
         fclose($handle);
 
         foreach ($rows as $i => $row) {
-            if ($row['ref_no'] === '' || $row['description'] === '' || !$row['category_id'] || !$row['particular_id'] || $row['date_encoded'] === '') {
+            if ($row['ref_no'] === '' || $row['description'] === '' || $row['category_raw'] === '' || $row['particular_raw'] === '' || $row['date_encoded'] === '') {
                 return back()->withErrors(['csv_file' => 'Row ' . ($i + 2) . ' is missing required data.']);
             }
 
@@ -405,14 +408,27 @@ class ExpenseController extends Controller
                 return back()->withErrors(['csv_file' => "Annual budget for FY {$year} is required before importing expenditures."]);
             }
 
-            $categoryHasAppropriation = BudgetCategory::whereKey($row['category_id'])
+            $category = $this->resolveExpenseCategory($row['category_raw']);
+            if (! $category) {
+                return back()->withErrors(['csv_file' => "Row " . ($i + 2) . " references an unknown category: {$row['category_raw']}"]);
+            }
+
+            $particular = $this->resolveExpenseParticular($row['particular_raw'], $category->id);
+            if (! $particular) {
+                return back()->withErrors(['csv_file' => "Row " . ($i + 2) . " references an unknown account title: {$row['particular_raw']}"]);
+            }
+
+            $rows[$i]['category_id'] = $category->id;
+            $rows[$i]['particular_id'] = $particular->id;
+
+            $categoryHasAppropriation = BudgetCategory::whereKey($category->id)
                 ->whereHas('budgetItems.budget', function ($query) use ($year) {
                     $query->where('year', $year);
                 })
                 ->exists();
 
             if (! $categoryHasAppropriation) {
-                return back()->withErrors(['csv_file' => "Category ID {$row['category_id']} has no appropriation for FY {$year}."]);
+                return back()->withErrors(['csv_file' => "Category {$category->name} has no appropriation for FY {$year}."]);
             }
         }
 
@@ -440,6 +456,42 @@ class ExpenseController extends Controller
         });
 
         return redirect()->back()->with('success', "Expense CSV imported successfully. Created: {$created}, Updated: {$updated}");
+    }
+
+    protected function resolveExpenseCategory(string $raw): ?BudgetCategory
+    {
+        $value = trim($raw);
+        if ($value === '') {
+            return null;
+        }
+
+        if (ctype_digit($value)) {
+            return BudgetCategory::find((int) $value);
+        }
+
+        return BudgetCategory::query()
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($value)])
+            ->first();
+    }
+
+    protected function resolveExpenseParticular(string $raw, int $categoryId): ?BudgetParticular
+    {
+        $value = trim($raw);
+        if ($value === '') {
+            return null;
+        }
+
+        $query = BudgetParticular::query()->where('category_id', $categoryId);
+
+        if (ctype_digit($value)) {
+            return $query->whereKey((int) $value)->first();
+        }
+
+        return $query->where(function ($subQuery) use ($value) {
+            $lower = mb_strtolower($value);
+            $subQuery->whereRaw('LOWER(particular) = ?', [$lower])
+                ->orWhereRaw('LOWER(account_name) = ?', [$lower]);
+        })->first();
     }
 
     protected function budgetOverrunWarning(Expense $expense): ?string

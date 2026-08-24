@@ -54,7 +54,7 @@ class BudgetCategoryController extends Controller
 
         return Response::streamDownload(function () use ($categories) {
             $out = fopen('php://output', 'w');
-            fputcsv($out, ['name', 'description']);
+            fputcsv($out, ['budget_category', 'description']);
 
             foreach ($categories as $category) {
                 fputcsv($out, [$category->name, $category->description]);
@@ -72,10 +72,10 @@ class BudgetCategoryController extends Controller
 
         $handle = fopen($validated['csv_file']->getRealPath(), 'r');
         $headers = array_map(fn ($value) => strtolower(trim((string) $value)), fgetcsv($handle) ?: []);
-        $required = ['name', 'description'];
+        $required = ['budget_category', 'description'];
         if (array_diff($required, $headers)) {
             fclose($handle);
-            return back()->withErrors(['csv_file' => 'CSV must contain these columns: name, description.']);
+            return back()->withErrors(['csv_file' => 'CSV must contain these columns: budget_category, description.']);
         }
 
         $index = array_flip($headers);
@@ -88,7 +88,7 @@ class BudgetCategoryController extends Controller
                 continue;
             }
 
-            $name = trim((string) ($row[$index['name']] ?? ''));
+            $name = trim((string) ($row[$index['budget_category']] ?? ''));
             $description = trim((string) ($row[$index['description']] ?? ''));
 
             if ($name === '') {
