@@ -292,7 +292,14 @@ class AnnualBudgetController extends Controller
             'csv_file' => 'required|file|mimes:csv,txt',
         ]);
 
-        $this->ensureIncomeExistsForYear((int) $annualBudget->year);
+        try {
+            $this->ensureIncomeExistsForYear((int) $annualBudget->year);
+        } catch (ValidationException $e) {
+            throw ValidationException::withMessages([
+                'csv_file' => $e->validator->errors()->first('year')
+                    ?: "You must create at least one income record for {$annualBudget->year} before importing budget rows.",
+            ]);
+        }
 
         $file = $request->file('csv_file');
         $handle = fopen($file->getRealPath(), 'r');
@@ -379,6 +386,12 @@ class AnnualBudgetController extends Controller
 
             fclose($handle);
         });
+
+        if (($rowsCreated + $rowsUpdated) === 0) {
+            return back()->withErrors([
+                'csv_file' => 'No budget rows were imported. Please check the CSV headers, month values, and prerequisite data.',
+            ]);
+        }
 
         return redirect()->route('annual-budgets.show', $annualBudget)->with('success', "CSV imported successfully. Created {$rowsCreated} row(s), updated {$rowsUpdated} row(s). Missing categories/account titles were created automatically.");
     }
