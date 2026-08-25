@@ -1,8 +1,10 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { router, usePage } from '@inertiajs/vue3'
+import { useOfflineQueue } from '@/composables/useOfflineQueue'
 
 const page = usePage()
+const { isOnline } = useOfflineQueue()
 const props = defineProps({
     tutorial: {
         type: Object,
@@ -317,6 +319,11 @@ const popoverStyle = computed(() => {
     return { ...horizontal, ...vertical }
 })
 
+function closeTutorial() {
+    visible.value = false
+    clearLocalState()
+}
+
 async function persist(endpoint, payload = {}) {
     await fetch(endpoint, {
         method: 'POST',
@@ -378,6 +385,7 @@ function hydrateTutorialState(forceVisible = false) {
 }
 
 function openTutorial() {
+    if (!isOnline.value) return
     hydrateTutorialState(true)
     saveLocalState({ visible: true, activeStepId: currentStep.value?.id || roleTutorials.value[0]?.id || null })
 }
@@ -458,6 +466,7 @@ onMounted(() => {
     window.addEventListener('scroll', onResize, true)
     document.addEventListener('click', onDocumentClick, true)
     window.addEventListener('tutorial:open', openTutorial)
+    window.addEventListener('tutorial:close', closeTutorial)
     hydrateTutorialState()
 })
 
@@ -466,6 +475,7 @@ onBeforeUnmount(() => {
     window.removeEventListener('scroll', onResize, true)
     document.removeEventListener('click', onDocumentClick, true)
     window.removeEventListener('tutorial:open', openTutorial)
+    window.removeEventListener('tutorial:close', closeTutorial)
 })
 
 watch(() => page.url, () => {
@@ -491,6 +501,12 @@ watch(visible, (next) => {
     }
 
     saveLocalState({ visible: true, activeStepId: currentStep.value?.id || null })
+})
+
+watch(isOnline, (nextOnline) => {
+    if (!nextOnline) {
+        closeTutorial()
+    }
 })
 </script>
 

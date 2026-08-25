@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { Link, usePage, router } from '@inertiajs/vue3'
 import OfflineBanner from '@/Components/OfflineBanner.vue'
 import OnboardingController from '@/Components/Onboarding/OnboardingController.vue'
+import { useOfflineQueue } from '@/composables/useOfflineQueue'
 
 const page = usePage()
 const auth = computed(() => page.props.auth)
@@ -17,6 +18,7 @@ const tutorial = computed(() => {
 const flash = computed(() => page.props.flash)
 const tutorialRoleLabel = computed(() => auth.value?.user?.role_label || 'Tutorial')
 const canUseTutorial = computed(() => auth.value?.user?.role !== 'auditor')
+const { isOnline } = useOfflineQueue()
 
 const mainNavItems = [
     { href: '/', label: 'DASHBOARD', icon: '', section: 'dashboard' },
@@ -74,9 +76,15 @@ function logout() {
 }
 
 function openTutorial() {
-    if (!canUseTutorial.value) return
+    if (!canUseTutorial.value || !isOnline.value) return
     tutorialController.value?.openTutorial?.()
 }
+
+watch(isOnline, (nextOnline) => {
+    if (!nextOnline) {
+        window.dispatchEvent(new CustomEvent('tutorial:close'))
+    }
+})
 
 watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value = false }, 4000) }, { deep: true })
 </script>
@@ -100,9 +108,10 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
                     <button
                         v-if="canUseTutorial"
                         type="button"
-                        class="hidden md:inline-flex items-center rounded-md bg-white/10 px-3 py-1.5 text-xs font-medium text-white border border-white/10 hover:bg-white/15 transition"
+                        class="hidden md:inline-flex items-center rounded-md bg-white/10 px-3 py-1.5 text-xs font-medium text-white border border-white/10 transition disabled:cursor-not-allowed disabled:bg-white/5 disabled:text-white/40"
                         title="Open tutorial"
                         aria-label="Open tutorial"
+                        :disabled="!isOnline"
                         @click="openTutorial"
                     >
                         Tutorial
@@ -148,7 +157,8 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
                     <button
                         v-if="canUseTutorial"
                         type="button"
-                        class="border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white"
+                        class="border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        :disabled="!isOnline"
                         @click="openTutorial(); mobileMenuOpen = false"
                     >
                         Tutorial
