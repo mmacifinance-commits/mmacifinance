@@ -96,6 +96,32 @@ document.addEventListener('click', (event) => {
     window.alert('CSV export requires an internet connection.')
 }, true)
 
+document.addEventListener('click', (event) => {
+    const link = event.target.closest?.('a[href]')
+    if (navigator.onLine || !link) return
+
+    const url = new URL(link.href, window.location.origin)
+    if (url.origin !== window.location.origin) return
+    if (link.hasAttribute('download')) return
+
+    const pathname = url.pathname
+    if (pathname.includes('/export-csv')) return
+    if (
+        pathname.startsWith('/login') ||
+        pathname.startsWith('/logout') ||
+        pathname.startsWith('/2fa') ||
+        pathname.startsWith('/forgot-password') ||
+        pathname.startsWith('/reset-password')
+    ) {
+        event.preventDefault()
+        window.alert('Authentication pages require an internet connection.')
+        return
+    }
+
+    event.preventDefault()
+    window.location.assign(link.href)
+}, true)
+
 createInertiaApp({
     title: (title) => title ? `${title} - Budget Fund Utilization & Tracking` : 'Budget Fund Utilization & Tracking',
     resolve: (name) =>
