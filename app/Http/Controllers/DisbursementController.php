@@ -19,13 +19,6 @@ class DisbursementController extends Controller
         $disbursementQuery = Disbursement::with([
             'expense.category',
             'expense.particular',
-            'preparedBy',
-            'releasedBy',
-            'submittedBy',
-            'approvedBy',
-            'rejectedBy',
-            'postedBy',
-            'auditTrails',
         ])->latest();
 
         $disbursements = $disbursementQuery->paginate(25)->withQueryString();

@@ -4,7 +4,7 @@ import Modal from '@/Components/Modal.vue'
 import { Head, useForm, router, usePage, Link } from '@inertiajs/vue3'
 import { ref, computed, watch } from 'vue'
 
-const props = defineProps({ budgets: Array, categories: Array, particulars: Array, availableYears: Array })
+const props = defineProps({ budgets: Array, availableYears: Array })
 const perms = computed(() => usePage().props.permissions || {})
 const FULL_YEAR_SEMESTER = 'Full Year (Jan-Dec)'
 const CANONICAL_SEMESTERS = [FULL_YEAR_SEMESTER, '1st Semester', '2nd Semester', 'Summer']

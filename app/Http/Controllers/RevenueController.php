@@ -83,47 +83,64 @@ class RevenueController extends Controller
         $remainingIncomeAfterExpense = $totalIncome - $totalExpense;
 
         $monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        $monthlyIncome = [];
-        $monthlyAppropriation = [];
-        $monthlyExpense = [];
-        for ($m = 1; $m <= 12; $m++) {
-            $monthlyIncome[] = [
-                'month' => $monthNames[$m - 1],
-                'month_num' => $m,
-                'amount' => (float) Income::whereYear('date_encoded', $selectedYear)->whereMonth('date_encoded', $m)->sum('amount'),
-            ];
-            $monthlyAppropriation[] = [
-                'month' => $monthNames[$m - 1],
-                'month_num' => $m,
-                'amount' => (float) BudgetItem::query()
-                    ->whereHas('budget', fn ($q) => $q->where('year', $selectedYear))
-                    ->where('month', $m)
-                    ->sum('appropriation'),
-            ];
-            $monthlyExpense[] = [
-                'month' => $monthNames[$m - 1],
-                'month_num' => $m,
-                'amount' => (float) Disbursement::query()
-                    ->where('status', 'posted')
-                    ->whereYear('date_encoded', $selectedYear)
-                    ->whereMonth('date_encoded', $m)
-                    ->sum('amount'),
-            ];
-        }
+        $monthlyIncomeTotals = Income::query()
+            ->whereYear('date_encoded', $selectedYear)
+            ->selectRaw('MONTH(date_encoded) as month, SUM(amount) as total')
+            ->groupByRaw('MONTH(date_encoded)')
+            ->pluck('total', 'month');
+        $monthlyAppropriationTotals = BudgetItem::query()
+            ->whereHas('budget', fn ($q) => $q->where('year', $selectedYear))
+            ->selectRaw('month, SUM(appropriation) as total')
+            ->groupBy('month')
+            ->pluck('total', 'month');
+        $monthlyExpenseTotals = Disbursement::query()
+            ->where('status', 'posted')
+            ->whereYear('date_encoded', $selectedYear)
+            ->selectRaw('MONTH(date_encoded) as month, SUM(amount) as total')
+            ->groupByRaw('MONTH(date_encoded)')
+            ->pluck('total', 'month');
 
-        $multiYearComparison = [];
+        $monthlyIncome = collect(range(1, 12))->map(fn ($m) => [
+                'month' => $monthNames[$m - 1],
+                'month_num' => $m,
+                'amount' => (float) ($monthlyIncomeTotals[$m] ?? 0),
+            ])->all();
+        $monthlyAppropriation = collect(range(1, 12))->map(fn ($m) => [
+                'month' => $monthNames[$m - 1],
+                'month_num' => $m,
+                'amount' => (float) ($monthlyAppropriationTotals[$m] ?? 0),
+            ])->all();
+        $monthlyExpense = collect(range(1, 12))->map(fn ($m) => [
+                'month' => $monthNames[$m - 1],
+                'month_num' => $m,
+                'amount' => (float) ($monthlyExpenseTotals[$m] ?? 0),
+            ])->all();
+
         $compareYears = collect($availableYears)->take(4)->sort()->values()->all();
-        foreach ($compareYears as $year) {
-            $yearIncome = (float) Income::whereYear('date_encoded', $year)->sum('amount');
-            $yearAppropriation = (float) BudgetItem::query()
-                ->whereHas('budget', fn ($q) => $q->where('year', $year))
-                ->sum('appropriation');
-            $yearExpense = (float) Disbursement::query()
-                ->where('status', 'posted')
-                ->whereYear('date_encoded', $year)
-                ->sum('amount');
+        $yearIncomeTotals = Income::query()
+            ->whereIn(DB::raw('YEAR(date_encoded)'), $compareYears)
+            ->selectRaw('YEAR(date_encoded) as year, SUM(amount) as total')
+            ->groupByRaw('YEAR(date_encoded)')
+            ->pluck('total', 'year');
+        $yearAppropriationTotals = BudgetItem::query()
+            ->join('annual_budgets', 'budget_items.budget_id', '=', 'annual_budgets.id')
+            ->whereIn('annual_budgets.year', $compareYears)
+            ->selectRaw('annual_budgets.year, SUM(budget_items.appropriation) as total')
+            ->groupBy('annual_budgets.year')
+            ->pluck('total', 'year');
+        $yearExpenseTotals = Disbursement::query()
+            ->where('status', 'posted')
+            ->whereIn(DB::raw('YEAR(date_encoded)'), $compareYears)
+            ->selectRaw('YEAR(date_encoded) as year, SUM(amount) as total')
+            ->groupByRaw('YEAR(date_encoded)')
+            ->pluck('total', 'year');
 
-            $multiYearComparison[] = [
+        $multiYearComparison = collect($compareYears)->map(function ($year) use ($yearIncomeTotals, $yearAppropriationTotals, $yearExpenseTotals) {
+            $yearIncome = (float) ($yearIncomeTotals[$year] ?? 0);
+            $yearAppropriation = (float) ($yearAppropriationTotals[$year] ?? 0);
+            $yearExpense = (float) ($yearExpenseTotals[$year] ?? 0);
+
+            return [
                 'year' => (int) $year,
                 'income' => $yearIncome,
                 'appropriation' => $yearAppropriation,
@@ -131,7 +148,7 @@ class RevenueController extends Controller
                 'remainingIncome' => $yearIncome - $yearAppropriation,
                 'remainingAppropriation' => $yearAppropriation - $yearExpense,
             ];
-        }
+        })->all();
 
         return Inertia::render('Revenue/Index', [
             'availableYears' => $availableYears,

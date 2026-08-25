@@ -124,8 +124,8 @@ class BudgetItem extends Model
 
     public function postedExpenditureTotal(): float
     {
-        if (array_key_exists('expenditure', $this->attributes) && $this->attributes['expenditure'] !== null) {
-            return (float) $this->attributes['expenditure'];
+        if (array_key_exists('derived_expenditure', $this->attributes) && $this->attributes['derived_expenditure'] !== null) {
+            return (float) $this->attributes['derived_expenditure'];
         }
 
         $budgetYear = $this->budgetFiscalYear();
@@ -155,6 +155,7 @@ class BudgetItem extends Model
 
         return Disbursement::query()
             ->whereRaw('LOWER(TRIM(COALESCE(status, ""))) LIKE ?', ['%posted%'])
+            ->when((int) ($this->month ?? 0) > 0, fn ($query) => $query->whereMonth('date_encoded', (int) $this->month))
             ->whereHas('expense', function ($expenseQuery) use ($budgetYear) {
                 $expenseQuery
                     ->whereYear('date_encoded', $budgetYear)
@@ -170,6 +171,7 @@ class BudgetItem extends Model
 
         return Expense::query()
             ->whereYear('date_encoded', $budgetYear)
+            ->when((int) ($this->month ?? 0) > 0, fn ($query) => $query->whereMonth('date_encoded', (int) $this->month))
             ->whereRaw('LOWER(TRIM(COALESCE(status, ""))) LIKE ?', ['%posted%'])
             ->where(fn ($matchQuery) => $this->applyBudgetLineIdentityMatch($matchQuery));
     }
@@ -191,8 +193,10 @@ class BudgetItem extends Model
             $matchQuery
                 ->orWhereHas('particular', function ($particularQuery) use ($budgetTitle) {
                     $particularQuery
-                        ->whereRaw('LOWER(TRIM(COALESCE(NULLIF(particular, ""), NULLIF(account_name, ""), ""))) = ?', [$budgetTitle])
-                        ->orWhereRaw('LOWER(TRIM(COALESCE(NULLIF(particular, ""), NULLIF(account_name, ""), ""))) LIKE ?', ['%' . $budgetTitle . '%']);
+                        ->whereRaw('LOWER(TRIM(COALESCE(particular, ""))) = ?', [$budgetTitle])
+                        ->orWhereRaw('LOWER(TRIM(COALESCE(account_name, ""))) = ?', [$budgetTitle])
+                        ->orWhereRaw('LOWER(TRIM(COALESCE(particular, ""))) LIKE ?', ['%' . $budgetTitle . '%'])
+                        ->orWhereRaw('LOWER(TRIM(COALESCE(account_name, ""))) LIKE ?', ['%' . $budgetTitle . '%']);
                 })
                 ->orWhereRaw('LOWER(TRIM(COALESCE(description, ""))) = ?', [$budgetTitle])
                 ->orWhereRaw('LOWER(TRIM(COALESCE(description, ""))) LIKE ?', ['%' . $budgetTitle . '%']);
@@ -296,41 +300,81 @@ class BudgetItem extends Model
 
         foreach ($itemsByYear as $year => $yearItems) {
             $categoryIds = $yearItems->pluck('category_id')->filter()->unique()->values();
-            $particularIds = $yearItems->pluck('particular_id')->filter()->unique()->values();
 
             $expenseTotals = Expense::query()
-                ->selectRaw('category_id, particular_id, SUM(CASE WHEN COALESCE(NULLIF(paid, 0), 0) > 0 THEN paid ELSE amount END) as total')
-                ->whereYear('date_encoded', $year)
-                ->whereRaw('LOWER(TRIM(COALESCE(status, ""))) LIKE ?', ['%posted%'])
-                ->when($categoryIds->isNotEmpty(), fn ($q) => $q->whereIn('category_id', $categoryIds))
-                ->when($particularIds->isNotEmpty(), fn ($q) => $q->whereIn('particular_id', $particularIds))
-                ->groupBy('category_id', 'particular_id')
-                ->get()
-                ->keyBy(fn ($row) => ($row->category_id ?? 0) . ':' . ($row->particular_id ?? 0));
+                ->selectRaw('
+                    MONTH(expenses.date_encoded) as month,
+                    expenses.category_id as category_id,
+                    expenses.particular_id as particular_id,
+                    LOWER(TRIM(COALESCE(budget_particulars.particular, ""))) as particular_title,
+                    LOWER(TRIM(COALESCE(budget_particulars.account_name, ""))) as account_name,
+                    SUM(CASE WHEN COALESCE(NULLIF(expenses.paid, 0), 0) > 0 THEN expenses.paid ELSE expenses.amount END) as total
+                ')
+                ->join('budget_particulars', 'expenses.particular_id', '=', 'budget_particulars.id')
+                ->whereYear('expenses.date_encoded', $year)
+                ->whereRaw('LOWER(TRIM(COALESCE(expenses.status, ""))) LIKE ?', ['%posted%'])
+                ->when($categoryIds->isNotEmpty(), fn ($q) => $q->whereIn('expenses.category_id', $categoryIds))
+                ->groupBy('month', 'expenses.category_id', 'expenses.particular_id', 'particular_title', 'account_name')
+                ->get();
 
             $disbursementTotals = Disbursement::query()
-                ->selectRaw('expenses.category_id as category_id, expenses.particular_id as particular_id, SUM(disbursements.amount) as total')
+                ->selectRaw('
+                    MONTH(disbursements.date_encoded) as month,
+                    expenses.category_id as category_id,
+                    expenses.particular_id as particular_id,
+                    LOWER(TRIM(COALESCE(budget_particulars.particular, ""))) as particular_title,
+                    LOWER(TRIM(COALESCE(budget_particulars.account_name, ""))) as account_name,
+                    SUM(disbursements.amount) as total
+                ')
                 ->join('expenses', 'disbursements.expense_id', '=', 'expenses.id')
+                ->join('budget_particulars', 'expenses.particular_id', '=', 'budget_particulars.id')
                 ->whereYear('disbursements.date_encoded', $year)
                 ->whereRaw('LOWER(TRIM(COALESCE(disbursements.status, ""))) LIKE ?', ['%posted%'])
                 ->when($categoryIds->isNotEmpty(), fn ($q) => $q->whereIn('expenses.category_id', $categoryIds))
-                ->when($particularIds->isNotEmpty(), fn ($q) => $q->whereIn('expenses.particular_id', $particularIds))
-                ->groupBy('expenses.category_id', 'expenses.particular_id')
-                ->get()
-                ->keyBy(fn ($row) => ($row->category_id ?? 0) . ':' . ($row->particular_id ?? 0));
+                ->groupBy('month', 'expenses.category_id', 'expenses.particular_id', 'particular_title', 'account_name')
+                ->get();
 
             $yearItems->each(function (self $item) use ($expenseTotals, $disbursementTotals) {
-                $key = ($item->category_id ?? 0) . ':' . ($item->particular_id ?? 0);
-                $expenseTotal = (float) ($expenseTotals[$key]->total ?? 0);
-                $disbursementTotal = (float) ($disbursementTotals[$key]->total ?? 0);
+                $expenseTotal = self::matchingDerivedRowsTotal($item, $expenseTotals);
+                $disbursementTotal = self::matchingDerivedRowsTotal($item, $disbursementTotals);
                 $expenditure = max($expenseTotal, $disbursementTotal);
                 $appropriation = (float) $item->appropriation;
 
+                $item->setAttribute('derived_expenditure', $expenditure);
                 $item->setAttribute('expenditure', $expenditure);
                 $item->setAttribute('balance', round($appropriation - $expenditure, 2));
                 $item->setAttribute('utilization_rate', $appropriation > 0 ? round(($expenditure / $appropriation) * 100, 2) : 0.0);
             });
         }
+    }
+
+    protected static function matchingDerivedRowsTotal(self $item, Collection $rows): float
+    {
+        $month = (int) ($item->month ?? 0);
+        $categoryId = (int) ($item->category_id ?? 0);
+        $particularId = (int) ($item->particular_id ?? 0);
+        $title = $item->normalizedBudgetTitle();
+
+        return (float) $rows
+            ->filter(function ($row) use ($month, $categoryId, $particularId, $title) {
+                if ((int) ($row->month ?? 0) !== $month || (int) ($row->category_id ?? 0) !== $categoryId) {
+                    return false;
+                }
+
+                if ($particularId > 0 && (int) ($row->particular_id ?? 0) === $particularId) {
+                    return true;
+                }
+
+                if ($title === '') {
+                    return false;
+                }
+
+                $rowParticular = Str::of((string) ($row->particular_title ?? ''))->lower()->trim()->replaceMatches('/\s+/', ' ')->toString();
+                $rowAccountName = Str::of((string) ($row->account_name ?? ''))->lower()->trim()->replaceMatches('/\s+/', ' ')->toString();
+
+                return $rowParticular === $title || $rowAccountName === $title;
+            })
+            ->sum('total');
     }
 
     public function getExpenditureAttribute($value): float

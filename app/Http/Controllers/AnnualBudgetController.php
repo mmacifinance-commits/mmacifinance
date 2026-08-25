@@ -422,7 +422,7 @@ class AnnualBudgetController extends Controller
 
     public function index()
     {
-        $budgets = AnnualBudget::with(['items.category', 'items.particular.department'])
+        $budgets = AnnualBudget::with(['items.budget:id,year', 'items.category', 'items.particular.department'])
             ->latest('year')
             ->get();
 
@@ -441,9 +441,6 @@ class AnnualBudgetController extends Controller
 
         return Inertia::render('AnnualBudgets/Index', [
             'budgets' => $budgets,
-            'categories' => BudgetCategory::all(),
-            'particulars' => BudgetParticular::with('category', 'department')->get(),
-            'accountTitles' => BudgetParticular::with('category', 'department')->get(),
             'availableYears' => AnnualBudget::distinct()->orderByDesc('year')->pluck('year'),
         ]);
     }
@@ -454,7 +451,7 @@ class AnnualBudgetController extends Controller
             $annualBudget->update(['ref_no' => sprintf('AB-%d-%04d', $annualBudget->year, $annualBudget->id)]);
         }
 
-        $budget = $annualBudget->load(['items.category', 'items.particular.department']);
+        $budget = $annualBudget->load(['items.budget:id,year', 'items.category', 'items.particular.department']);
         foreach ($budget->items as $item) {
             if (!$item->ref_no) {
                 $item->update(['ref_no' => sprintf('MB-%d-%02d-%04d', $annualBudget->year, $item->month ?: 1, $item->id)]);

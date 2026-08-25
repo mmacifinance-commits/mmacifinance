@@ -23,7 +23,6 @@ class ExpenseController extends Controller
             'category',
             'particular.department',
             'disbursements',
-            'auditTrails',
         ])->latest()->get();
 
         $yearsFromExpenses = $expenses->pluck('date_encoded')
@@ -49,11 +48,21 @@ class ExpenseController extends Controller
             ->whereHas('budgetItems.budget', function ($query) use ($availableYears) {
                 $query->whereIn('year', $availableYears);
             })
-            ->with(['budgetItems.budget' => function ($query) use ($availableYears) {
-                $query->whereIn('year', $availableYears);
+            ->with(['budgetItems' => function ($query) use ($availableYears) {
+                $query
+                    ->select(['id', 'budget_id', 'category_id'])
+                    ->whereHas('budget', fn ($budgetQuery) => $budgetQuery->whereIn('year', $availableYears))
+                    ->with('budget:id,year');
             }])
             ->orderBy('name')
             ->get();
+
+        // BudgetItem has calculated attributes that query posted workflow totals.
+        // The expense category picker only needs the related fiscal years, so do
+        // not serialize those expensive attributes for every dropdown option.
+        $budgetedCategories->each(function (BudgetCategory $category) {
+            $category->budgetItems->each(fn (BudgetItem $item) => $item->setAppends([]));
+        });
 
         return Inertia::render('Expenses/Index', [
             'expenses' => $expenses,

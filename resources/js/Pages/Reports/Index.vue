@@ -7,8 +7,6 @@ import { computed, ref } from 'vue'
 const props = defineProps({
     budgets: Array,
     categories: Array,
-    accountTitles: Array,
-    particulars: Array,
     departments: Array,
     expenses: Array,
     disbursements: Array,
@@ -227,19 +225,7 @@ function utilRate(app, exp) { return Number(app || 0) > 0 ? ((Number(exp || 0) /
 
 const yearEndSummary = computed(() => {
     return asArray(props.yearEndUnusedBalances)
-        .map((item) => ({
-            ...item,
-            category: item.category || 'Uncategorized',
-            account_title: item.account_title || 'Untitled',
-            responsibility_center: item.responsibility_center || 'No RC',
-        }))
-        .sort((a, b) => {
-            const cat = String(a.category).localeCompare(String(b.category))
-            if (cat !== 0) return cat
-            const acc = String(a.account_title).localeCompare(String(b.account_title))
-            if (acc !== 0) return acc
-            return Number(a.month || 0) - Number(b.month || 0)
-        })
+        .sort((a, b) => Number(a.month || 0) - Number(b.month || 0))
 })
 
 const yearEndSummaryTotals = computed(() => {
@@ -353,8 +339,8 @@ const yearEndSummaryTotals = computed(() => {
     <div class="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden mb-6">
         <div class="px-5 py-3 border-b bg-gray-50 flex flex-wrap items-center justify-between gap-2">
             <div>
-                <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wider">Year-End Unused Balance Summary</h3>
-                <p class="text-xs text-gray-500 mt-1">Balances remaining after posted expenditures. Rollover stays manual and is not automatic.</p>
+                <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wider">Monthly Budget Reconciliation</h3>
+                <p class="text-xs text-gray-500 mt-1">Monthly totals dynamically follow the fiscal year, month, date range, responsibility center, and category filters above.</p>
             </div>
             <div class="flex gap-2 text-xs">
                 <span class="rounded-full bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">Unused: {{ PESO }}{{ fmt(yearEndSummaryTotals.balance) }}</span>
@@ -366,9 +352,6 @@ const yearEndSummaryTotals = computed(() => {
             <table class="w-full text-sm">
                 <thead>
                     <tr class="bg-navy-dark text-white border-b-2 border-mustard">
-                        <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Category</th>
-                        <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Account Title</th>
-                        <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Responsibility Center</th>
                         <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Month</th>
                         <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-wider text-white">Appropriation</th>
                         <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-wider text-white">Posted Expenditure</th>
@@ -377,10 +360,7 @@ const yearEndSummaryTotals = computed(() => {
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="item in yearEndSummary" :key="`${item.budget_ref_no}-${item.category}-${item.account_title}-${item.month}`" class="border-b hover:bg-gray-50/50 transition-colors">
-                        <td class="px-5 py-3 font-medium text-gray-900">{{ item.category }}</td>
-                        <td class="px-5 py-3 font-medium text-gray-800">{{ item.account_title }}</td>
-                        <td class="px-5 py-3 text-gray-700">{{ item.responsibility_center }}</td>
+                    <tr v-for="item in yearEndSummary" :key="item.month" class="border-b hover:bg-gray-50/50 transition-colors">
                         <td class="px-5 py-3 text-gray-700">{{ item.month_label }}</td>
                         <td class="px-5 py-3 text-right font-medium font-sans tabular-nums">{{ PESO }}{{ fmt(item.appropriation) }}</td>
                         <td class="px-5 py-3 text-right font-medium font-sans tabular-nums">{{ PESO }}{{ fmt(item.expenditure) }}</td>
@@ -392,7 +372,7 @@ const yearEndSummaryTotals = computed(() => {
                         </td>
                     </tr>
                     <tr v-if="!yearEndSummary.length">
-                        <td colspan="8" class="px-5 py-8 text-center text-gray-400">No unused balances found for this fiscal year.</td>
+                        <td colspan="5" class="px-5 py-8 text-center text-gray-400">No budget records match the selected report filters.</td>
                     </tr>
                 </tbody>
             </table>

@@ -86,8 +86,20 @@ createInertiaApp({
     },
 });
 
-// ── Service Worker Registration ─────────────────────────────────────────────
-if ('serviceWorker' in navigator) {
+const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
+
+// Service Worker Registration
+if ('serviceWorker' in navigator && isLocalHost) {
+    // Keep local development predictable. A stale SW can trap Inertia navigation
+    // on "Loading..." even after backend code has been fixed.
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.getRegistrations()
+            .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+            .then(() => caches?.keys?.())
+            .then((keys) => keys ? Promise.all(keys.map((key) => caches.delete(key))) : null)
+            .catch((err) => console.warn('[SW] Local cleanup failed:', err))
+    })
+} else if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker
             .register('/sw.js', { scope: '/' })
