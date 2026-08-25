@@ -108,6 +108,10 @@ class ExpenseController extends Controller
         }
 
         $validated['status'] = strtolower(trim((string) ($validated['status'] ?? 'pending')));
+        if ($request->header('X-Offline-Sync')) {
+            $validated['status'] = 'pending';
+            $validated['date_approved'] = null;
+        }
         if (!in_array($validated['status'], ['pending', 'cancelled'], true)) {
             throw ValidationException::withMessages([
                 'status' => 'New expenditures must start as Pending or Cancelled. Use the workflow actions to submit and approve them.',
@@ -121,6 +125,10 @@ class ExpenseController extends Controller
         $expense = Expense::create($validated);
 
         $warning = $this->budgetOverrunWarning($expense);
+
+        if ($request->header('X-Offline-Sync')) {
+            return response()->json(['id' => $expense->id, 'resource' => 'expense', 'record' => $expense->fresh()], 201);
+        }
 
         return redirect()->route('expenses.index')->with([
             'success' => 'Expense created.',
@@ -180,6 +188,10 @@ class ExpenseController extends Controller
         $expense->update($validated);
 
         $warning = $this->budgetOverrunWarning($expense);
+
+        if ($request->header('X-Offline-Sync')) {
+            return response()->json(['id' => $expense->id, 'resource' => 'expense', 'record' => $expense->fresh()]);
+        }
 
         return redirect()->route('expenses.index')->with([
             'success' => 'Expense updated.',

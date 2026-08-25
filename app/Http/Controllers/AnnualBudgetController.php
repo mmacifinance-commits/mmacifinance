@@ -482,6 +482,10 @@ class AnnualBudgetController extends Controller
         $annualBudget = AnnualBudget::create($validated);
         AuditTrail::log($annualBudget, 'created', auth()->user(), "Created Annual Budget for year {$annualBudget->year}");
 
+        if ($request->header('X-Offline-Sync')) {
+            return response()->json(['id' => $annualBudget->id, 'resource' => 'budget', 'record' => $annualBudget->fresh()], 201);
+        }
+
         return redirect()->route('annual-budgets.index')->with('success', 'Annual Budget created with reference number ' . $annualBudget->ref_no);
     }
 
@@ -516,6 +520,10 @@ class AnnualBudgetController extends Controller
         });
 
         AuditTrail::log($item, 'created', auth()->user(), "Added Monthly Budget Allocation item {$item->ref_no}");
+
+        if ($request->header('X-Offline-Sync')) {
+            return response()->json(['id' => $item->id, 'resource' => 'budget', 'record' => $item->fresh()], 201);
+        }
 
         return redirect()->route('annual-budgets.show', $annualBudget)->with('success', 'Monthly Budget Allocation added.');
     }
@@ -560,6 +568,10 @@ class AnnualBudgetController extends Controller
         });
 
         AuditTrail::log($item, 'modified', auth()->user(), "Updated Monthly Budget Allocation item {$item->ref_no}");
+
+        if ($request->header('X-Offline-Sync')) {
+            return response()->json(['id' => $item->id, 'resource' => 'budget', 'record' => $item->fresh()]);
+        }
 
         return redirect()->route('annual-budgets.show', $annualBudget)->with('success', 'Monthly Budget Allocation updated.');
     }

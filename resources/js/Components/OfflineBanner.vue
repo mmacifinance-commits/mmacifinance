@@ -1,7 +1,7 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
 import { router } from '@inertiajs/vue3'
-import { useOfflineQueue } from '@/composables/useOfflineQueue'
+import { getPageSnapshot, useOfflineQueue } from '@/composables/useOfflineQueue'
 
 const {
   isOnline,
@@ -12,6 +12,9 @@ const {
   syncQueue,
   getQueue,
   clearQueue,
+  removeFromQueue,
+  retryQueueItem,
+  lastSnapshotAt,
 } = useOfflineQueue()
 
 const showQueue = ref(false)
@@ -25,6 +28,23 @@ async function toggleQueue() {
   if (showQueue.value) {
     queueItems.value = await getQueue()
   }
+}
+
+async function refreshSnapshotTime() {
+  const url = window.location.pathname + window.location.search
+  await getPageSnapshot(url).catch(() => null)
+}
+
+async function retryItem(item) {
+  await retryQueueItem(item.id)
+  queueItems.value = await getQueue()
+  if (isOnline.value) await handleSync()
+}
+
+async function discardItem(item) {
+  if (!confirm(`Discard queued action "${item.label}"?`)) return
+  await removeFromQueue(item.id)
+  queueItems.value = await getQueue()
 }
 
 async function handleSync() {
@@ -60,7 +80,10 @@ async function handleClearQueue() {
 
 // When coming back online, refresh queue display
 watch(isOnline, async (online) => {
-  if (!online) return
+  if (!online) {
+    await refreshSnapshotTime()
+    return
+  }
 
   if (showQueue.value) {
     queueItems.value = await getQueue()
@@ -73,6 +96,7 @@ watch(isOnline, async (online) => {
 
 // Also covers reopening the app after connectivity was restored.
 watch(queueCount, async (count, previousCount) => {
+  if (showQueue.value) queueItems.value = await getQueue()
   if (count > 0 && previousCount === 0 && isOnline.value && !isSyncing.value) {
     await handleSync()
   }
@@ -84,7 +108,11 @@ const bannerVisible = computed(() =>
 
 function fmtTime(ts) {
   if (!ts) return ''
-  return new Date(ts).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })
+  return new Date(ts).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+function prerequisite(item) {
+  return item.dependsOn ? `Waiting for ${item.dependsOn}` : 'None'
 }
 </script>
 
@@ -108,6 +136,9 @@ function fmtTime(ts) {
               {{ queueCount }} action{{ queueCount !== 1 ? 's' : '' }} queued
             </span>
             <span v-else class="offline-sub">Actions will be saved and synced when you reconnect</span>
+            <span class="offline-sub">
+              Cached data last updated: {{ lastSnapshotAt ? fmtTime(lastSnapshotAt) : 'not available for this page' }}
+            </span>
           </div>
         </div>
         <div class="offline-bar__right">
@@ -223,8 +254,14 @@ function fmtTime(ts) {
                   </span>
                   <span class="queue-item__url">{{ item.url }}</span>
                   <span class="queue-item__time">{{ fmtTime(item.timestamp) }}</span>
+                  <span>By: {{ item.ownerName || 'Current user' }}</span>
+                  <span>Type: {{ item.resource || 'record' }}</span>
+                  <span>Prerequisite: {{ prerequisite(item) }}</span>
                   <span v-if="item.status === 'error'" class="queue-item__error">
-                    {{ item.lastError }}
+                    Validation error: {{ item.lastError }}
+                  </span>
+                  <span v-if="item.serverRecord" class="queue-item__error">
+                    Conflict detected. Server record: {{ JSON.stringify(item.serverRecord) }}
                   </span>
                 </div>
               </div>
@@ -234,6 +271,8 @@ function fmtTime(ts) {
                 <span v-else-if="item.status === 'syncing'" class="status-badge status-badge--syncing">
                   <span class="offline-bar__spinner offline-bar__spinner--sm"></span>
                 </span>
+                <button v-if="item.status === 'error'" @click="retryItem(item)" class="offline-btn offline-btn--ghost">Retry</button>
+                <button @click="discardItem(item)" class="offline-btn offline-btn--danger-ghost">Discard</button>
               </div>
             </div>
           </div>
@@ -428,6 +467,21 @@ function fmtTime(ts) {
 .queue-item__time  { color: #64748b; }
 .queue-item__error { color: #f87171; font-size: 0.7rem; display: block; width: 100%; margin-top: 2px; }
 
+.queue-item__status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+  min-width: 11rem;
+  flex-wrap: wrap;
+}
+
+.queue-item__status .offline-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 /* Method badges */
 .queue-item__method {
   padding: 0.1rem 0.4rem;
@@ -454,6 +508,23 @@ function fmtTime(ts) {
 .status-badge--pending { background: rgba(251,191,36,.15); color: #fbbf24; }
 .status-badge--error   { background: rgba(239,68,68,.15);  color: #f87171; }
 .status-badge--syncing { background: rgba(59,130,246,.15); color: #60a5fa; display: flex; align-items: center; }
+
+@media (max-width: 700px) {
+  .queue-item {
+    flex-wrap: wrap;
+  }
+
+  .queue-item__info {
+    flex: 1 1 calc(100% - 2rem);
+  }
+
+  .queue-item__status {
+    flex: 1 1 100%;
+    min-width: 0;
+    justify-content: flex-end;
+    padding-left: 1.75rem;
+  }
+}
 
 /* ── Transitions ─────────────────────────────────────────── */
 .banner-slide-enter-active, .banner-slide-leave-active {

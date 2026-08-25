@@ -6,7 +6,7 @@ import { ref, computed, watch } from 'vue'
 import { useOfflineQueue } from '@/composables/useOfflineQueue'
 
 const perms = computed(() => usePage().props.permissions || {})
-const { isOnline, offlinePost, offlinePut, offlineDelete } = useOfflineQueue()
+const { isOnline, offlinePost, offlinePut } = useOfflineQueue()
 
 const props = defineProps({
     expenses: Array,
@@ -137,7 +137,7 @@ async function save() {
         category_id: form.category_id,
         particular_id: form.particular_id,
         amount: form.amount,
-        status: form.status,
+        status: isOnline.value ? form.status : 'pending',
         notes: form.notes,
         date_encoded: form.date_encoded,
         date_approved: perms.value.isSuperAdmin ? form.date_approved : '',
@@ -147,7 +147,12 @@ async function save() {
         const { queued } = await offlinePut(
             `/expenses/${editing.value}`,
             data,
-            `Edit Expense: '${form.description}'`
+            `Edit Expense: '${form.description}'`,
+            {
+                resource: 'expense',
+                rank: 30,
+                baseVersion: props.expenses.find((row) => String(row.id) === String(editing.value))?.updated_at || null,
+            }
         )
         if (queued) {
             const idx = offlineRows.value.findIndex(r => r.id === editing.value)
@@ -160,7 +165,12 @@ async function save() {
         const { queued, item } = await offlinePost(
             '/expenses',
             data,
-            `Add Expense: '${form.description}'`
+            `Add Expense: '${form.description}'`,
+            {
+                resource: 'expense',
+                rank: 30,
+                tempId: `offline-expense-${crypto.randomUUID()}`,
+            }
         )
         if (queued) {
             offlineRows.value.unshift({
@@ -191,15 +201,15 @@ async function remove(id) {
         offlineRows.value = offlineRows.value.filter(r => r.id !== id)
         return
     }
-    const { queued } = await offlineDelete(`/expenses/${id}`, `Delete Expense #${id}`)
-    if (queued) {
-        offlineRows.value = offlineRows.value.filter(r => r.id !== id)
-    } else {
-        router.delete(`/expenses/${id}`)
+    if (!isOnline.value) {
+        alert('Deleting financial records requires an internet connection.')
+        return
     }
+    router.delete(`/expenses/${id}`)
 }
 
 function submitForApproval(expense) {
+    if (!isOnline.value) return alert('Expense submission requires an internet connection.')
     if (!confirm('Submit this expenditure for Head of Finance approval?')) return
     router.post(`/expenses/${expense.id}/submit`, {
         remarks: 'Submitted for approval from Expenditures page.',
@@ -207,6 +217,7 @@ function submitForApproval(expense) {
 }
 
 function approveExpense(expense) {
+    if (!isOnline.value) return alert('Expense approval requires an internet connection.')
     if (!confirm('Approve this expenditure as Head of Finance?')) return
     router.post(`/expenses/${expense.id}/approve`, {
         remarks: 'Approved by Head of Finance.',
@@ -214,6 +225,7 @@ function approveExpense(expense) {
 }
 
 function returnExpense(expense) {
+    if (!isOnline.value) return alert('Returning an expense requires an internet connection.')
     if (!confirm('Return this expenditure for revision?')) return
     router.post(`/expenses/${expense.id}/return`, {
         remarks: 'Returned for revision by Head of Finance.',
@@ -221,14 +233,19 @@ function returnExpense(expense) {
 }
 
 function rejectExpense(expense) {
+    if (!isOnline.value) return alert('Expense rejection requires an internet connection.')
     if (!confirm('Reject this expenditure?')) return
     router.post(`/expenses/${expense.id}/reject`, {
         remarks: 'Rejected by Head of Finance.',
     })
 }
 
-function exportCsv() { window.location.href = '/expenses/export-csv' }
+function exportCsv() {
+    if (!isOnline.value) return alert('CSV export requires an internet connection.')
+    window.location.href = '/expenses/export-csv'
+}
 function importCsv() {
+    if (!isOnline.value) return alert('CSV import requires an internet connection.')
     importForm.post('/expenses/import-csv', {
         forceFormData: true,
         preserveScroll: true,

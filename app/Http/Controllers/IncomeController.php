@@ -107,7 +107,11 @@ class IncomeController extends Controller
         $validated['income_no'] = sprintf('INC-%s-%04d', date('Y'), Income::count() + 1);
         $validated['created_by_id'] = auth()->id();
 
-        Income::create($validated);
+        $income = Income::create($validated);
+
+        if ($request->header('X-Offline-Sync')) {
+            return response()->json(['id' => $income->id, 'resource' => 'income', 'record' => $income->fresh()], 201);
+        }
 
         return redirect()->back()->with('success', 'Income item created successfully.');
     }
@@ -123,6 +127,10 @@ class IncomeController extends Controller
         ]);
 
         $income->update($validated);
+
+        if ($request->header('X-Offline-Sync')) {
+            return response()->json(['id' => $income->id, 'resource' => 'income', 'record' => $income->fresh()]);
+        }
 
         return redirect()->back()->with('success', 'Income item updated successfully.');
     }

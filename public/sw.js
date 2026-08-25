@@ -7,7 +7,7 @@
  *  - Never intercept POST/PUT/DELETE (those go through the offline queue)
  */
 
-const CACHE_NAME = 'budget-tracker-v3'
+const CACHE_NAME = 'budget-tracker-v4'
 
 // Assets to pre-cache on install
 const PRECACHE_URLS = [
@@ -60,6 +60,16 @@ self.addEventListener('fetch', (event) => {
     url.pathname.startsWith('/reset-password')
   ) {
     event.respondWith(fetch(request))
+    return
+  }
+
+  // Financial file transfer is intentionally network-only.
+  if (url.pathname.includes('/import-csv') || url.pathname.includes('/export-csv')) {
+    event.respondWith(fetch(request).catch(() => new Response('CSV import and export require an internet connection.', {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: { 'Content-Type': 'text/plain' }
+    })))
     return
   }
 

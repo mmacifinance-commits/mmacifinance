@@ -137,8 +137,13 @@ class DisbursementController extends Controller
         $validated['disbursement_no'] = 'DSB' . str_pad($nextNum, 8, '0', STR_PAD_LEFT);
         $validated['prepared_by_id'] = auth()->id();
 
+        if ($request->header('X-Offline-Sync')) {
+            $validated['status'] = 'draft';
+            unset($validated['released_by_id'], $validated['submitted_by_id'], $validated['approved_by_id'], $validated['posted_by_id']);
+        }
+
         // If Cashier sets status to for_approval directly upon saving release details
-        if (auth()->user()?->isCashier() && in_array($validated['status'], ['for_release', 'for_approval'])) {
+        if (! $request->header('X-Offline-Sync') && auth()->user()?->isCashier() && in_array($validated['status'], ['for_release', 'for_approval'])) {
             $validated['status'] = 'for_approval';
             $validated['released_by_id'] = auth()->id();
             $validated['submitted_by_id'] = auth()->id();
@@ -154,6 +159,10 @@ class DisbursementController extends Controller
 
         if ($dsb->status === 'posted') {
             $this->syncExpensePaidAmount($dsb->expense_id);
+        }
+
+        if ($request->header('X-Offline-Sync')) {
+            return response()->json(['id' => $dsb->id, 'resource' => 'disbursement', 'record' => $dsb->fresh()], 201);
         }
 
         return redirect()->route('disbursements.index')->with('success', 'Disbursement created.');
@@ -184,6 +193,15 @@ class DisbursementController extends Controller
             'expense_id.required' => 'Please select a linked expense.',
             'status.in' => 'You are not authorized to set this status.',
         ]);
+
+        if ($request->header('X-Offline-Sync')) {
+            if (! in_array($disbursement->status, ['draft', 'for_release'], true)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'status' => 'Only draft disbursements can be edited from the offline queue.',
+                ]);
+            }
+            $validated['status'] = 'draft';
+        }
 
         $selectedExpense = Expense::findOrFail($validated['expense_id']);
         $this->ensureApprovedLinkedExpense($selectedExpense);
@@ -220,6 +238,10 @@ class DisbursementController extends Controller
         $this->syncExpensePaidAmount($oldExpenseId);
         if ($disbursement->expense_id && $disbursement->expense_id !== $oldExpenseId) {
             $this->syncExpensePaidAmount($disbursement->expense_id);
+        }
+
+        if ($request->header('X-Offline-Sync')) {
+            return response()->json(['id' => $disbursement->id, 'resource' => 'disbursement', 'record' => $disbursement->fresh()]);
         }
 
         return redirect()->route('disbursements.index')->with('success', 'Disbursement updated.');

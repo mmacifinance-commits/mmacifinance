@@ -3,6 +3,9 @@ import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
+import { useOfflineQueue } from '@/composables/useOfflineQueue'
+
+const { isOnline, offlinePost, offlinePut } = useOfflineQueue()
 
 const pageProps = computed(() => usePage().props || {})
 const perms = computed(() => ({
@@ -211,28 +214,70 @@ function onExpenseSelect(event) {
     }
 }
 
-function save() {
+async function save() {
+    const data = {
+        expense_id: form.expense_id,
+        description: form.description,
+        source: form.source,
+        pay_to: form.pay_to,
+        amount: form.amount,
+        method: form.method,
+        date_encoded: form.date_encoded,
+        status: isOnline.value ? form.status : 'draft',
+        notes: form.notes,
+        remarks: form.remarks,
+    }
     if (editing.value) {
-        form.put(`/disbursements/${editing.value}`, { onSuccess: () => { showModal.value = false } })
+        const current = disbursementItems.value.find((row) => String(row.id) === String(editing.value))
+        const { queued } = await offlinePut(`/disbursements/${editing.value}`, data, `Edit disbursement: ${form.description}`, {
+            resource: 'disbursement', rank: 40, baseVersion: current?.updated_at || null,
+        })
+        if (queued) {
+            const index = offlineRows.value.findIndex((row) => String(row.id) === String(editing.value))
+            if (index >= 0) offlineRows.value[index] = { ...offlineRows.value[index], ...data }
+            showModal.value = false
+        } else {
+            form.put(`/disbursements/${editing.value}`, { onSuccess: () => { showModal.value = false } })
+        }
     } else {
-        form.post('/disbursements', { onSuccess: () => { showModal.value = false } })
+        const tempId = `offline-disbursement-${crypto.randomUUID()}`
+        const expenseId = String(data.expense_id)
+        const { queued } = await offlinePost('/disbursements', data, `Create disbursement: ${form.description}`, {
+            resource: 'disbursement', rank: 40, tempId,
+            dependsOn: expenseId.startsWith('offline-expense-') ? expenseId : null,
+        })
+        if (queued) {
+            offlineRows.value.unshift({
+                ...data, id: tempId, disbursement_no: '(pending sync)', _offline: true,
+                expense: props.expenses?.find((row) => String(row.id) === expenseId) || null,
+            })
+            showModal.value = false
+        } else {
+            form.post('/disbursements', { onSuccess: () => { showModal.value = false } })
+        }
     }
 }
 
 function remove(id) {
+    if (!isOnline.value) return alert('Deleting financial records requires an internet connection.')
     if (confirm('Are you sure you want to delete this disbursement record?')) {
         router.delete(`/disbursements/${id}`)
     }
 }
 
 function submitForApproval(d) {
+    if (!isOnline.value) return alert('Payment release submission requires an internet connection.')
     if (confirm('Submit this disbursement for approval to the Head of Finance?')) {
         router.post(`/disbursements/${d.id}/submit`, { remarks: 'Released and submitted by Cashier' })
     }
 }
 
-function exportCsv() { window.location.href = '/disbursements/export-csv' }
+function exportCsv() {
+    if (!isOnline.value) return alert('CSV export requires an internet connection.')
+    window.location.href = '/disbursements/export-csv'
+}
 function importCsv() {
+    if (!isOnline.value) return alert('CSV import requires an internet connection.')
     importForm.post('/disbursements/import-csv', {
         forceFormData: true,
         preserveScroll: true,
@@ -242,6 +287,7 @@ function importCsv() {
 }
 
 function openActionModal(d, type) {
+    if (!isOnline.value) return alert('Approval, rejection, and posting require an internet connection.')
     selectedDsb.value = d
     actionType.value = type
     actionForm.reset()
@@ -249,6 +295,7 @@ function openActionModal(d, type) {
 }
 
 function executeAction() {
+    if (!isOnline.value) return alert('This workflow action requires an internet connection.')
     if (!selectedDsb.value || !actionType.value) return
     const dId = selectedDsb.value.id
     const endpoint = `/disbursements/${dId}/${actionType.value}`
