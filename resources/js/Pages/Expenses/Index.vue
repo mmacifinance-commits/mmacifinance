@@ -24,7 +24,7 @@ const showImportModal = ref(false)
 const showAuditModal = ref(false)
 const editing = ref(null)
 const selectedExpense = ref(null)
-const form = useForm({ description: '', category_id: '', particular_id: '', amount: 0, date_encoded: '', date_approved: '', status: 'pending', notes: '' })
+const form = useForm({ description: '', category_id: '', particular_id: '', amount: 0, date_encoded: '', status: 'pending', notes: '' })
 const importForm = useForm({ csv_file: null })
 
 // Local optimistic list for offline-queued items
@@ -127,7 +127,7 @@ function openCreate() {
     showModal.value = true
 }
 function openEdit(e) {
-    Object.assign(form, { description: e.description, category_id: e.category_id, particular_id: e.particular_id, amount: e.amount, status: e.status, notes: e.notes||'', date_encoded: e.date_encoded?.slice(0,10)||'', date_approved: e.date_approved?.slice(0,10)||'' })
+    Object.assign(form, { description: e.description, category_id: e.category_id, particular_id: e.particular_id, amount: e.amount, status: e.status, notes: e.notes||'', date_encoded: e.date_encoded?.slice(0,10)||'' })
     editing.value = e.id; showModal.value = true
 }
 
@@ -140,7 +140,6 @@ async function save() {
         status: isOnline.value ? form.status : 'pending',
         notes: form.notes,
         date_encoded: form.date_encoded,
-        date_approved: perms.value.isSuperAdmin ? form.date_approved : '',
     }
 
     if (editing.value) {
@@ -184,7 +183,6 @@ async function save() {
                 amount: form.amount,
                 status: form.status,
                 date_encoded: form.date_encoded,
-                date_approved: form.date_approved,
                 notes: form.notes,
                 _offline: true,
             })
@@ -441,10 +439,6 @@ function splitDate(d) {
                     </p>
                 </div>
                 <div><label class="block text-sm font-medium mb-1.5">Date Encoded</label><input v-model="form.date_encoded" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
-                <div v-if="perms.isSuperAdmin">
-                    <label class="block text-sm font-medium mb-1.5">Date Approved</label>
-                    <input v-model="form.date_approved" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" />
-                </div>
                 <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1.5">Notes</label><input v-model="form.notes" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" placeholder="Optional expense notes" /></div>
             </div>
             <div class="flex items-center justify-end gap-3 pt-5 border-t mt-4">
