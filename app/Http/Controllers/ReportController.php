@@ -11,6 +11,7 @@ use App\Models\Disbursement;
 use App\Models\Expense;
 use App\Models\IncomeAllocation;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class ReportController extends Controller
@@ -57,7 +58,9 @@ class ReportController extends Controller
         }
 
         // Disbursements Query
-        $dsbQuery = Disbursement::with(['expense.category', 'expense.particular.department', 'approvedBy', 'postedBy']);
+        $dsbQuery = Disbursement::query()
+            ->with(['expense.category', 'expense.particular.department', 'approvedBy', 'postedBy'])
+            ->where('status', 'posted');
         if ($startDate && $endDate) {
             $dsbQuery->whereBetween('date_encoded', [$startDate, $endDate]);
         } elseif ($selectedMonth) {
@@ -96,6 +99,39 @@ class ReportController extends Controller
         $annualBudgetItems = $annualBudgetItemsQuery->get();
         BudgetItem::hydrateDerivedTotals($annualBudgetItems);
 
+        $postedDisbursementsQuery = Disbursement::query()
+            ->with(['expense.category', 'expense.particular.department'])
+            ->where('status', 'posted');
+        if ($startDate && $endDate) {
+            $postedDisbursementsQuery->whereBetween('date_encoded', [$startDate, $endDate]);
+        } elseif ($selectedMonth) {
+            $postedDisbursementsQuery->whereYear('date_encoded', $selectedYear)->whereMonth('date_encoded', $selectedMonth);
+        } else {
+            $postedDisbursementsQuery->whereYear('date_encoded', $selectedYear);
+        }
+        if ($departmentId || $categoryId || $accountTitleId) {
+            $postedDisbursementsQuery->whereHas('expense', function ($q) use ($departmentId, $categoryId, $accountTitleId) {
+                if ($departmentId) {
+                    $q->whereHas('particular', fn ($p) => $p->where('department_id', $departmentId));
+                }
+                if ($categoryId) {
+                    $q->where('category_id', $categoryId);
+                }
+                if ($accountTitleId) {
+                    $q->where('particular_id', $accountTitleId);
+                }
+            });
+        }
+
+        $postedDisbursements = $postedDisbursementsQuery->get();
+        $postedDisbursementAmount = (float) $postedDisbursements->sum('amount');
+
+        $monthlyPostedDisbursements = $postedDisbursements->groupBy(fn ($item) => (int) date('n', strtotime((string) $item->date_encoded)))
+            ->map(fn ($group) => (float) $group->sum('amount'));
+
+        $yearlyPostedDisbursements = $postedDisbursements->groupBy(fn ($item) => (int) date('Y', strtotime((string) $item->date_encoded)))
+            ->map(fn ($group) => (float) $group->sum('amount'));
+
         $selectedMonthLabel = 'All Months';
         if ($startDate && $endDate) {
             $startMonth = (int) date('n', strtotime($startDate));
@@ -109,7 +145,9 @@ class ReportController extends Controller
             $selectedBudgetItems = $annualBudgetItems;
         }
         $monthAppropriation = (float) $selectedBudgetItems->sum('appropriation');
-        $monthExpenditure = (float) $selectedBudgetItems->sum(fn ($item) => $item->postedExpenditureTotal());
+        $monthExpenditure = $startDate && $endDate
+            ? (float) $postedDisbursements->sum('amount')
+            : ($selectedMonth ? (float) ($monthlyPostedDisbursements[$selectedMonth] ?? 0) : (float) $postedDisbursements->sum('amount'));
 
         $selectedMonthPerformance = [
             'month_label' => $selectedMonthLabel,
@@ -150,7 +188,28 @@ class ReportController extends Controller
             ->groupBy(fn ($item) => (int) $item->month)
             ->map(function ($items, $month) {
                 $appropriation = (float) $items->sum('appropriation');
-                $expenditure = (float) $items->sum(fn ($item) => $item->postedExpenditureTotal());
+                $expenditure = (float) $items->sum(function ($item) use ($month, $postedDisbursements) {
+                    return (float) $postedDisbursements
+                        ->filter(function ($disbursement) use ($item, $month) {
+                            if ((int) date('n', strtotime((string) $disbursement->date_encoded)) !== (int) $month) {
+                                return false;
+                            }
+
+                            if ((int) ($disbursement->expense?->category_id ?? 0) !== (int) ($item->category_id ?? 0)) {
+                                return false;
+                            }
+
+                            if ((int) ($disbursement->expense?->particular_id ?? 0) === (int) ($item->particular_id ?? 0)) {
+                                return true;
+                            }
+
+                            $expenseTitle = strtolower(trim((string) ($disbursement->expense?->particular?->particular ?? $disbursement->expense?->particular?->account_name ?? '')));
+                            $budgetTitle = strtolower(trim((string) ($item->particular?->particular ?? $item->particular?->account_name ?? '')));
+
+                            return $expenseTitle !== '' && $budgetTitle !== '' && $expenseTitle === $budgetTitle;
+                        })
+                        ->sum('amount');
+                });
 
                 return [
                     'month' => (int) $month,
