@@ -14,6 +14,7 @@ class Expense extends Model
         'description',
         'category_id',
         'particular_id',
+        'budget_item_id',
         'amount',
         'paid',
         'date_encoded',
@@ -42,6 +43,11 @@ class Expense extends Model
     public function accountTitle(): BelongsTo
     {
         return $this->particular();
+    }
+
+    public function budgetItem(): BelongsTo
+    {
+        return $this->belongsTo(BudgetItem::class, 'budget_item_id');
     }
 
     public function disbursements(): HasMany

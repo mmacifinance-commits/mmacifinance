@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Disbursement extends Model
 {
+    public const STATUS_POSTED = 'posted';
+
     protected $fillable = [
         'disbursement_no',
         'expense_id',

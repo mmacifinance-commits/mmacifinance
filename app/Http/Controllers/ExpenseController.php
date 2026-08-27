@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use App\Services\BudgetUtilizationService;
 
 class ExpenseController extends Controller
 {
@@ -121,6 +122,7 @@ class ExpenseController extends Controller
         $lastExpense = Expense::latest('id')->first();
         $nextNum = $lastExpense ? intval(substr($lastExpense->ref_no, 3)) + 1 : 1;
         $validated['ref_no'] = 'EXP' . str_pad($nextNum, 8, '0', STR_PAD_LEFT);
+        $validated['budget_item_id'] = $this->resolveBudgetItemId($validated);
 
         $expense = Expense::create($validated);
 
@@ -185,6 +187,7 @@ class ExpenseController extends Controller
             ]);
         }
 
+        $validated['budget_item_id'] = $this->resolveBudgetItemId($validated);
         $expense->update($validated);
 
         $warning = $this->budgetOverrunWarning($expense);
@@ -441,6 +444,11 @@ class ExpenseController extends Controller
 
             $rows[$i]['category_id'] = $category->id;
             $rows[$i]['particular_id'] = $particular->id;
+            $rows[$i]['budget_item_id'] = $this->resolveBudgetItemId([
+                'category_id' => $category->id,
+                'particular_id' => $particular->id,
+                'date_encoded' => $row['date_encoded'],
+            ]);
 
             $categoryHasAppropriation = BudgetCategory::whereKey($category->id)
                 ->whereHas('budgetItems.budget', function ($query) use ($year) {
@@ -465,6 +473,7 @@ class ExpenseController extends Controller
                 $expense->description = $row['description'];
                 $expense->category_id = $row['category_id'];
                 $expense->particular_id = $row['particular_id'];
+                $expense->budget_item_id = $row['budget_item_id'];
                 $expense->amount = $row['amount'];
                 $expense->date_encoded = $row['date_encoded'];
                 $expense->date_approved = $row['date_approved'] !== '' ? $row['date_approved'] : null;
@@ -495,6 +504,26 @@ class ExpenseController extends Controller
             ->first();
     }
 
+    protected function resolveBudgetItemId(array $expenseData): ?int
+    {
+        $budgetItem = app(BudgetUtilizationService::class)
+            ->resolveBudgetItem(
+                (int) $expenseData['category_id'],
+                (int) $expenseData['particular_id'],
+                (string) $expenseData['date_encoded']
+            );
+
+        if (! $budgetItem) {
+            $year = (int) date('Y', strtotime((string) $expenseData['date_encoded']));
+            $month = date('F', strtotime((string) $expenseData['date_encoded']));
+            throw ValidationException::withMessages([
+                'particular_id' => "No unique monthly budget allocation matches this account title for {$month} FY {$year}.",
+            ]);
+        }
+
+        return $budgetItem->id;
+    }
+
     protected function resolveExpenseParticular(string $raw, int $categoryId): ?BudgetParticular
     {
         $value = trim($raw);
@@ -521,26 +550,13 @@ class ExpenseController extends Controller
             return null;
         }
 
-        $year = (int) date('Y', strtotime($expense->date_encoded));
-        $budget = AnnualBudget::where('year', $year)->first();
-        if (!$budget) {
-            return null;
-        }
-
-        $budgetItem = BudgetItem::where('budget_id', $budget->id)
-            ->where('particular_id', $expense->particular_id)
-            ->first();
+        $budgetItem = $expense->budgetItem;
 
         if (!$budgetItem) {
             return null;
         }
 
-        $totalPaid = Disbursement::where('status', 'posted')
-            ->whereHas('expense', function ($query) use ($year, $expense) {
-                $query->whereYear('date_encoded', $year)
-                    ->where('particular_id', $expense->particular_id);
-            })
-            ->sum('amount');
+        $totalPaid = app(BudgetUtilizationService::class)->expenditureForItem($budgetItem);
 
         $budgetAmount = (float) $budgetItem->appropriation;
         if ($totalPaid > $budgetAmount) {
