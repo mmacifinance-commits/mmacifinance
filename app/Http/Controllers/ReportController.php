@@ -124,7 +124,6 @@ class ReportController extends Controller
         }
 
         $postedDisbursements = $postedDisbursementsQuery->get();
-        $postedDisbursementAmount = (float) $postedDisbursements->sum('amount');
 
         $monthlyPostedDisbursements = $postedDisbursements->groupBy(fn ($item) => (int) date('n', strtotime((string) $item->date_encoded)))
             ->map(fn ($group) => (float) $group->sum('amount'));
@@ -186,7 +185,7 @@ class ReportController extends Controller
         // Fully utilized months remain included so the totals always reconcile.
         $yearEndUnusedBalances = $selectedBudgetItems
             ->groupBy(fn ($item) => (int) $item->month)
-            ->map(function ($items, $month) {
+            ->map(function ($items, $month) use ($postedDisbursements) {
                 $appropriation = (float) $items->sum('appropriation');
                 $expenditure = (float) $items->sum(function ($item) use ($month, $postedDisbursements) {
                     return (float) $postedDisbursements
