@@ -23,6 +23,7 @@ class ExpenseController extends Controller
         $expenses = Expense::with([
             'category',
             'particular.department',
+            'auditTrails',
             'disbursements',
         ])->latest()->get();
 
@@ -125,6 +126,12 @@ class ExpenseController extends Controller
         $validated['budget_item_id'] = $this->resolveBudgetItemId($validated);
 
         $expense = Expense::create($validated);
+        AuditTrail::log($expense, 'created', auth()->user(), 'Expense record created.', [
+            'status' => $expense->status,
+            'amount' => (float) $expense->amount,
+            'category_id' => $expense->category_id,
+            'particular_id' => $expense->particular_id,
+        ]);
 
         $warning = $this->budgetOverrunWarning($expense);
 
@@ -188,7 +195,12 @@ class ExpenseController extends Controller
         }
 
         $validated['budget_item_id'] = $this->resolveBudgetItemId($validated);
+
+        $original = $expense->getOriginal();
         $expense->update($validated);
+        AuditTrail::log($expense, 'modified', auth()->user(), 'Expense record updated.', [
+            'changes' => array_diff_assoc($validated, $original),
+        ]);
 
         $warning = $this->budgetOverrunWarning($expense);
 
@@ -323,6 +335,7 @@ class ExpenseController extends Controller
     public function destroy(Expense $expense)
     {
         $expense->delete();
+        AuditTrail::log($expense, 'deleted', auth()->user(), 'Expense record deleted.');
 
         return redirect()->route('expenses.index')->with('success', 'Expense deleted.');
     }
@@ -480,6 +493,18 @@ class ExpenseController extends Controller
                 $expense->status = $row['status'];
                 $expense->notes = $row['notes'] !== '' ? $row['notes'] : null;
                 $expense->save();
+                AuditTrail::log(
+                    $expense,
+                    $isNew ? 'created' : 'modified',
+                    auth()->user(),
+                    $row['notes'] !== '' ? $row['notes'] : ($isNew ? 'Expense imported from CSV.' : 'Expense updated from CSV.'),
+                    [
+                        'status' => $expense->status,
+                        'amount' => (float) $expense->amount,
+                        'category_id' => $expense->category_id,
+                        'particular_id' => $expense->particular_id,
+                    ]
+                );
 
                 $isNew ? $created++ : $updated++;
             }
