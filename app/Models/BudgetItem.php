@@ -155,11 +155,10 @@ class BudgetItem extends Model
 
         return Disbursement::query()
             ->whereRaw('LOWER(TRIM(COALESCE(status, ""))) LIKE ?', ['%posted%'])
+            ->whereYear('date_encoded', $budgetYear)
             ->when((int) ($this->month ?? 0) > 0, fn ($query) => $query->whereMonth('date_encoded', (int) $this->month))
-            ->whereHas('expense', function ($expenseQuery) use ($budgetYear) {
-                $expenseQuery
-                    ->whereYear('date_encoded', $budgetYear)
-                    ->where(fn ($matchQuery) => $this->applyBudgetLineIdentityMatch($matchQuery));
+            ->whereHas('expense', function ($expenseQuery) {
+                $expenseQuery->where(fn ($matchQuery) => $this->applyBudgetLineIdentityMatch($matchQuery));
             });
     }
 
@@ -216,6 +215,10 @@ class BudgetItem extends Model
                     ->whereHas('category', fn ($categoryQuery) => $categoryQuery->whereRaw('LOWER(TRIM(name)) = ?', [$budgetCategory]))
                     ->whereHas('particular.department', fn ($departmentQuery) => $departmentQuery->whereRaw('LOWER(TRIM(name)) = ?', [$budgetDepartment]));
             });
+        }
+
+        if ($budgetCategoryId > 0) {
+            $matchQuery->orWhere('category_id', $budgetCategoryId);
         }
     }
 
@@ -355,7 +358,7 @@ class BudgetItem extends Model
         $particularId = (int) ($item->particular_id ?? 0);
         $title = $item->normalizedBudgetTitle();
 
-        return (float) $rows
+        $exactTotal = (float) $rows
             ->filter(function ($row) use ($month, $categoryId, $particularId, $title) {
                 if ((int) ($row->month ?? 0) !== $month || (int) ($row->category_id ?? 0) !== $categoryId) {
                     return false;
@@ -374,6 +377,14 @@ class BudgetItem extends Model
 
                 return $rowParticular === $title || $rowAccountName === $title;
             })
+            ->sum('total');
+
+        if ($exactTotal > 0) {
+            return $exactTotal;
+        }
+
+        return (float) $rows
+            ->filter(fn ($row) => (int) ($row->month ?? 0) === $month && (int) ($row->category_id ?? 0) === $categoryId)
             ->sum('total');
     }
 
