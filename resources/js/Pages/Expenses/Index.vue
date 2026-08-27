@@ -194,7 +194,7 @@ async function save() {
 }
 
 async function remove(id) {
-    if (!confirm('Are you sure you want to delete this expense record?')) return
+    if (!confirm('Warning: this cannot be undone. Delete this expense record?')) return
     if (String(id).startsWith('offline-')) {
         offlineRows.value = offlineRows.value.filter(r => r.id !== id)
         return

@@ -73,7 +73,7 @@ function save() {
 }
 
 function remove(id) {
-    if (confirm('Delete this income item?')) router.delete(`/income/${id}`)
+    if (confirm('Warning: this cannot be undone. Delete this income item?')) router.delete(`/income/${id}`)
 }
 
 function exportCsv() {

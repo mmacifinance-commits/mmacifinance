@@ -45,7 +45,7 @@ function save() {
     if (editing.value) form.put(`/budget-particulars/${editing.value}`, { onSuccess: () => { showModal.value = false } })
     else form.post('/budget-particulars', { onSuccess: () => { showModal.value = false } })
 }
-function remove(id) { if (confirm('Are you sure you want to delete this Account Title?')) router.delete(`/budget-particulars/${id}`) }
+function remove(id) { if (confirm('Warning: this cannot be undone. Delete this Account Title?')) router.delete(`/budget-particulars/${id}`) }
 function exportCsv() { window.location.href = '/budget-particulars/export-csv' }
 function importCsv() {
     importForm.post('/budget-particulars/import-csv', {

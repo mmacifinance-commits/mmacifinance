@@ -19,7 +19,7 @@ function save() {
     if (editing.value) form.put(`/budget-categories/${editing.value}`, { onSuccess: () => { showModal.value = false } })
     else form.post('/budget-categories', { onSuccess: () => { showModal.value = false } })
 }
-function remove(id) { if (confirm('Delete category?')) router.delete(`/budget-categories/${id}`) }
+function remove(id) { if (confirm('Warning: this cannot be undone. Delete category?')) router.delete(`/budget-categories/${id}`) }
 function exportCsv() { window.location.href = '/budget-categories/export-csv' }
 function importCsv() {
     importForm.post('/budget-categories/import-csv', {

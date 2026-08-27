@@ -260,7 +260,7 @@ async function save() {
 
 function remove(id) {
     if (!isOnline.value) return alert('Deleting financial records requires an internet connection.')
-    if (confirm('Are you sure you want to delete this disbursement record?')) {
+    if (confirm('Warning: this cannot be undone. Delete this disbursement record?')) {
         router.delete(`/disbursements/${id}`)
     }
 }

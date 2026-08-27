@@ -206,7 +206,7 @@ function saveItem() {
 }
 
 function removeItem(itemId) {
-    if (confirm('Delete this monthly budget allocation item?')) router.delete(`/annual-budgets/${props.budget.id}/items/${itemId}`)
+    if (confirm('Warning: this cannot be undone. Delete this monthly budget allocation item?')) router.delete(`/annual-budgets/${props.budget.id}/items/${itemId}`)
 }
 
 function exportCsv() {

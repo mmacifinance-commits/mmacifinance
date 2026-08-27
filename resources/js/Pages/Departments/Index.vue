@@ -41,7 +41,7 @@ function save() {
 }
 
 function remove(id) {
-    if (confirm('Delete this responsibility center?')) {
+    if (confirm('Warning: this cannot be undone. Delete this responsibility center?')) {
         router.delete(`/departments/${id}`)
     }
 }

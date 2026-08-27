@@ -46,7 +46,7 @@ function createBudget() {
     budgetForm.post('/annual-budgets', { onSuccess: () => { showNewBudget.value = false } })
 }
 function removeBudget(id) {
-    if (confirm('Delete this entire budget year and all its items?')) router.delete(`/annual-budgets/${id}`)
+    if (confirm('Warning: this cannot be undone. Delete this entire budget year and all its items?')) router.delete(`/annual-budgets/${id}`)
 }
 
 function budgetTotal(items, field) { return items ? items.reduce((s, i) => s + Number(i[field] || 0), 0) : 0 }
