@@ -119,7 +119,11 @@ document.addEventListener('click', (event) => {
     }
 
     event.preventDefault()
-    window.location.assign(link.href)
+    router.visit(link.href, {
+        preserveScroll: true,
+        preserveState: true,
+        replace: true,
+    })
 }, true)
 
 createInertiaApp({
