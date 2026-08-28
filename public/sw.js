@@ -7,7 +7,28 @@
  *  - Never intercept POST/PUT/DELETE (those go through the offline queue)
  */
 
-const CACHE_NAME = 'budget-tracker-v4'
+const CACHE_NAME = 'budget-tracker-v5'
+
+function normalizePageUrl(url) {
+  const parsed = new URL(url, self.location.origin)
+  return `${parsed.origin}${parsed.pathname}${parsed.search}`
+}
+
+async function cachePageResponse(url, response) {
+  if (!response || !response.ok) return response
+  const cache = await caches.open(CACHE_NAME)
+  await cache.put(normalizePageUrl(url), response.clone())
+  return response
+}
+
+async function matchPageResponse(url) {
+  const cache = await caches.open(CACHE_NAME)
+  const normalized = normalizePageUrl(url)
+  const parsed = new URL(url, self.location.origin)
+  const pathnameOnly = `${parsed.origin}${parsed.pathname}`
+
+  return cache.match(normalized).then((cached) => cached || cache.match(pathnameOnly))
+}
 
 // Assets to pre-cache on install
 const PRECACHE_URLS = [
@@ -77,14 +98,8 @@ self.addEventListener('fetch', (event) => {
   if (request.headers.get('X-Inertia')) {
     event.respondWith(
       fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const clone = response.clone()
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
-          }
-          return response
-        })
-        .catch(() => caches.match(request).then((cached) => cached || new Response(JSON.stringify({
+        .then((response) => cachePageResponse(request.url, response))
+        .catch(() => matchPageResponse(request.url).then((cached) => cached || new Response(JSON.stringify({
           message: 'This page has not been cached for offline use yet.'
         }), {
           status: 503,
@@ -119,16 +134,9 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
-        .then((response) => {
-          // Cache a fresh copy of HTML pages
-          if (response.ok) {
-            const clone = response.clone()
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
-          }
-          return response
-        })
+        .then((response) => cachePageResponse(request.url, response))
         .catch(() =>
-          caches.match(request).then(
+          matchPageResponse(request.url).then(
             (cached) => cached || caches.match('/offline.html').then((offline) => offline || new Response('Offline', {
               status: 503,
               statusText: 'Service Unavailable',

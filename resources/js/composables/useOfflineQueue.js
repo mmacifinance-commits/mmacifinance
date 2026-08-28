@@ -402,7 +402,9 @@ export function useOfflineQueue() {
 
 export async function savePageSnapshot(page) {
   if (!page?.url || !page?.component) return null
-  const pathname = new URL(page.url, window.location.origin).pathname
+  const parsed = new URL(page.url, window.location.origin)
+  const snapshotUrl = `${parsed.pathname}${parsed.search}`
+  const pathname = parsed.pathname
   const cacheable = [
     /^\/$/,
     /^\/income(?:\/|$)/,
@@ -414,7 +416,7 @@ export async function savePageSnapshot(page) {
   ].some((pattern) => pattern.test(pathname))
   if (!cacheable) return null
   const snapshot = {
-    url: page.url,
+    url: snapshotUrl,
     component: page.component,
     props: page.props || {},
     cachedAt: new Date().toISOString(),
@@ -426,7 +428,10 @@ export async function savePageSnapshot(page) {
 }
 
 export async function getPageSnapshot(url) {
-  const snapshot = await snapshotGet(url)
+  const parsed = new URL(url, window.location.origin)
+  const exactKey = `${parsed.pathname}${parsed.search}`
+  const pathKey = parsed.pathname
+  const snapshot = (await snapshotGet(exactKey)) || (await snapshotGet(pathKey))
   const ownerId = window.__BUDGET_TRACKER_USER_ID__ || null
   if (snapshot && String(snapshot.ownerId || '') !== String(ownerId || '')) return null
   if (snapshot?.cachedAt) lastSnapshotAt.value = snapshot.cachedAt

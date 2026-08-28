@@ -155,36 +155,37 @@ router.on('navigate', (event) => {
 const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
 
 // Service Worker Registration
-if ('serviceWorker' in navigator && isLocalHost) {
-    // Keep local development predictable. A stale SW can trap Inertia navigation
-    // on "Loading..." even after backend code has been fixed.
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.getRegistrations()
-            .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
-            .then(() => caches?.keys?.())
-            .then((keys) => keys ? Promise.all(keys.map((key) => caches.delete(key))) : null)
-            .catch((err) => console.warn('[SW] Local cleanup failed:', err))
-    })
-} else if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker
-            .register('/sw.js', { scope: '/' })
-            .then((registration) => {
-                console.log('[SW] Registered, scope:', registration.scope)
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', async () => {
+        try {
+            if (isLocalHost) {
+                // Local testing now needs the same SW behavior so cached pages can be
+                // validated offline. Clear older workers/caches once, then register.
+                const registrations = await navigator.serviceWorker.getRegistrations()
+                await Promise.all(registrations.map((registration) => registration.unregister()))
+                const keys = await caches?.keys?.().catch(() => [])
+                if (keys?.length) {
+                    await Promise.all(keys.map((key) => caches.delete(key)))
+                }
+            }
 
-                // Check for updates on every page load
-                registration.update()
+            const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            console.log('[SW] Registered, scope:', registration.scope)
 
-                // When a new SW is waiting, activate it immediately
-                registration.addEventListener('updatefound', () => {
-                    const newWorker = registration.installing
-                    newWorker?.addEventListener('statechange', () => {
-                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            newWorker.postMessage('SKIP_WAITING')
-                        }
-                    })
+            // Check for updates on every page load
+            registration.update()
+
+            // When a new SW is waiting, activate it immediately
+            registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing
+                newWorker?.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        newWorker.postMessage('SKIP_WAITING')
+                    }
                 })
             })
-            .catch((err) => console.warn('[SW] Registration failed:', err))
+        } catch (err) {
+            console.warn('[SW] Registration failed:', err)
+        }
     })
 }
