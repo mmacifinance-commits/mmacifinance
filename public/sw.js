@@ -7,7 +7,7 @@
  *  - Never intercept POST/PUT/DELETE (those go through the offline queue)
  */
 
-const CACHE_NAME = 'budget-tracker-v6'
+const CACHE_NAME = 'budget-tracker-v7'
 
 function normalizePageUrl(url) {
   const parsed = new URL(url, self.location.origin)
