@@ -7,27 +7,44 @@
  *  - Never intercept POST/PUT/DELETE (those go through the offline queue)
  */
 
-const CACHE_NAME = 'budget-tracker-v5'
+const CACHE_NAME = 'budget-tracker-v6'
 
 function normalizePageUrl(url) {
   const parsed = new URL(url, self.location.origin)
   return `${parsed.origin}${parsed.pathname}${parsed.search}`
 }
 
+function cacheKey(url, kind = 'page') {
+  const parsed = new URL(url, self.location.origin)
+  return new Request(`${parsed.origin}/__offline_cache__/${kind}${parsed.pathname}${parsed.search}`, { method: 'GET' })
+}
+
 async function cachePageResponse(url, response) {
   if (!response || !response.ok) return response
+  const contentType = response.headers.get('content-type') || ''
+  if (!contentType.includes('text/html')) return response
   const cache = await caches.open(CACHE_NAME)
-  await cache.put(normalizePageUrl(url), response.clone())
+  await cache.put(cacheKey(url, 'page'), response.clone())
   return response
 }
 
 async function matchPageResponse(url) {
   const cache = await caches.open(CACHE_NAME)
-  const normalized = normalizePageUrl(url)
-  const parsed = new URL(url, self.location.origin)
-  const pathnameOnly = `${parsed.origin}${parsed.pathname}`
+  return cache.match(cacheKey(url, 'page'))
+}
 
-  return cache.match(normalized).then((cached) => cached || cache.match(pathnameOnly))
+async function cacheInertiaResponse(url, response) {
+  if (!response || !response.ok) return response
+  const contentType = response.headers.get('content-type') || ''
+  if (!contentType.includes('application/json')) return response
+  const cache = await caches.open(CACHE_NAME)
+  await cache.put(cacheKey(url, 'inertia'), response.clone())
+  return response
+}
+
+async function matchInertiaResponse(url) {
+  const cache = await caches.open(CACHE_NAME)
+  return cache.match(cacheKey(url, 'inertia'))
 }
 
 // Assets to pre-cache on install
@@ -98,8 +115,8 @@ self.addEventListener('fetch', (event) => {
   if (request.headers.get('X-Inertia')) {
     event.respondWith(
       fetch(request)
-        .then((response) => cachePageResponse(request.url, response))
-        .catch(() => matchPageResponse(request.url).then((cached) => cached || new Response(JSON.stringify({
+        .then((response) => cacheInertiaResponse(request.url, response))
+        .catch(() => matchInertiaResponse(request.url).then((cached) => cached || new Response(JSON.stringify({
           message: 'This page has not been cached for offline use yet.'
         }), {
           status: 503,
