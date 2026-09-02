@@ -1,2 +1,10 @@
 User-agent: *
-Disallow:
+Disallow: /admin/
+Disallow: /login
+Disallow: /logout
+Disallow: /2fa/
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /storage/
+
+Sitemap: https://mmacifinanceoffice.laravel.cloud/sitemap.xml
