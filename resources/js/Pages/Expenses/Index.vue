@@ -58,8 +58,23 @@ const selectedCategoryId = computed(() => form.category_id ? String(form.categor
 const accountTitleOptions = computed(() => {
     const items = (props.accountTitles || props.particulars || [])
     if (!selectedCategoryId.value) return []
-    return items.filter((item) => String(item.category_id ?? item.budget_category_id ?? '') === selectedCategoryId.value)
+    return items.filter((item) => String(item.category_id ?? item.budget_category_id ?? '') === selectedCategoryId.value && matchingAllocations(item.id).length === 1)
 })
+
+function matchingAllocations(particularId) {
+    const category = categoryOptions.value.find(c => String(c.id) === selectedCategoryId.value)
+    const allocations = (category?.budget_items || category?.budgetItems || []).filter(item =>
+        String(item.particular_id) === String(particularId) && String(item.budget?.year) === selectedYear.value
+    )
+    const month = Number(form.date_encoded?.slice(5, 7))
+    const sameMonth = allocations.filter(item => Number(item.month) === month)
+    return sameMonth.length === 1 ? sameMonth : allocations
+}
+
+function accountOptionLabel(account) {
+    const allocation = matchingAllocations(account.id)[0]
+    return [account.particular, account.department?.name || account.department?.code, allocation?.ref_no].filter(Boolean).join(' - ')
+}
 
 const filteredExpenses = computed(() => {
     const all = [...props.expenses, ...offlineRows.value]
@@ -443,7 +458,7 @@ function splitDate(d) {
         <form @submit.prevent="save">
             <div v-if="saveError || expenseErrorMessages.length" class="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
                 <p class="font-semibold">Please correct the following before saving:</p>
-                <p v-if="saveError" class="mt-1">{{ saveError }}</p>
+                <p v-if="saveError && !expenseErrorMessages.length" class="mt-1">{{ saveError }}</p>
                 <ul v-if="expenseErrorMessages.length" class="mt-1 list-disc pl-5">
                     <li v-for="(message, index) in expenseErrorMessages" :key="`${message}-${index}`">{{ message }}</li>
                 </ul>
@@ -451,7 +466,11 @@ function splitDate(d) {
             <div class="grid gap-4 sm:grid-cols-2">
                 <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1.5">Description</label><input v-model="form.description" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.description }" required /><p v-if="form.errors.description" class="mt-1 text-xs text-rose-600">{{ form.errors.description }}</p></div>
                 <div><label class="block text-sm font-medium mb-1.5">Category</label><select v-model="form.category_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.category_id }" required><option value="">Select Category</option><option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.name }}</option></select><p v-if="form.errors.category_id" class="mt-1 text-xs text-rose-600">{{ form.errors.category_id }}</p></div>
-                <div><label class="block text-sm font-medium mb-1.5">Account Title</label><select v-model="form.particular_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.particular_id }" :disabled="!form.category_id" required><option value="">Select Account Title</option><option v-for="p in accountTitleOptions" :key="p.id" :value="p.id">{{ p.particular }}</option></select><p v-if="form.errors.particular_id" class="mt-1 text-xs text-rose-600">{{ form.errors.particular_id }}</p></div>
+                <div><label class="block text-sm font-medium mb-1.5">Account Title</label><select v-model="form.particular_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.particular_id }" :disabled="!form.category_id" required><option value="">Select Account Title</option><option v-for="p in accountTitleOptions" :key="p.id" :value="p.id">{{ accountOptionLabel(p) }}</option></select><p v-if="form.errors.particular_id" class="mt-1 text-xs text-rose-600">{{ form.errors.particular_id }}</p></div>
+                <p v-if="form.category_id" class="sm:col-span-2 text-xs text-gray-600">
+                    Account choices show the responsibility center and monthly budget reference for FY {{ selectedYear }}.
+                    <span v-if="!accountTitleOptions.length">No unambiguous allocation is available. Check Annual Budget &gt; Manage Items for the account and date selected.</span>
+                </p>
                 <div><label class="block text-sm font-medium mb-1.5">Amount (₱)</label><input v-model.number="form.amount" type="number" step="0.01" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.amount }" required /><p v-if="form.errors.amount" class="mt-1 text-xs text-rose-600">{{ form.errors.amount }}</p></div>
                 <div class="rounded-lg border border-dashed border-emerald-200 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-800">
                     Paid amounts are controlled by linked disbursements only.

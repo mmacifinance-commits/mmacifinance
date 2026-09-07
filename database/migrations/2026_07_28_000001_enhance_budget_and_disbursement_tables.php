@@ -25,7 +25,9 @@ return new class extends Migration {
         });
 
         // 3. Update disbursements
-        \Illuminate\Support\Facades\DB::statement("ALTER TABLE disbursements MODIFY COLUMN status VARCHAR(40) NOT NULL DEFAULT 'draft'");
+        if (\Illuminate\Support\Facades\DB::getDriverName() === 'mysql') {
+            \Illuminate\Support\Facades\DB::statement("ALTER TABLE disbursements MODIFY COLUMN status VARCHAR(40) NOT NULL DEFAULT 'draft'");
+        }
 
         Schema::table('disbursements', function (Blueprint $table) {
             if (!Schema::hasColumn('disbursements', 'remarks')) {

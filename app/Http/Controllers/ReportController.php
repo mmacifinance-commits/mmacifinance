@@ -7,16 +7,14 @@ use App\Models\BudgetCategory;
 use App\Models\BudgetItem;
 use App\Models\BudgetParticular;
 use App\Models\Department;
-use App\Models\Disbursement;
 use App\Models\Expense;
-use App\Models\IncomeAllocation;
+use App\Services\BudgetUtilizationService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class ReportController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, BudgetUtilizationService $utilization)
     {
         $selectedYear = (int) ($request->query('year') ?: date('Y'));
         $selectedMonth = $request->query('month') ? (int) $request->query('month') : null;
@@ -58,30 +56,15 @@ class ReportController extends Controller
         }
 
         // Disbursements Query
-        $dsbQuery = Disbursement::query()
-            ->with(['expense.category', 'expense.particular.department', 'approvedBy', 'postedBy'])
-            ->where('status', 'posted');
-        if ($startDate && $endDate) {
-            $dsbQuery->whereBetween('date_encoded', [$startDate, $endDate]);
-        } elseif ($selectedMonth) {
-            $dsbQuery->whereYear('date_encoded', $selectedYear)->whereMonth('date_encoded', $selectedMonth);
-        } else {
-            $dsbQuery->whereYear('date_encoded', $selectedYear);
-        }
-
-        if ($departmentId || $categoryId || $accountTitleId) {
-            $dsbQuery->whereHas('expense', function ($q) use ($departmentId, $categoryId, $accountTitleId) {
-                if ($departmentId) {
-                    $q->whereHas('particular', fn($p) => $p->where('department_id', $departmentId));
-                }
-                if ($categoryId) {
-                    $q->where('category_id', $categoryId);
-                }
-                if ($accountTitleId) {
-                    $q->where('particular_id', $accountTitleId);
-                }
-            });
-        }
+        $dsbQuery = $utilization->queryForBudgetFilters(
+            $selectedYear,
+            $selectedMonth,
+            $startDate,
+            $endDate,
+            $departmentId,
+            $categoryId,
+            $accountTitleId
+        )->with(['expense.category', 'expense.particular.department', 'expense.budgetItem', 'approvedBy', 'postedBy']);
 
         $annualBudgetItemsQuery = BudgetItem::query()
             ->with(['budget', 'category', 'particular.department'])
@@ -99,19 +82,7 @@ class ReportController extends Controller
         $annualBudgetItems = $annualBudgetItemsQuery->get();
         BudgetItem::hydrateDerivedTotals($annualBudgetItems);
 
-        $selectedBudgetItemIds = $annualBudgetItems
-            ->when($selectedMonth, fn ($items) => $items->where('month', $selectedMonth))
-            ->pluck('id');
-
-        $postedDisbursementsQuery = Disbursement::query()
-            ->with(['expense.category', 'expense.particular.department', 'expense.budgetItem'])
-            ->where('status', Disbursement::STATUS_POSTED)
-            ->whereHas('expense', fn ($query) => $query->whereIn('budget_item_id', $selectedBudgetItemIds));
-        if ($startDate && $endDate) {
-            $postedDisbursementsQuery->whereBetween('date_encoded', [$startDate, $endDate]);
-        }
-
-        $postedDisbursements = $postedDisbursementsQuery->get();
+        $postedDisbursements = (clone $dsbQuery)->get();
 
         $monthlyPostedDisbursements = $postedDisbursements->groupBy(fn ($item) => (int) ($item->expense?->budgetItem?->month ?? 0))
             ->map(fn ($group) => (float) $group->sum('amount'));

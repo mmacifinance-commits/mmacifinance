@@ -2,21 +2,24 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\AnnualBudget;
-use App\Models\Expense;
 use App\Models\BudgetItem;
-use App\Models\Disbursement;
 use App\Models\Income;
+use App\Services\BudgetUtilizationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
 use Inertia\Inertia;
 
 class IncomeController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, BudgetUtilizationService $utilization)
     {
+        $yearExpression = DB::getDriverName() === 'sqlite'
+            ? "CAST(strftime('%Y', date_encoded) AS INTEGER)"
+            : 'YEAR(date_encoded)';
+
         $availableYears = Income::query()
-            ->selectRaw('YEAR(date_encoded) as year')
+            ->selectRaw("{$yearExpression} as year")
             ->distinct()
             ->pluck('year')
             ->concat([(int) date('Y')])
@@ -51,19 +54,20 @@ class IncomeController extends Controller
         $recordCount = (clone $query)->count();
         $incomeRecords = $query->latest('date_encoded')->paginate(25)->withQueryString();
         $incomeTotalQuery = Income::query()->whereYear('date_encoded', $selectedYear);
-        $expenseTotalQuery = Disbursement::query()
-            ->where('status', 'posted')
-            ->whereYear('date_encoded', $selectedYear);
+        $expenseTotalQuery = $utilization->queryForBudgetFilters(
+            $selectedYear,
+            $selectedMonth,
+            $startDate,
+            $endDate
+        );
         $appropriationTotalQuery = BudgetItem::query()
             ->whereHas('budget', fn ($q) => $q->where('year', $selectedYear));
 
         if ($startDate && $endDate) {
             $incomeTotalQuery->whereBetween('date_encoded', [$startDate, $endDate]);
-            $expenseTotalQuery->whereBetween('date_encoded', [$startDate, $endDate]);
             $appropriationTotalQuery->whereHas('budget', fn ($q) => $q->where('year', $selectedYear));
         } elseif ($selectedMonth) {
             $incomeTotalQuery->whereMonth('date_encoded', $selectedMonth);
-            $expenseTotalQuery->whereMonth('date_encoded', $selectedMonth);
             $appropriationTotalQuery->where('month', $selectedMonth);
         }
 

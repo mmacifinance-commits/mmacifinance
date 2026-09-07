@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -151,16 +152,25 @@ class AuthSecurityTest extends TestCase
         $response = $this->post('/forgot-password', [
             'email' => $user->email,
         ]);
-        $response->assertRedirect(route('password.reset'));
+        $response->assertRedirect(route('password.reset', ['email' => $user->email]));
 
-        // Retrieve code from Cache
-        $code = Cache::get('password_reset_code_' . $user->email);
-        $this->assertNotNull($code);
+        $token = DB::table('password_reset_tokens')->where('email', $user->email)->first();
+        $this->assertNotNull($token);
+
+        DB::table('password_reset_tokens')->where('email', $user->email)->update([
+            'token' => Hash::make('123456'),
+            'created_at' => now(),
+        ]);
+
+        $this->withSession(['password_reset_email' => $user->email])
+            ->post('/reset-password/verify', [
+                'email' => $user->email,
+                'code' => '123456',
+            ]);
 
         // Reset password
-        $response = $this->withSession(['password_reset_email' => $user->email])
-            ->post('/reset-password', [
-                'code' => $code,
+        $response = $this->post('/reset-password', [
+                'email' => $user->email,
                 'password' => 'newpassword123',
                 'password_confirmation' => 'newpassword123',
             ]);

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\PasswordResetMail;
@@ -33,12 +34,11 @@ class PasswordResetTest extends TestCase
             'email' => ' ADMIN@MMAC.EDU.PH ',
         ]);
 
-        $response->assertRedirect(route('password.reset'));
+        $response->assertRedirect(route('password.reset', ['email' => 'admin@mmac.edu.ph']));
         $response->assertSessionHas('message', 'A verification code has been sent to your email.');
 
-        $cachedCode = Cache::get('password_reset_code_admin@mmac.edu.ph');
-        $this->assertNotNull($cachedCode);
-        $this->assertEquals(6, strlen($cachedCode));
+        $token = DB::table('password_reset_tokens')->where('email', 'admin@mmac.edu.ph')->first();
+        $this->assertNotNull($token);
 
         Mail::assertSent(PasswordResetMail::class, function ($mail) use ($user) {
             return $mail->hasTo('admin@mmac.edu.ph');
@@ -79,14 +79,24 @@ class PasswordResetTest extends TestCase
             'lockout_level' => 2,
         ]);
 
-        Cache::put('password_reset_code_' . $user->email, '123456', now()->addMinutes(10));
+        DB::table('password_reset_tokens')->insert([
+            'email' => $user->email,
+            'token' => Hash::make('123456'),
+            'created_at' => now(),
+        ]);
 
-        $response = $this->withSession(['password_reset_email' => $user->email])
-            ->post('/reset-password', [
-                'code' => '123 456', // Padded with space like when user copies from email
-                'password' => 'newsecret123',
-                'password_confirmation' => 'newsecret123',
-            ]);
+        $this->withSession(['password_reset_email' => $user->email])
+            ->post('/reset-password/verify', [
+                'email' => $user->email,
+                'code' => '123 456',
+            ])
+            ->assertRedirect(route('password.reset', ['email' => $user->email, 'verified' => 1]));
+
+        $response = $this->post('/reset-password', [
+            'email' => $user->email,
+            'password' => 'newsecret123',
+            'password_confirmation' => 'newsecret123',
+        ]);
 
         $response->assertRedirect(route('login'));
         $response->assertSessionHas('message', 'Your password has been changed successfully. You can now log in.');
@@ -95,20 +105,23 @@ class PasswordResetTest extends TestCase
         $this->assertTrue(Hash::check('newsecret123', $user->password));
         $this->assertEquals(0, $user->failed_login_attempts);
         $this->assertEquals(0, $user->lockout_level);
-        $this->assertNull(Cache::get('password_reset_code_' . $user->email));
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => $user->email]);
     }
 
     public function test_password_reset_fails_with_invalid_code(): void
     {
         $user = User::factory()->create();
 
-        Cache::put('password_reset_code_' . $user->email, '123456', now()->addMinutes(10));
+        DB::table('password_reset_tokens')->insert([
+            'email' => $user->email,
+            'token' => Hash::make('123456'),
+            'created_at' => now(),
+        ]);
 
         $response = $this->withSession(['password_reset_email' => $user->email])
-            ->post('/reset-password', [
+            ->post('/reset-password/verify', [
+                'email' => $user->email,
                 'code' => '654321',
-                'password' => 'newsecret123',
-                'password_confirmation' => 'newsecret123',
             ]);
 
         $response->assertSessionHasErrors(['code']);

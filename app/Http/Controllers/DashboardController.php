@@ -9,13 +9,13 @@ use App\Models\BudgetParticular;
 use App\Models\Department;
 use App\Models\Disbursement;
 use App\Models\Expense;
+use App\Services\BudgetUtilizationService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class DashboardController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, BudgetUtilizationService $utilization)
     {
         $budgets = AnnualBudget::query()
             ->latest('year')
@@ -70,29 +70,15 @@ class DashboardController extends Controller
             : $totalAppropriation;
 
         // Posted Disbursements Query (Only POSTED affect expenditures & utilization)
-        $disbQuery = Disbursement::with('expense.budgetItem')
-            ->where('status', Disbursement::STATUS_POSTED)
-            ->whereHas('expense.budgetItem.budget', fn ($query) => $query->where('year', $selectedYear));
-
-        if ($startDate && $endDate) {
-            $disbQuery->whereBetween('date_encoded', [$startDate, $endDate]);
-        } elseif ($selectedMonth) {
-            $disbQuery->whereHas('expense.budgetItem', fn ($query) => $query->where('month', $selectedMonth));
-        }
-
-        if ($departmentId || $categoryId || $accountTitleId) {
-            $disbQuery->whereHas('expense', function ($q) use ($departmentId, $categoryId, $accountTitleId) {
-                if ($departmentId) {
-                    $q->whereHas('particular', fn($p) => $p->where('department_id', $departmentId));
-                }
-                if ($categoryId) {
-                    $q->where('category_id', $categoryId);
-                }
-                if ($accountTitleId) {
-                    $q->where('particular_id', $accountTitleId);
-                }
-            });
-        }
+        $disbQuery = $utilization->queryForBudgetFilters(
+            $selectedYear,
+            $selectedMonth,
+            $startDate,
+            $endDate,
+            $departmentId,
+            $categoryId,
+            $accountTitleId
+        )->with('expense.budgetItem');
 
         $postedDisbursements = $disbQuery->get();
         $totalExpenditure = (float) $postedDisbursements->sum('amount');
@@ -109,7 +95,7 @@ class DashboardController extends Controller
         foreach ($categories as $cat) {
             $catAppr = (float) $budgetItems->where('category_id', $cat->id)->sum('appropriation');
             $catExp = (float) $postedDisbursements->filter(function ($d) use ($cat) {
-                return $d->expense?->category_id == $cat->id || strtolower(trim($d->source)) === strtolower(trim($cat->name));
+                return $d->expense?->budgetItem?->category_id == $cat->id;
             })->sum('amount');
 
             if ($catAppr > 0 || $catExp > 0) {
@@ -141,27 +127,12 @@ class DashboardController extends Controller
             ->groupBy('annual_budgets.year')
             ->pluck('total', 'year');
 
-        $yearExpendituresQuery = Disbursement::query()
-            ->join('expenses', 'disbursements.expense_id', '=', 'expenses.id')
-            ->join('budget_items', 'expenses.budget_item_id', '=', 'budget_items.id')
-            ->join('annual_budgets', 'budget_items.budget_id', '=', 'annual_budgets.id')
-            ->whereIn('annual_budgets.year', $compareYears)
-            ->where('disbursements.status', Disbursement::STATUS_POSTED);
-        if ($departmentId || $categoryId || $accountTitleId) {
-            if ($categoryId) { $yearExpendituresQuery->where('budget_items.category_id', $categoryId); }
-            if ($accountTitleId) { $yearExpendituresQuery->where('budget_items.particular_id', $accountTitleId); }
-            if ($departmentId) {
-                $yearExpendituresQuery->whereExists(function ($query) use ($departmentId) {
-                    $query->selectRaw('1')->from('budget_particulars')
-                        ->whereColumn('budget_particulars.id', 'budget_items.particular_id')
-                        ->where('budget_particulars.department_id', $departmentId);
-                });
-            }
-        }
-        $yearExpenditures = $yearExpendituresQuery
-            ->selectRaw('annual_budgets.year as year, SUM(disbursements.amount) as total')
-            ->groupBy('annual_budgets.year')
-            ->pluck('total', 'year');
+        $yearExpenditures = $utilization->totalsByBudgetYear(
+            $compareYears,
+            $departmentId,
+            $categoryId,
+            $accountTitleId
+        );
 
         $multiYearComparison = collect($compareYears)->map(function ($y) use ($yearAppropriations, $yearExpenditures) {
             $yAppr = (float) ($yearAppropriations[$y] ?? 0);
@@ -188,27 +159,14 @@ class DashboardController extends Controller
             ->groupBy('month')
             ->pluck('total', 'month');
 
-        $monthlyExpendituresQuery = Disbursement::query()
-            ->join('expenses', 'disbursements.expense_id', '=', 'expenses.id')
-            ->join('budget_items', 'expenses.budget_item_id', '=', 'budget_items.id')
-            ->join('annual_budgets', 'budget_items.budget_id', '=', 'annual_budgets.id')
-            ->where('annual_budgets.year', $selectedYear)
-            ->where('disbursements.status', Disbursement::STATUS_POSTED);
-        if ($departmentId || $categoryId || $accountTitleId) {
-            if ($categoryId) { $monthlyExpendituresQuery->where('budget_items.category_id', $categoryId); }
-            if ($accountTitleId) { $monthlyExpendituresQuery->where('budget_items.particular_id', $accountTitleId); }
-            if ($departmentId) {
-                $monthlyExpendituresQuery->whereExists(function ($query) use ($departmentId) {
-                    $query->selectRaw('1')->from('budget_particulars')
-                        ->whereColumn('budget_particulars.id', 'budget_items.particular_id')
-                        ->where('budget_particulars.department_id', $departmentId);
-                });
-            }
-        }
-        $monthlyExpenditures = $monthlyExpendituresQuery
-            ->selectRaw('budget_items.month as month, SUM(disbursements.amount) as total')
-            ->groupBy('budget_items.month')
-            ->pluck('total', 'month');
+        $monthlyExpenditures = $utilization->totalsByAllocationMonth(
+            $selectedYear,
+            $startDate,
+            $endDate,
+            $departmentId,
+            $categoryId,
+            $accountTitleId
+        );
 
         $monthlyBreakdown = collect(range(1, 12))->map(function ($m) use ($months, $monthlyAppropriations, $monthlyExpenditures) {
             $mAppr = (float) ($monthlyAppropriations[$m] ?? 0);
@@ -225,7 +183,7 @@ class DashboardController extends Controller
         })->all();
 
         // Recent Posted Transactions
-        $recentDisbursements = Disbursement::with('expense')
+        $recentDisbursements = (clone $disbQuery)
             ->latest('date_encoded')
             ->take(6)
             ->get();

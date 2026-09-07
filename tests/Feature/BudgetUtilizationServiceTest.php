@@ -9,6 +9,7 @@ use App\Models\BudgetParticular;
 use App\Models\Department;
 use App\Models\Disbursement;
 use App\Models\Expense;
+use App\Models\User;
 use App\Services\BudgetUtilizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -93,6 +94,53 @@ class BudgetUtilizationServiceTest extends TestCase
                 ->whereHas('expense', fn ($query) => $query->where('budget_item_id', $item->id))
                 ->sum('amount')
         );
+    }
+
+    public function test_financial_pages_share_posted_allocation_totals(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+        $this->makeDisbursement('DSB-POSTED', 20000, 'posted');
+
+        Disbursement::create([
+            'disbursement_no' => 'DSB-PENDING-LATEST',
+            'expense_id' => $this->expense->id,
+            'description' => 'Pending payment',
+            'source' => 'Expenditure',
+            'pay_to' => 'Supplier',
+            'amount' => 9000,
+            'method' => 'check',
+            'date_encoded' => '2026-09-01',
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($user)
+            ->get('/?year=2026&month=1')
+            ->assertInertia(fn ($page) => $page
+                ->where('stats.totalExpenditure', fn ($value) => (float) $value === 20000.0)
+                ->where('stats.totalTransactions', 1)
+                ->has('recentDisbursements', 1)
+                ->where('recentDisbursements.0.status', Disbursement::STATUS_POSTED));
+
+        $this->actingAs($user)
+            ->get('/income?year=2026&month=1')
+            ->assertInertia(fn ($page) => $page->where('stats.totalExpense', fn ($value) => (float) $value === 20000.0));
+
+        $this->actingAs($user)
+            ->get('/iaeo?year=2026&month=1')
+            ->assertInertia(fn ($page) => $page->where('stats.totalExpense', fn ($value) => (float) $value === 20000.0));
+
+        $this->actingAs($user)
+            ->get('/reports?year=2026&month=1')
+            ->assertInertia(fn ($page) => $page
+                ->where('selectedMonthPerformance.expenditure', fn ($value) => (float) $value === 20000.0)
+                ->has('disbursements', 1));
+
+        $this->actingAs($user)
+            ->get('/annual-budgets')
+            ->assertInertia(fn ($page) => $page
+                ->where('budgets.0.items.0.expenditure', fn ($value) => (float) $value === 20000.0)
+                ->where('budgets.0.items.0.balance', fn ($value) => (float) $value === 30000.0)
+                ->where('budgets.0.items.0.utilization_rate', fn ($value) => (float) $value === 40.0));
     }
 
     private function makeDisbursement(string $reference, float $amount, string $status): Disbursement

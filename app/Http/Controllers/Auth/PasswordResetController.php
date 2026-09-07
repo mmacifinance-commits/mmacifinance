@@ -73,11 +73,12 @@ class PasswordResetController extends Controller
     public function showResetForm(Request $request)
     {
         $email = $request->session()->get('password_reset_email') ?: $request->query('email');
-        $verified = $request->query('verified') === '1';
 
         if (!$email) {
             return redirect()->route('password.request');
         }
+
+        $verified = $request->session()->get('password_reset_verified_email') === $email;
 
         return Inertia::render('Auth/ResetPassword', [
             'email' => $email,
@@ -123,11 +124,13 @@ class PasswordResetController extends Controller
 
     public function resetPassword(Request $request)
     {
-        $email = $request->session()->get('password_reset_verified_email') ?: $request->input('email') ?: $request->session()->get('password_reset_email');
+        $email = $request->session()->get('password_reset_verified_email');
 
         if (!$email) {
             return redirect()->route('password.request');
         }
+
+        $request->merge(['email' => $email]);
 
         $request->validate([
             'email' => 'required|email|exists:users,email',

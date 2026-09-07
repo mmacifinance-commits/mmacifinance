@@ -16,6 +16,10 @@ class DisbursementController extends Controller
 {
     public function index(Request $request)
     {
+        $yearExpression = DB::getDriverName() === 'sqlite'
+            ? "CAST(strftime('%Y', date_encoded) AS INTEGER)"
+            : 'YEAR(date_encoded)';
+
         $disbursementQuery = Disbursement::with([
             'expense.category',
             'expense.particular',
@@ -29,7 +33,7 @@ class DisbursementController extends Controller
 
         $disbursements = $disbursementQuery->paginate(25)->withQueryString();
         $yearsFromDsb = Disbursement::query()
-            ->selectRaw('YEAR(date_encoded) as year')
+            ->selectRaw("{$yearExpression} as year")
             ->distinct()
             ->pluck('year')
             ->filter()

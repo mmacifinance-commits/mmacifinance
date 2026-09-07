@@ -92,6 +92,12 @@ class BudgetAndDisbursementEnhancementTest extends TestCase
 
     public function test_cashier_can_create_disbursement_and_submit_for_approval()
     {
+        AnnualBudget::create([
+            'year' => 2026,
+            'semester' => 'Full Year (Jan-Dec)',
+        ]);
+        $this->expense->update(['status' => 'approved']);
+
         $response = $this->actingAs($this->cashier)->post('/disbursements', [
             'expense_id' => $this->expense->id,
             'description' => 'Payment for supplies',

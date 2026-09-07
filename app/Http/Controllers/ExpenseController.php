@@ -52,7 +52,7 @@ class ExpenseController extends Controller
             })
             ->with(['budgetItems' => function ($query) use ($availableYears) {
                 $query
-                    ->select(['id', 'budget_id', 'category_id'])
+                    ->select(['id', 'budget_id', 'category_id', 'particular_id', 'month', 'ref_no'])
                     ->whereHas('budget', fn ($budgetQuery) => $budgetQuery->whereIn('year', $availableYears))
                     ->with('budget:id,year');
             }])
@@ -542,7 +542,7 @@ class ExpenseController extends Controller
             $year = (int) date('Y', strtotime((string) $expenseData['date_encoded']));
             $month = date('F', strtotime((string) $expenseData['date_encoded']));
             throw ValidationException::withMessages([
-                'particular_id' => "No unique monthly budget allocation matches this account title for {$month} FY {$year}.",
+                'particular_id' => "The selected account title and responsibility center have no single matching allocation for {$month} FY {$year}. Check Annual Budget > Manage Items and select the account belonging to the funded responsibility center.",
             ]);
         }
 
