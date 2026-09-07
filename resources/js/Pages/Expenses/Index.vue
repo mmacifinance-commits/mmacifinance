@@ -26,6 +26,9 @@ const editing = ref(null)
 const selectedExpense = ref(null)
 const form = useForm({ description: '', category_id: '', particular_id: '', amount: 0, date_encoded: '', status: 'pending', notes: '' })
 const importForm = useForm({ csv_file: null })
+const saveError = ref('')
+
+const expenseErrorMessages = computed(() => Object.values(form.errors || {}).flat().filter(Boolean))
 
 // Local optimistic list for offline-queued items
 const offlineRows = ref([])
@@ -122,16 +125,22 @@ function openCreate() {
     }
 
     form.reset()
+    form.clearErrors()
+    saveError.value = ''
     form.date_encoded = new Date().toISOString().slice(0,10)
     editing.value = null
     showModal.value = true
 }
 function openEdit(e) {
     Object.assign(form, { description: e.description, category_id: e.category_id, particular_id: e.particular_id, amount: e.amount, status: e.status, notes: e.notes||'', date_encoded: e.date_encoded?.slice(0,10)||'' })
+    form.clearErrors()
+    saveError.value = ''
     editing.value = e.id; showModal.value = true
 }
 
 async function save() {
+    form.clearErrors()
+    saveError.value = ''
     const data = {
         description: form.description,
         category_id: form.category_id,
@@ -158,7 +167,14 @@ async function save() {
             if (idx !== -1) offlineRows.value[idx] = { ...offlineRows.value[idx], ...data }
             showModal.value = false
         } else {
-            form.put(`/expenses/${editing.value}`, { onSuccess: () => { showModal.value = false } })
+            form.put(`/expenses/${editing.value}`, {
+                preserveScroll: true,
+                onSuccess: () => { showModal.value = false },
+                onError: (errors) => {
+                    saveError.value = Object.values(errors || {}).flat().join(' ')
+                        || 'The expense could not be updated. Please review the form and try again.'
+                },
+            })
         }
     } else {
         const { queued, item } = await offlinePost(
@@ -188,7 +204,14 @@ async function save() {
             })
             showModal.value = false
         } else {
-            form.post('/expenses', { onSuccess: () => { showModal.value = false } })
+            form.post('/expenses', {
+                preserveScroll: true,
+                onSuccess: () => { showModal.value = false },
+                onError: (errors) => {
+                    saveError.value = Object.values(errors || {}).flat().join(' ')
+                        || 'The expense could not be created. Please review the form and try again.'
+                },
+            })
         }
     }
 }
@@ -418,11 +441,18 @@ function splitDate(d) {
 
     <Modal :show="showModal" :title="editing ? 'Edit Expense' : 'Add Expense'" :subtitle="editing ? 'Update expenditure details.' : 'Record a new expenditure line item.'" max-width="lg" @close="showModal = false">
         <form @submit.prevent="save">
+            <div v-if="saveError || expenseErrorMessages.length" class="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
+                <p class="font-semibold">Please correct the following before saving:</p>
+                <p v-if="saveError" class="mt-1">{{ saveError }}</p>
+                <ul v-if="expenseErrorMessages.length" class="mt-1 list-disc pl-5">
+                    <li v-for="(message, index) in expenseErrorMessages" :key="`${message}-${index}`">{{ message }}</li>
+                </ul>
+            </div>
             <div class="grid gap-4 sm:grid-cols-2">
-                <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1.5">Description</label><input v-model="form.description" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
-                <div><label class="block text-sm font-medium mb-1.5">Category</label><select v-model="form.category_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required><option value="">Select Category</option><option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
-                <div><label class="block text-sm font-medium mb-1.5">Account Title</label><select v-model="form.particular_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :disabled="!form.category_id" required><option value="">Select Account Title</option><option v-for="p in accountTitleOptions" :key="p.id" :value="p.id">{{ p.particular }}</option></select></div>
-                <div><label class="block text-sm font-medium mb-1.5">Amount (₱)</label><input v-model.number="form.amount" type="number" step="0.01" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
+                <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1.5">Description</label><input v-model="form.description" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.description }" required /><p v-if="form.errors.description" class="mt-1 text-xs text-rose-600">{{ form.errors.description }}</p></div>
+                <div><label class="block text-sm font-medium mb-1.5">Category</label><select v-model="form.category_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.category_id }" required><option value="">Select Category</option><option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.name }}</option></select><p v-if="form.errors.category_id" class="mt-1 text-xs text-rose-600">{{ form.errors.category_id }}</p></div>
+                <div><label class="block text-sm font-medium mb-1.5">Account Title</label><select v-model="form.particular_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.particular_id }" :disabled="!form.category_id" required><option value="">Select Account Title</option><option v-for="p in accountTitleOptions" :key="p.id" :value="p.id">{{ p.particular }}</option></select><p v-if="form.errors.particular_id" class="mt-1 text-xs text-rose-600">{{ form.errors.particular_id }}</p></div>
+                <div><label class="block text-sm font-medium mb-1.5">Amount (₱)</label><input v-model.number="form.amount" type="number" step="0.01" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.amount }" required /><p v-if="form.errors.amount" class="mt-1 text-xs text-rose-600">{{ form.errors.amount }}</p></div>
                 <div class="rounded-lg border border-dashed border-emerald-200 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-800">
                     Paid amounts are controlled by linked disbursements only.
                 </div>
@@ -431,14 +461,15 @@ function splitDate(d) {
                     <div v-if="editing && ['approved', 'posted', 'rejected', 'returned_for_revision'].includes(form.status)" class="w-full rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 text-sm font-semibold text-green-700">
                         {{ form.status === 'for_approval' ? 'For Approval (workflow-controlled)' : (form.status === 'posted' ? 'Posted (controlled by linked disbursements)' : (form.status === 'approved' ? 'Approved (controlled by Head of Finance)' : (form.status === 'rejected' ? 'Rejected (controlled by Head of Finance)' : 'Returned for Revision (controlled by Head of Finance)'))) }}
                     </div>
-                    <select v-else v-model="form.status" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm">
+                    <select v-else v-model="form.status" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.status }">
                         <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
                     </select>
+                    <p v-if="form.errors.status" class="mt-1 text-xs text-rose-600">{{ form.errors.status }}</p>
                     <p v-if="editing && ['for_approval', 'approved', 'posted', 'rejected', 'returned_for_revision'].includes(form.status)" class="mt-1 text-xs text-gray-500">
                         {{ form.status === 'for_approval' ? 'For Approval is managed through the submit action only.' : (form.status === 'posted' ? 'Posted status is managed from the disbursement workflow only.' : (form.status === 'approved' ? 'Approved status is managed through the approval action only.' : (form.status === 'rejected' ? 'Rejected status is managed through the approval action only.' : 'Returned for Revision is managed through the approval action only.'))) }}
                     </p>
                 </div>
-                <div><label class="block text-sm font-medium mb-1.5">Date Encoded</label><input v-model="form.date_encoded" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
+                <div><label class="block text-sm font-medium mb-1.5">Date Encoded</label><input v-model="form.date_encoded" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.date_encoded }" required /><p v-if="form.errors.date_encoded" class="mt-1 text-xs text-rose-600">{{ form.errors.date_encoded }}</p></div>
                 <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1.5">Notes</label><input v-model="form.notes" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" placeholder="Optional expense notes" /></div>
             </div>
             <div class="flex items-center justify-end gap-3 pt-5 border-t mt-4">
