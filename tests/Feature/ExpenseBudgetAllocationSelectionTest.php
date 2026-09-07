@@ -86,6 +86,48 @@ class ExpenseBudgetAllocationSelectionTest extends TestCase
         $this->assertDatabaseMissing('expenses', ['description' => 'Wrong fiscal year']);
     }
 
+    public function test_expense_amount_cannot_exceed_the_selected_allocations_available_balance(): void
+    {
+        [$user, $category, $particular, $augustItem] = $this->fixtures();
+        $existingExpense = Expense::create([
+            'ref_no' => 'EXP-POSTED-BALANCE',
+            'description' => 'Previously posted expense',
+            'category_id' => $category->id,
+            'particular_id' => $particular->id,
+            'budget_item_id' => $augustItem->id,
+            'amount' => 10000,
+            'date_encoded' => '2026-08-15',
+            'status' => 'posted',
+        ]);
+        Disbursement::create([
+            'disbursement_no' => 'DSB-POSTED-BALANCE',
+            'expense_id' => $existingExpense->id,
+            'description' => 'Posted allocation charge',
+            'source' => 'Expenditure',
+            'pay_to' => 'Supplier',
+            'amount' => 10000,
+            'method' => 'check',
+            'date_encoded' => '2026-08-16',
+            'status' => Disbursement::STATUS_POSTED,
+        ]);
+
+        $response = $this->actingAs($user)
+            ->from(route('expenses.index'))
+            ->post('/expenses', [
+                'description' => 'Expense above remaining allocation',
+                'category_id' => $category->id,
+                'particular_id' => $particular->id,
+                'budget_item_id' => $augustItem->id,
+                'amount' => 20000.01,
+                'date_encoded' => '2026-09-07',
+                'status' => 'pending',
+            ]);
+
+        $response->assertRedirect(route('expenses.index'));
+        $response->assertSessionHasErrors('amount');
+        $this->assertDatabaseMissing('expenses', ['description' => 'Expense above remaining allocation']);
+    }
+
     private function fixtures(): array
     {
         $user = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);

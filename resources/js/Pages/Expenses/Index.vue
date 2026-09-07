@@ -82,6 +82,19 @@ function accountOptionLabel(account) {
 
 const allocationOptions = computed(() => form.particular_id ? matchingAllocations(form.particular_id) : [])
 const selectedAllocation = computed(() => allocationOptions.value.find(item => String(item.id) === String(form.budget_item_id)))
+const maximumExpenseAmount = computed(() => {
+    if (!selectedAllocation.value) return null
+
+    let available = Number(selectedAllocation.value.balance || 0)
+    const currentExpense = (props.expenses || []).find(row => String(row.id) === String(editing.value))
+    if (currentExpense && String(currentExpense.budget_item_id) === String(selectedAllocation.value.id)) {
+        available += (currentExpense.disbursements || [])
+            .filter(disbursement => disbursement.status === 'posted')
+            .reduce((total, disbursement) => total + Number(disbursement.amount || 0), 0)
+    }
+
+    return Math.max(0, Number(available.toFixed(2)))
+})
 
 function allocationOptionLabel(item) {
     const month = monthNames[Number(item.month) - 1] || `Month ${item.month}`
@@ -193,6 +206,15 @@ function openEdit(e) {
 async function save() {
     form.clearErrors()
     saveError.value = ''
+
+    if (maximumExpenseAmount.value !== null && Number(form.amount) > maximumExpenseAmount.value) {
+        form.setError(
+            'amount',
+            `The expense amount cannot exceed this allocation's available amount of ₱${fmt(maximumExpenseAmount.value)}.`
+        )
+        return
+    }
+
     const data = {
         description: form.description,
         category_id: form.category_id,
@@ -495,7 +517,7 @@ function splitDate(d) {
         </div>
     </div>
 
-    <Modal :show="showModal" :title="editing ? 'Edit Expense' : 'Add Expense'" :subtitle="editing ? 'Update expenditure details.' : 'Record a new expenditure line item.'" max-width="lg" @close="showModal = false">
+    <Modal :show="showModal" :title="editing ? 'Edit Expense' : 'Add Expense'" :subtitle="editing ? 'Update expenditure details.' : 'Record a new expenditure line item.'" max-width="4xl" @close="showModal = false">
         <form @submit.prevent="save">
             <div v-if="saveError || expenseErrorMessages.length" class="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
                 <p class="font-semibold">Please correct the following before saving:</p>
@@ -526,7 +548,12 @@ function splitDate(d) {
                     </div>
                     <p class="mt-1 text-xs text-gray-500">Choose the month whose appropriation should be charged. This may differ from the actual expense or disbursement date.</p>
                 </div>
-                <div><label class="block text-sm font-medium mb-1.5">Amount (₱)</label><input v-model.number="form.amount" type="number" step="0.01" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.amount }" required /><p v-if="form.errors.amount" class="mt-1 text-xs text-rose-600">{{ form.errors.amount }}</p></div>
+                <div>
+                    <label class="block text-sm font-medium mb-1.5">Amount (₱)</label>
+                    <input v-model.number="form.amount" type="number" min="0.01" :max="maximumExpenseAmount ?? undefined" step="0.01" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.amount }" required />
+                    <p v-if="maximumExpenseAmount !== null" class="mt-1 text-xs text-gray-500">Maximum available: ₱{{ fmt(maximumExpenseAmount) }}</p>
+                    <p v-if="form.errors.amount" class="mt-1 text-xs text-rose-600">{{ form.errors.amount }}</p>
+                </div>
                 <div class="rounded-lg border border-dashed border-emerald-200 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-800">
                     Paid amounts are controlled by linked disbursements only.
                 </div>

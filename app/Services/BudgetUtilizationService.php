@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\BudgetItem;
 use App\Models\Disbursement;
+use App\Models\Expense;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -151,6 +152,23 @@ class BudgetUtilizationService
         return (float) $this->postedDisbursements()
             ->whereHas('expense', fn (Builder $query) => $query->where('budget_item_id', $item->getKey()))
             ->sum('amount');
+    }
+
+    public function availableForExpense(BudgetItem $item, ?Expense $expense = null): float
+    {
+        $postedForAllocation = $this->expenditureForItem($item);
+        $postedForCurrentExpense = 0.0;
+
+        if ($expense?->exists && (int) $expense->budget_item_id === (int) $item->getKey()) {
+            $postedForCurrentExpense = (float) $this->postedDisbursements()
+                ->where('expense_id', $expense->getKey())
+                ->sum('amount');
+        }
+
+        return round(
+            max(0, (float) $item->appropriation - $postedForAllocation + $postedForCurrentExpense),
+            2
+        );
     }
 
     public function hydrateItems(Collection $items): void

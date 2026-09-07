@@ -88,7 +88,7 @@ class ExpenseController extends Controller
             'category_id' => 'required|exists:budget_categories,id',
             'particular_id' => 'required|exists:budget_particulars,id',
             'budget_item_id' => 'required|exists:budget_items,id',
-            'amount' => 'required|numeric|min:0',
+            'amount' => 'required|numeric|min:0.01',
             'date_encoded' => 'required|date',
             'date_approved' => 'nullable|date',
             'status' => 'nullable|string',
@@ -128,7 +128,9 @@ class ExpenseController extends Controller
         $lastExpense = Expense::latest('id')->first();
         $nextNum = $lastExpense ? intval(substr($lastExpense->ref_no, 3)) + 1 : 1;
         $validated['ref_no'] = 'EXP' . str_pad($nextNum, 8, '0', STR_PAD_LEFT);
-        $validated['budget_item_id'] = $this->validateSelectedBudgetItem($validated)->id;
+        $budgetItem = $this->validateSelectedBudgetItem($validated);
+        $this->ensureAmountWithinAllocation($budgetItem, (float) $validated['amount']);
+        $validated['budget_item_id'] = $budgetItem->id;
 
         $expense = Expense::create($validated);
         AuditTrail::log($expense, 'created', auth()->user(), 'Expense record created.', [
@@ -139,16 +141,11 @@ class ExpenseController extends Controller
             'budget_item_id' => $expense->budget_item_id,
         ]);
 
-        $warning = $this->budgetOverrunWarning($expense);
-
         if ($request->header('X-Offline-Sync')) {
             return response()->json(['id' => $expense->id, 'resource' => 'expense', 'record' => $expense->fresh()], 201);
         }
 
-        return redirect()->route('expenses.index')->with([
-            'success' => 'Expense created.',
-            'warning' => $warning,
-        ]);
+        return redirect()->route('expenses.index')->with('success', 'Expense created.');
     }
 
     public function update(Request $request, Expense $expense)
@@ -158,7 +155,7 @@ class ExpenseController extends Controller
             'category_id' => 'required|exists:budget_categories,id',
             'particular_id' => 'required|exists:budget_particulars,id',
             'budget_item_id' => 'required|exists:budget_items,id',
-            'amount' => 'required|numeric|min:0',
+            'amount' => 'required|numeric|min:0.01',
             'date_encoded' => 'required|date',
             'date_approved' => 'nullable|date',
             'status' => 'nullable|string',
@@ -201,7 +198,9 @@ class ExpenseController extends Controller
             ]);
         }
 
-        $validated['budget_item_id'] = $this->validateSelectedBudgetItem($validated)->id;
+        $budgetItem = $this->validateSelectedBudgetItem($validated);
+        $this->ensureAmountWithinAllocation($budgetItem, (float) $validated['amount'], $expense);
+        $validated['budget_item_id'] = $budgetItem->id;
         if ((int) $expense->budget_item_id !== (int) $validated['budget_item_id'] && $expense->disbursements()->exists()) {
             throw ValidationException::withMessages([
                 'budget_item_id' => 'The monthly allocation cannot be changed after a disbursement has been created. Reverse or remove the unposted disbursement first.',
@@ -214,16 +213,11 @@ class ExpenseController extends Controller
             'changes' => array_diff_assoc($validated, $original),
         ]);
 
-        $warning = $this->budgetOverrunWarning($expense);
-
         if ($request->header('X-Offline-Sync')) {
             return response()->json(['id' => $expense->id, 'resource' => 'expense', 'record' => $expense->fresh()]);
         }
 
-        return redirect()->route('expenses.index')->with([
-            'success' => 'Expense updated.',
-            'warning' => $warning,
-        ]);
+        return redirect()->route('expenses.index')->with('success', 'Expense updated.');
     }
 
     public function submitForApproval(Request $request, Expense $expense)
@@ -501,6 +495,20 @@ class ExpenseController extends Controller
             if (! $categoryHasAppropriation) {
                 return back()->withErrors(['csv_file' => "Category {$category->name} has no appropriation for FY {$year}."]);
             }
+
+            if ($row['amount'] <= 0) {
+                return back()->withErrors(['csv_file' => 'Row ' . ($i + 2) . ' must have an amount greater than zero.']);
+            }
+
+            $budgetItem = BudgetItem::findOrFail($rows[$i]['budget_item_id']);
+            $existingExpense = Expense::where('ref_no', $row['ref_no'])->first();
+            $available = app(BudgetUtilizationService::class)->availableForExpense($budgetItem, $existingExpense);
+            if ($row['amount'] > $available) {
+                return back()->withErrors([
+                    'csv_file' => 'Row ' . ($i + 2) . ' exceeds the available amount for '
+                        . $budgetItem->ref_no . '. Available: PHP ' . number_format($available, 2) . '.',
+                ]);
+            }
         }
 
         $created = 0;
@@ -621,26 +629,19 @@ class ExpenseController extends Controller
         })->first();
     }
 
-    protected function budgetOverrunWarning(Expense $expense): ?string
+    protected function ensureAmountWithinAllocation(
+        BudgetItem $budgetItem,
+        float $amount,
+        ?Expense $expense = null
+    ): void
     {
-        if (!$expense->date_encoded || !$expense->particular_id) {
-            return null;
+        $available = app(BudgetUtilizationService::class)->availableForExpense($budgetItem, $expense);
+
+        if ($amount > $available) {
+            throw ValidationException::withMessages([
+                'amount' => 'The expense amount cannot exceed the available amount for '
+                    . $budgetItem->ref_no . '. Available: PHP ' . number_format($available, 2) . '.',
+            ]);
         }
-
-        $budgetItem = $expense->budgetItem;
-
-        if (!$budgetItem) {
-            return null;
-        }
-
-        $totalPaid = app(BudgetUtilizationService::class)->expenditureForItem($budgetItem);
-
-        $budgetAmount = (float) $budgetItem->appropriation;
-        if ($totalPaid > $budgetAmount) {
-            $over = $totalPaid - $budgetAmount;
-            return 'This expense is over the budget by ' . number_format($over, 2) . '. It will still be saved so you can monitor the overrun.';
-        }
-
-        return null;
     }
 }
