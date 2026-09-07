@@ -28,7 +28,7 @@ const widths = {
                 <!-- Backdrop -->
                 <div class="fixed inset-0 bg-black/50" @click="$emit('close')"></div>
                 <!-- Modal -->
-                <div :class="['relative flex max-h-[calc(100dvh-1rem)] w-full flex-col overflow-hidden bg-white shadow-2xl sm:max-h-[92vh]', widths[maxWidth] || 'max-w-md']">
+                <div :class="['app-modal relative flex max-h-[calc(100dvh-1rem)] w-full flex-col overflow-hidden bg-white shadow-2xl sm:max-h-[92vh]', widths[maxWidth] || 'max-w-md']">
                     <!-- Header -->
                     <div class="flex items-start justify-between border-b border-gray-100 p-4 sm:p-5 sm:pb-3">
                         <div>
@@ -38,11 +38,11 @@ const widths = {
                         <button @click="$emit('close')" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
                     </div>
                     <!-- Body -->
-                    <div class="flex-1 overflow-y-auto overflow-x-auto p-4 sm:p-5">
+                    <div class="app-modal__body flex-1 overflow-y-auto overflow-x-auto p-4 sm:p-5">
                         <slot />
                     </div>
                     <!-- Footer -->
-                    <div v-if="$slots.footer" class="flex items-center justify-end gap-3 px-5 pb-5">
+                    <div v-if="$slots.footer" class="flex flex-col-reverse gap-2 px-4 pb-4 sm:flex-row sm:items-center sm:justify-end sm:gap-3 sm:px-5 sm:pb-5">
                         <slot name="footer" />
                     </div>
                 </div>

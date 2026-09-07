@@ -179,13 +179,32 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
                     <span class="mr-2">{{ item.icon }}</span>{{ item.label }}
                 </Link>
                 <button @click="logout" class="w-full px-4 py-3 text-left text-xs font-bold uppercase text-red-300 border-b border-navy-light">
-                    ðŸšª Logout
+                    Logout
                 </button>
             </div>
         </nav>
 
+        <!-- Mobile secondary navigation for sections that use the desktop sidebar -->
+        <nav v-if="hasSidebar" class="border-b border-gray-200 bg-white md:hidden" aria-label="Budget sub-navigation">
+            <div class="flex snap-x gap-1 overflow-x-auto px-3 py-2">
+                <Link
+                    v-for="item in currentSidebar"
+                    :key="item.href"
+                    :href="item.href"
+                    :class="[
+                        'flex-none snap-start whitespace-nowrap border px-3 py-2 text-xs font-semibold',
+                        isSideActive(item.href)
+                            ? 'border-mustard bg-mustard/10 text-navy-dark'
+                            : 'border-gray-200 text-gray-600'
+                    ]"
+                >
+                    {{ item.label }}
+                </Link>
+            </div>
+        </nav>
+
         <!-- Flash Messages -->
-        <div v-if="showFlash && (flash?.success || flash?.error || flash?.warning)" class="fixed top-20 right-4 z-50 w-80">
+        <div v-if="showFlash && (flash?.success || flash?.error || flash?.warning)" class="fixed left-3 right-3 top-20 z-50 sm:left-auto sm:right-4 sm:w-80">
             <div v-if="flash?.success" class="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700 shadow-lg flex justify-between items-center">
                 <span>Success: {{ flash.success }}</span>
                 <button @click="showFlash = false" class="text-green-500 hover:text-green-700 ml-2">&times;</button>

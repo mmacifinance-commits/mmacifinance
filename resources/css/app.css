@@ -42,10 +42,19 @@ td {
 }
 
 @media (max-width: 767px) {
+    .mobile-app-content {
+        width: 100%;
+        max-width: 100vw;
+        overflow-x: hidden;
+        padding: 0.875rem;
+    }
+
     input,
     select,
     textarea {
         font-size: 16px !important;
+        max-width: 100%;
+        min-width: 0 !important;
     }
 
     input.otp-digit {
@@ -54,6 +63,7 @@ td {
 
     .mobile-app-content table {
         font-size: 0.75rem;
+        min-width: max-content;
     }
 
     .mobile-app-content th,
@@ -65,5 +75,81 @@ td {
     .mobile-app-content > .flex.items-center.justify-between {
         align-items: flex-start;
         flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+
+    .mobile-app-content > .flex.items-center.justify-between > div:last-child,
+    .mobile-app-content > .flex.items-center.justify-between > button:last-child {
+        max-width: 100%;
+    }
+
+    .mobile-app-content > .flex.items-center.justify-between > div:last-child.flex {
+        width: 100%;
+    }
+
+    .mobile-app-content > .flex.items-center.justify-between > div:last-child.flex > button,
+    .mobile-app-content > .flex.items-center.justify-between > button:last-child {
+        flex: 1 1 auto;
+        min-height: 2.75rem;
+    }
+
+    .mobile-app-content > .flex.flex-wrap.items-end > div,
+    .mobile-app-content > .flex.flex-col.sm\:flex-row > input,
+    .mobile-app-content > .flex.flex-col.sm\:flex-row > select {
+        width: 100%;
+        max-width: none;
+    }
+
+    .mobile-app-content h2 {
+        font-size: 1.125rem;
+        line-height: 1.45;
+    }
+
+    .mobile-app-content h3 {
+        line-height: 1.45;
+    }
+
+    .mobile-app-content .overflow-x-auto {
+        overscroll-behavior-x: contain;
+        scrollbar-width: thin;
+    }
+
+    .mobile-app-content td .inline-flex {
+        flex-wrap: wrap;
+    }
+
+    .app-modal {
+        max-width: calc(100vw - 1rem) !important;
+    }
+
+    .app-modal__body form > .flex.items-center.justify-end {
+        flex-direction: column-reverse;
+        align-items: stretch;
+    }
+
+    .app-modal__body form > .flex.items-center.justify-end > button {
+        width: 100%;
+        min-height: 2.75rem;
+    }
+
+    .app-modal__body .grid > * {
+        min-width: 0;
+    }
+
+    .app-modal__body select,
+    .app-modal__body input,
+    .app-modal__body textarea {
+        width: 100%;
+    }
+
+    footer {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chart-shell--ready {
+        animation: none !important;
     }
 }

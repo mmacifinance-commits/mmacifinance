@@ -396,7 +396,7 @@ function catBalancePercent(group) {
     </div>
 
     <!-- Grand Total -->
-    <div v-if="groupedItems.length" class="bg-white rounded-lg border border-gray-200 overflow-hidden mt-4 shadow-sm">
+    <div v-if="groupedItems.length" class="overflow-x-auto bg-white rounded-lg border border-gray-200 mt-4 shadow-sm">
         <table class="w-full text-sm">
             <tfoot>
                 <tr class="bg-navy-dark text-white font-bold">

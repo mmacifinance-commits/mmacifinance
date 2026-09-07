@@ -389,6 +389,7 @@ const yearEndSummaryTotals = computed(() => {
                 </p>
             </div>
         </div>
+        <div class="overflow-x-auto">
         <table class="w-full text-sm">
             <thead>
                 <tr class="bg-navy-dark text-white border-b-2 border-mustard">
@@ -439,6 +440,7 @@ const yearEndSummaryTotals = computed(() => {
                 </tr>
             </tbody>
         </table>
+        </div>
     </div>
 
     <Modal

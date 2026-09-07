@@ -510,6 +510,42 @@ function prerequisite(item) {
 .status-badge--syncing { background: rgba(59,130,246,.15); color: #60a5fa; display: flex; align-items: center; }
 
 @media (max-width: 700px) {
+  .offline-bar {
+    align-items: flex-start;
+    padding: 0.65rem 0.75rem;
+  }
+
+  .offline-bar__left,
+  .offline-bar__right {
+    width: 100%;
+  }
+
+  .offline-bar__right {
+    justify-content: flex-end;
+  }
+
+  .offline-sub {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+
+  .queue-drawer__header,
+  .queue-drawer__footer,
+  .queue-item {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .queue-drawer__header {
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .queue-drawer__actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
   .queue-item {
     flex-wrap: wrap;
   }

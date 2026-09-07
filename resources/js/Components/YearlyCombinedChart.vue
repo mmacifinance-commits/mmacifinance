@@ -83,7 +83,10 @@ function buildChart() {
         chartInstance = null
     }
 
-    revealProgress = 0
+    const reduceMotion = window.innerWidth < 768
+        || window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    revealProgress = reduceMotion ? 1 : 0
     const items = chartData.value.items
     const seriesDefs = Array.isArray(props.series) ? props.series : []
     const colorMap = Object.fromEntries(seriesDefs.map((s) => [s.key, s.color || COLORS.navy]))
@@ -152,7 +155,7 @@ function buildChart() {
             layout: {
                 padding: { top: 22, right: 18, bottom: 10, left: 10 },
             },
-            animation: {
+            animation: reduceMotion ? false : {
                 duration: 2200,
                 easing: 'easeOutQuart',
                 delay(context) {
@@ -347,16 +350,16 @@ onBeforeUnmount(() => {
         ref="rootRef"
         :class="[
             'relative rounded-lg border border-slate-200 bg-slate-50/60 overflow-hidden',
-            showHeader ? 'h-[24rem] p-4' : 'h-[22rem] p-3',
+            showHeader ? 'h-[22rem] p-2 sm:h-[24rem] sm:p-4' : 'h-[20rem] p-2 sm:h-[22rem] sm:p-3',
             chartReady ? 'chart-shell--ready' : 'chart-shell--loading',
         ]"
     >
-        <div v-if="showHeader" class="mb-4 flex items-center justify-between gap-3">
+        <div v-if="showHeader" class="mb-3 flex flex-col items-start justify-between gap-2 sm:mb-4 sm:flex-row sm:items-center sm:gap-3">
             <div>
                 <h3 class="text-base font-bold text-slate-900">{{ title }}</h3>
                 <p class="text-xs text-slate-500">{{ subtitle }}</p>
             </div>
-            <div v-if="showLegend" class="flex items-center gap-4 text-xs font-semibold text-slate-600">
+            <div v-if="showLegend" class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-semibold text-slate-600 sm:gap-4 sm:text-xs">
                 <span v-for="item in series.filter(s => s.type === 'bar')" :key="item.label" class="flex items-center gap-1.5">
                     <span class="h-3 w-3 rounded-sm" :style="{ backgroundColor: item.color || COLORS.navy }"></span>
                     {{ item.label }}
