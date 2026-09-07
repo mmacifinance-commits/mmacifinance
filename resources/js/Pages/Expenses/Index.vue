@@ -23,12 +23,17 @@ const showModal = ref(false)
 const showImportModal = ref(false)
 const showAuditModal = ref(false)
 const editing = ref(null)
+const editingHasDisbursements = ref(false)
 const selectedExpense = ref(null)
-const form = useForm({ description: '', category_id: '', particular_id: '', amount: 0, date_encoded: '', status: 'pending', notes: '' })
+const form = useForm({ description: '', category_id: '', particular_id: '', budget_item_id: '', amount: 0, date_encoded: '', status: 'pending', notes: '' })
 const importForm = useForm({ csv_file: null })
 const saveError = ref('')
 
 const expenseErrorMessages = computed(() => Object.values(form.errors || {}).flat().filter(Boolean))
+const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+]
 
 // Local optimistic list for offline-queued items
 const offlineRows = ref([])
@@ -53,12 +58,14 @@ function hasBudgetForYear(category, year) {
 const categoryOptions = computed(() => {
     return (props.budgetedCategories || []).filter((category) => hasBudgetForYear(category, selectedYear.value))
 })
+const allBudgetAllocations = computed(() => (props.budgetedCategories || [])
+    .flatMap(category => category.budget_items || category.budgetItems || []))
 const filterCategoryOptions = computed(() => props.categories || [])
 const selectedCategoryId = computed(() => form.category_id ? String(form.category_id) : '')
 const accountTitleOptions = computed(() => {
     const items = (props.accountTitles || props.particulars || [])
     if (!selectedCategoryId.value) return []
-    return items.filter((item) => String(item.category_id ?? item.budget_category_id ?? '') === selectedCategoryId.value && matchingAllocations(item.id).length === 1)
+    return items.filter((item) => String(item.category_id ?? item.budget_category_id ?? '') === selectedCategoryId.value && matchingAllocations(item.id).length > 0)
 })
 
 function matchingAllocations(particularId) {
@@ -66,14 +73,31 @@ function matchingAllocations(particularId) {
     const allocations = (category?.budget_items || category?.budgetItems || []).filter(item =>
         String(item.particular_id) === String(particularId) && String(item.budget?.year) === selectedYear.value
     )
-    const month = Number(form.date_encoded?.slice(5, 7))
-    const sameMonth = allocations.filter(item => Number(item.month) === month)
-    return sameMonth.length === 1 ? sameMonth : allocations
+    return allocations.sort((a, b) => Number(a.month) - Number(b.month))
 }
 
 function accountOptionLabel(account) {
-    const allocation = matchingAllocations(account.id)[0]
-    return [account.particular, account.department?.name || account.department?.code, allocation?.ref_no].filter(Boolean).join(' - ')
+    return [account.particular, account.department?.name || account.department?.code].filter(Boolean).join(' - ')
+}
+
+const allocationOptions = computed(() => form.particular_id ? matchingAllocations(form.particular_id) : [])
+const selectedAllocation = computed(() => allocationOptions.value.find(item => String(item.id) === String(form.budget_item_id)))
+
+function allocationOptionLabel(item) {
+    const month = monthNames[Number(item.month) - 1] || `Month ${item.month}`
+    const account = (props.accountTitles || props.particulars || []).find(p => String(p.id) === String(item.particular_id))
+    return `${item.ref_no} - ${month} FY ${item.budget?.year} - ${account?.department?.name || 'Responsibility center'} - Available: ₱${fmt(item.balance)}`
+}
+
+function expenseAllocation(expense) {
+    return expense?.budget_item || allBudgetAllocations.value.find(item => String(item.id) === String(expense?.budget_item_id))
+}
+
+function expenseAllocationLabel(expense) {
+    const allocation = expenseAllocation(expense)
+    if (!allocation) return 'Allocation not linked'
+    const month = monthNames[Number(allocation.month) - 1] || `Month ${allocation.month}`
+    return `${allocation.ref_no} · ${month} FY ${allocation.budget?.year || ''}`
 }
 
 const filteredExpenses = computed(() => {
@@ -106,12 +130,23 @@ watch([selectedYear, categoryOptions], ([year, options]) => {
     if (form.category_id && !options.some(c => String(c.id) === String(form.category_id))) {
         form.category_id = ''
         form.particular_id = ''
+        form.budget_item_id = ''
     }
 })
 
 watch([selectedCategoryId, accountTitleOptions], ([categoryId, options]) => {
     if (categoryId && form.particular_id && !options.some(p => String(p.id) === String(form.particular_id))) {
         form.particular_id = ''
+        form.budget_item_id = ''
+    }
+})
+
+watch(allocationOptions, (options) => {
+    if (form.budget_item_id && !options.some(item => String(item.id) === String(form.budget_item_id))) {
+        form.budget_item_id = ''
+    }
+    if (!form.budget_item_id && options.length === 1) {
+        form.budget_item_id = options[0].id
     }
 })
 
@@ -144,13 +179,16 @@ function openCreate() {
     saveError.value = ''
     form.date_encoded = new Date().toISOString().slice(0,10)
     editing.value = null
+    editingHasDisbursements.value = false
     showModal.value = true
 }
 function openEdit(e) {
-    Object.assign(form, { description: e.description, category_id: e.category_id, particular_id: e.particular_id, amount: e.amount, status: e.status, notes: e.notes||'', date_encoded: e.date_encoded?.slice(0,10)||'' })
+    Object.assign(form, { description: e.description, category_id: e.category_id, particular_id: e.particular_id, budget_item_id: e.budget_item_id || '', amount: e.amount, status: e.status, notes: e.notes||'', date_encoded: e.date_encoded?.slice(0,10)||'' })
     form.clearErrors()
     saveError.value = ''
-    editing.value = e.id; showModal.value = true
+    editing.value = e.id
+    editingHasDisbursements.value = (e.disbursements || []).length > 0
+    showModal.value = true
 }
 
 async function save() {
@@ -160,6 +198,7 @@ async function save() {
         description: form.description,
         category_id: form.category_id,
         particular_id: form.particular_id,
+        budget_item_id: form.budget_item_id,
         amount: form.amount,
         status: isOnline.value ? form.status : 'pending',
         notes: form.notes,
@@ -210,6 +249,8 @@ async function save() {
                 category_id: form.category_id,
                 category: props.categories?.find(c => String(c.id) === String(form.category_id)),
                 particular_id: form.particular_id,
+                budget_item_id: form.budget_item_id,
+                budget_item: selectedAllocation.value,
                 particular: (props.accountTitles || props.particulars)?.find(p => String(p.id) === String(form.particular_id)),
                 amount: form.amount,
                 status: form.status,
@@ -385,6 +426,7 @@ function splitDate(d) {
                         <td class="px-5 py-4 text-gray-500 text-xs uppercase align-middle">{{ e.category?.name }}</td>
                         <td class="px-5 py-4 text-gray-600 text-xs align-middle">
                             {{ e.particular?.department?.name || e.particular?.department?.code || '—' }}
+                            <div class="mt-1 font-mono text-[10px] font-semibold text-amber-700">{{ expenseAllocationLabel(e) }}</div>
                         </td>
                         <td class="px-5 py-4 text-gray-800 font-medium text-xs align-middle">
                             {{ e.particular?.particular || '—' }}
@@ -465,12 +507,21 @@ function splitDate(d) {
             </div>
             <div class="grid gap-4 sm:grid-cols-2">
                 <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1.5">Description</label><input v-model="form.description" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.description }" required /><p v-if="form.errors.description" class="mt-1 text-xs text-rose-600">{{ form.errors.description }}</p></div>
-                <div><label class="block text-sm font-medium mb-1.5">Category</label><select v-model="form.category_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.category_id }" required><option value="">Select Category</option><option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.name }}</option></select><p v-if="form.errors.category_id" class="mt-1 text-xs text-rose-600">{{ form.errors.category_id }}</p></div>
-                <div><label class="block text-sm font-medium mb-1.5">Account Title</label><select v-model="form.particular_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.particular_id }" :disabled="!form.category_id" required><option value="">Select Account Title</option><option v-for="p in accountTitleOptions" :key="p.id" :value="p.id">{{ accountOptionLabel(p) }}</option></select><p v-if="form.errors.particular_id" class="mt-1 text-xs text-rose-600">{{ form.errors.particular_id }}</p></div>
+                <div><label class="block text-sm font-medium mb-1.5">Category</label><select v-model="form.category_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.category_id }" :disabled="editing && editingHasDisbursements" required><option value="">Select Category</option><option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.name }}</option></select><p v-if="form.errors.category_id" class="mt-1 text-xs text-rose-600">{{ form.errors.category_id }}</p></div>
+                <div><label class="block text-sm font-medium mb-1.5">Account Title</label><select v-model="form.particular_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.particular_id }" :disabled="!form.category_id || (editing && editingHasDisbursements)" required><option value="">Select Account Title</option><option v-for="p in accountTitleOptions" :key="p.id" :value="p.id">{{ accountOptionLabel(p) }}</option></select><p v-if="form.errors.particular_id" class="mt-1 text-xs text-rose-600">{{ form.errors.particular_id }}</p></div>
                 <p v-if="form.category_id" class="sm:col-span-2 text-xs text-gray-600">
-                    Account choices show the responsibility center and monthly budget reference for FY {{ selectedYear }}.
-                    <span v-if="!accountTitleOptions.length">No unambiguous allocation is available. Check Annual Budget &gt; Manage Items for the account and date selected.</span>
+                    Account choices show the responsibility center for funded accounts in FY {{ selectedYear }}.
+                    <span v-if="!accountTitleOptions.length">No funded account is available. Check Annual Budget &gt; Manage Items.</span>
                 </p>
+                <div class="sm:col-span-2">
+                    <label class="block text-sm font-medium mb-1.5">Charge to Monthly Budget Allocation</label>
+                    <select v-model="form.budget_item_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.budget_item_id }" :disabled="!form.particular_id || (editing && editingHasDisbursements)" required>
+                        <option value="">Select Monthly Allocation</option>
+                        <option v-for="item in allocationOptions" :key="item.id" :value="item.id">{{ allocationOptionLabel(item) }}</option>
+                    </select>
+                    <p v-if="form.errors.budget_item_id" class="mt-1 text-xs text-rose-600">{{ form.errors.budget_item_id }}</p>
+                    <p class="mt-1 text-xs text-gray-500">Choose the month whose appropriation should be charged. This may differ from the actual expense or disbursement date.</p>
+                </div>
                 <div><label class="block text-sm font-medium mb-1.5">Amount (₱)</label><input v-model.number="form.amount" type="number" step="0.01" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.amount }" required /><p v-if="form.errors.amount" class="mt-1 text-xs text-rose-600">{{ form.errors.amount }}</p></div>
                 <div class="rounded-lg border border-dashed border-emerald-200 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-800">
                     Paid amounts are controlled by linked disbursements only.
@@ -488,7 +539,7 @@ function splitDate(d) {
                         {{ form.status === 'for_approval' ? 'For Approval is managed through the submit action only.' : (form.status === 'posted' ? 'Posted status is managed from the disbursement workflow only.' : (form.status === 'approved' ? 'Approved status is managed through the approval action only.' : (form.status === 'rejected' ? 'Rejected status is managed through the approval action only.' : 'Returned for Revision is managed through the approval action only.'))) }}
                     </p>
                 </div>
-                <div><label class="block text-sm font-medium mb-1.5">Date Encoded</label><input v-model="form.date_encoded" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.date_encoded }" required /><p v-if="form.errors.date_encoded" class="mt-1 text-xs text-rose-600">{{ form.errors.date_encoded }}</p></div>
+                <div><label class="block text-sm font-medium mb-1.5">Expense Date / Date Encoded</label><input v-model="form.date_encoded" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.date_encoded }" required /><p v-if="form.errors.date_encoded" class="mt-1 text-xs text-rose-600">{{ form.errors.date_encoded }}</p></div>
                 <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1.5">Notes</label><input v-model="form.notes" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" placeholder="Optional expense notes" /></div>
             </div>
             <div class="flex items-center justify-end gap-3 pt-5 border-t mt-4">
@@ -538,6 +589,9 @@ function splitDate(d) {
             <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 <p class="font-semibold">Required columns</p>
                 <p class="mt-1 font-mono text-xs">ref_no, description, category, account_title, amount, date_encoded, date_approved, status, notes</p>
+                <p class="mt-2 text-xs">
+                    Optional: <span class="font-mono font-semibold">monthly_allocation_ref</span>. Use a reference such as MB-2026-08-0001 to charge a month that differs from the expense date. Older files without it continue using date-based matching.
+                </p>
                 <p class="mt-2 text-xs">
                     Expenditures can only be imported for categories and account titles that already have Annual Budget Allocations for the expense fiscal year.
                     Import status is limited to pending or cancelled so workflow stamps stay intact.

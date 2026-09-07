@@ -52,18 +52,22 @@ class ExpenseController extends Controller
             })
             ->with(['budgetItems' => function ($query) use ($availableYears) {
                 $query
-                    ->select(['id', 'budget_id', 'category_id', 'particular_id', 'month', 'ref_no'])
+                    ->select(['id', 'budget_id', 'category_id', 'particular_id', 'month', 'ref_no', 'appropriation'])
                     ->whereHas('budget', fn ($budgetQuery) => $budgetQuery->whereIn('year', $availableYears))
                     ->with('budget:id,year');
             }])
             ->orderBy('name')
             ->get();
 
-        // BudgetItem has calculated attributes that query posted workflow totals.
-        // The expense category picker only needs the related fiscal years, so do
-        // not serialize those expensive attributes for every dropdown option.
+        $budgetItems = $budgetedCategories->flatMap(fn (BudgetCategory $category) => $category->budgetItems);
+        BudgetItem::hydrateDerivedTotals($budgetItems);
+
+        // Totals are hydrated in one aggregate query. Disable accessors afterward
+        // so serialization cannot trigger one query per allocation option.
         $budgetedCategories->each(function (BudgetCategory $category) {
-            $category->budgetItems->each(fn (BudgetItem $item) => $item->setAppends([]));
+            $category->budgetItems->each(fn (BudgetItem $item) => $item
+                ->setAppends([])
+                ->makeHidden('derived_expenditure'));
         });
 
         return Inertia::render('Expenses/Index', [
@@ -83,6 +87,7 @@ class ExpenseController extends Controller
             'description' => 'required|string|max:255',
             'category_id' => 'required|exists:budget_categories,id',
             'particular_id' => 'required|exists:budget_particulars,id',
+            'budget_item_id' => 'required|exists:budget_items,id',
             'amount' => 'required|numeric|min:0',
             'date_encoded' => 'required|date',
             'date_approved' => 'nullable|date',
@@ -123,7 +128,7 @@ class ExpenseController extends Controller
         $lastExpense = Expense::latest('id')->first();
         $nextNum = $lastExpense ? intval(substr($lastExpense->ref_no, 3)) + 1 : 1;
         $validated['ref_no'] = 'EXP' . str_pad($nextNum, 8, '0', STR_PAD_LEFT);
-        $validated['budget_item_id'] = $this->resolveBudgetItemId($validated);
+        $validated['budget_item_id'] = $this->validateSelectedBudgetItem($validated)->id;
 
         $expense = Expense::create($validated);
         AuditTrail::log($expense, 'created', auth()->user(), 'Expense record created.', [
@@ -131,6 +136,7 @@ class ExpenseController extends Controller
             'amount' => (float) $expense->amount,
             'category_id' => $expense->category_id,
             'particular_id' => $expense->particular_id,
+            'budget_item_id' => $expense->budget_item_id,
         ]);
 
         $warning = $this->budgetOverrunWarning($expense);
@@ -151,6 +157,7 @@ class ExpenseController extends Controller
             'description' => 'required|string|max:255',
             'category_id' => 'required|exists:budget_categories,id',
             'particular_id' => 'required|exists:budget_particulars,id',
+            'budget_item_id' => 'required|exists:budget_items,id',
             'amount' => 'required|numeric|min:0',
             'date_encoded' => 'required|date',
             'date_approved' => 'nullable|date',
@@ -194,7 +201,12 @@ class ExpenseController extends Controller
             ]);
         }
 
-        $validated['budget_item_id'] = $this->resolveBudgetItemId($validated);
+        $validated['budget_item_id'] = $this->validateSelectedBudgetItem($validated)->id;
+        if ((int) $expense->budget_item_id !== (int) $validated['budget_item_id'] && $expense->disbursements()->exists()) {
+            throw ValidationException::withMessages([
+                'budget_item_id' => 'The monthly allocation cannot be changed after a disbursement has been created. Reverse or remove the unposted disbursement first.',
+            ]);
+        }
 
         $original = $expense->getOriginal();
         $expense->update($validated);
@@ -351,15 +363,16 @@ class ExpenseController extends Controller
         $callback = function () {
             $handle = fopen('php://output', 'w');
             fwrite($handle, "\xEF\xBB\xBF");
-            fputcsv($handle, ['ref_no', 'description', 'category_id', 'particular_id', 'amount', 'date_encoded', 'date_approved', 'status', 'notes']);
+            fputcsv($handle, ['ref_no', 'description', 'category_id', 'particular_id', 'monthly_allocation_ref', 'amount', 'date_encoded', 'date_approved', 'status', 'notes']);
 
-            Expense::query()->orderBy('id')->chunk(200, function ($rows) use ($handle) {
+            Expense::query()->with('budgetItem:id,ref_no')->orderBy('id')->chunk(200, function ($rows) use ($handle) {
                 foreach ($rows as $expense) {
                     fputcsv($handle, [
                         $expense->ref_no,
                         $expense->description,
                         $expense->category_id,
                         $expense->particular_id,
+                        $expense->budgetItem?->ref_no,
                         $expense->amount,
                         optional($expense->date_encoded)->format('Y-m-d'),
                         optional($expense->date_approved)->format('Y-m-d'),
@@ -418,6 +431,7 @@ class ExpenseController extends Controller
                 'ref_no' => trim((string) ($row[$index['ref_no']] ?? '')),
                 'category_raw' => $categoryRaw,
                 'particular_raw' => $particularRaw,
+                'allocation_ref' => trim((string) ($row[$index['monthly_allocation_ref'] ?? -1] ?? '')),
                 'description' => trim((string) ($row[$index['description']] ?? '')),
                 'amount' => (float) ($row[$index['amount']] ?? 0),
                 'date_encoded' => trim((string) ($row[$index['date_encoded']] ?? '')),
@@ -457,11 +471,26 @@ class ExpenseController extends Controller
 
             $rows[$i]['category_id'] = $category->id;
             $rows[$i]['particular_id'] = $particular->id;
-            $rows[$i]['budget_item_id'] = $this->resolveBudgetItemId([
-                'category_id' => $category->id,
-                'particular_id' => $particular->id,
-                'date_encoded' => $row['date_encoded'],
-            ]);
+            if ($row['allocation_ref'] !== '') {
+                $budgetItem = BudgetItem::where('ref_no', $row['allocation_ref'])->first();
+                if (! $budgetItem) {
+                    return back()->withErrors(['csv_file' => 'Row ' . ($i + 2) . " references an unknown monthly allocation: {$row['allocation_ref']}"]);
+                }
+                $rows[$i]['budget_item_id'] = $this->validateSelectedBudgetItem([
+                    'category_id' => $category->id,
+                    'particular_id' => $particular->id,
+                    'budget_item_id' => $budgetItem->id,
+                    'date_encoded' => $row['date_encoded'],
+                ])->id;
+            } else {
+                // Backward compatibility for exports created before allocation
+                // references were included in the expense CSV format.
+                $rows[$i]['budget_item_id'] = $this->resolveBudgetItemId([
+                    'category_id' => $category->id,
+                    'particular_id' => $particular->id,
+                    'date_encoded' => $row['date_encoded'],
+                ]);
+            }
 
             $categoryHasAppropriation = BudgetCategory::whereKey($category->id)
                 ->whereHas('budgetItems.budget', function ($query) use ($year) {
@@ -547,6 +576,29 @@ class ExpenseController extends Controller
         }
 
         return $budgetItem->id;
+    }
+
+    protected function validateSelectedBudgetItem(array $expenseData): BudgetItem
+    {
+        $budgetItem = BudgetItem::with(['budget', 'particular.department'])
+            ->find($expenseData['budget_item_id'] ?? null);
+        $expenseYear = (int) date('Y', strtotime((string) $expenseData['date_encoded']));
+
+        if (! $budgetItem
+            || (int) $budgetItem->category_id !== (int) $expenseData['category_id']
+            || (int) $budgetItem->particular_id !== (int) $expenseData['particular_id']) {
+            throw ValidationException::withMessages([
+                'budget_item_id' => 'Select a monthly allocation that matches the chosen category, account title, and responsibility center.',
+            ]);
+        }
+
+        if ((int) $budgetItem->budget?->year !== $expenseYear) {
+            throw ValidationException::withMessages([
+                'budget_item_id' => "The selected allocation belongs to FY {$budgetItem->budget?->year}, but the expense date belongs to FY {$expenseYear}.",
+            ]);
+        }
+
+        return $budgetItem;
     }
 
     protected function resolveExpenseParticular(string $raw, int $categoryId): ?BudgetParticular
