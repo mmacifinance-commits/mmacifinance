@@ -55,6 +55,8 @@ const itemForm = useForm({
     appropriation: 0,
 })
 
+const itemErrorMessages = computed(() => [...new Set(Object.values(itemForm.errors).filter(Boolean))])
+
 const availableDepartments = computed(() => {
     const titles = props.accountTitles || props.particulars || []
     const categoryId = Number(itemForm.category_id || 0)
@@ -182,12 +184,14 @@ const utilRate = computed(() => grandTotals.value.appropriation > 0 ? ((grandTot
 
 function openAddItem() {
     itemForm.reset()
+    itemForm.clearErrors()
     itemForm.month = 1
     editingItem.value = null
     showItemModal.value = true
 }
 
 function openEditItem(item) {
+    itemForm.clearErrors()
     itemForm.category_id = item.category_id
     itemForm.department_id = Number(item.particular?.department_id || item.particular?.department?.id || 0) || ''
     itemForm.particular_id = item.particular_id
@@ -198,10 +202,21 @@ function openEditItem(item) {
 }
 
 function saveItem() {
+    const options = {
+        preserveScroll: true,
+        onSuccess: () => {
+            showItemModal.value = false
+            itemForm.clearErrors()
+        },
+        onError: () => {
+            showItemModal.value = true
+        },
+    }
+
     if (editingItem.value) {
-        itemForm.put(`/annual-budgets/${props.budget.id}/items/${editingItem.value}`, { onSuccess: () => { showItemModal.value = false } })
+        itemForm.put(`/annual-budgets/${props.budget.id}/items/${editingItem.value}`, options)
     } else {
-        itemForm.post(`/annual-budgets/${props.budget.id}/items`, { onSuccess: () => { showItemModal.value = false } })
+        itemForm.post(`/annual-budgets/${props.budget.id}/items`, options)
     }
 }
 
@@ -398,19 +413,27 @@ function catBalancePercent(group) {
     <!-- Add/Edit Item Modal -->
     <Modal :show="showItemModal" :title="editingItem ? 'Edit Monthly Budget Allocation' : 'Add Monthly Budget Allocation'" :subtitle="editingItem ? 'Update monthly budget item details.' : 'Allocate budget for a specific month and account title.'" max-width="lg" @close="showItemModal = false">
         <form @submit.prevent="saveItem">
+            <div v-if="itemErrorMessages.length" class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+                <p class="font-semibold">Please correct the following before saving:</p>
+                <ul class="mt-1 list-disc space-y-1 pl-5">
+                    <li v-for="message in itemErrorMessages" :key="message">{{ message }}</li>
+                </ul>
+            </div>
             <div class="grid gap-4 sm:grid-cols-2">
                 <div class="sm:col-span-2">
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Budget Month</label>
-                    <select v-model.number="itemForm.month" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required>
+                    <select v-model.number="itemForm.month" :class="itemForm.errors.month ? 'border-red-400' : 'border-gray-300'" class="w-full rounded-lg border px-3 py-2.5 text-sm" required>
                         <option v-for="(mName, idx) in monthNames" :key="idx+1" :value="idx+1">{{ mName }} (Month {{ idx+1 }})</option>
                     </select>
+                    <p v-if="itemForm.errors.month" class="mt-1 text-xs text-red-600">{{ itemForm.errors.month }}</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Budget Category</label>
-                    <select v-model="itemForm.category_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required>
+                    <select v-model="itemForm.category_id" :class="itemForm.errors.category_id ? 'border-red-400' : 'border-gray-300'" class="w-full rounded-lg border px-3 py-2.5 text-sm" required>
                         <option value="">Select category</option>
                         <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
                     </select>
+                    <p v-if="itemForm.errors.category_id" class="mt-1 text-xs text-red-600">{{ itemForm.errors.category_id }}</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Responsibility Center</label>
@@ -418,6 +441,7 @@ function catBalancePercent(group) {
                         <option value="">Select responsibility center</option>
                         <option v-for="d in availableDepartments" :key="d.id" :value="d.id">{{ d.name }}</option>
                     </select>
+                    <p v-if="itemForm.errors.department_id" class="mt-1 text-xs text-red-600">{{ itemForm.errors.department_id }}</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Account Title</label>
@@ -425,10 +449,12 @@ function catBalancePercent(group) {
                         <option value="">Select account title</option>
                         <option v-for="p in filteredAccountTitles" :key="p.id" :value="p.id">{{ p.particular }}</option>
                     </select>
+                    <p v-if="itemForm.errors.particular_id" class="mt-1 text-xs text-red-600">{{ itemForm.errors.particular_id }}</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Monthly Appropriation Amount (₱)</label>
                     <input v-model.number="itemForm.appropriation" type="number" step="0.01" min="0" placeholder="0.00" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required />
+                    <p v-if="itemForm.errors.appropriation" class="mt-1 text-xs text-red-600">{{ itemForm.errors.appropriation }}</p>
                 </div>
                 <div class="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
                     Expenditure is now calculated automatically from linked disbursements with status <span class="font-semibold">Posted (GL)</span>. It is no longer editable here.
@@ -436,7 +462,7 @@ function catBalancePercent(group) {
             </div>
             <div class="flex items-center justify-end gap-3 pt-5 border-t mt-4">
                 <button type="button" @click="showItemModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button type="submit" :disabled="itemForm.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">{{ editingItem ? 'Update Allocation' : 'Save Allocation' }}</button>
+                <button type="submit" :disabled="itemForm.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm disabled:cursor-wait disabled:opacity-60">{{ itemForm.processing ? (editingItem ? 'Updating...' : 'Saving...') : (editingItem ? 'Update Allocation' : 'Save Allocation') }}</button>
             </div>
         </form>
     </Modal>

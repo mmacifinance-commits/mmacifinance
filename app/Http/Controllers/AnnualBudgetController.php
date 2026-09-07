@@ -531,6 +531,8 @@ class AnnualBudgetController extends Controller
 
     public function updateItem(Request $request, AnnualBudget $annualBudget, BudgetItem $item)
     {
+        abort_unless((int) $item->budget_id === (int) $annualBudget->id, 404);
+
         $validated = $request->validate([
             'category_id' => 'required|exists:budget_categories,id',
             'department_id' => 'required|exists:departments,id',
@@ -546,9 +548,31 @@ class AnnualBudgetController extends Controller
             ]);
         }
 
+        $month = (int) ($validated['month'] ?: $item->month ?: 1);
+        $duplicateExists = $annualBudget->items()
+            ->where('particular_id', $validated['particular_id'])
+            ->where('month', $month)
+            ->whereKeyNot($item->id)
+            ->exists();
+
+        if ($duplicateExists) {
+            $monthName = date('F', mktime(0, 0, 0, $month, 1));
+
+            throw ValidationException::withMessages([
+                'month' => "An allocation already exists for {$particular->particular} in {$monthName} FY {$annualBudget->year}. Edit the existing row or choose another month.",
+            ]);
+        }
+
         $this->ensureIncomeExistsForYear((int) $annualBudget->year);
 
-        $validated['month'] = $validated['month'] ?: $item->month ?: 1;
+        $validated['month'] = $month;
+        if ($month !== (int) $item->month) {
+            $validated['ref_no'] = preg_replace(
+                '/^MB-\d{4}-\d{2}-/',
+                sprintf('MB-%d-%02d-', $annualBudget->year, $month),
+                (string) $item->ref_no
+            );
+        }
         unset($validated['department_id']);
 
         DB::transaction(function () use ($item, $validated) {
