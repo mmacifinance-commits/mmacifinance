@@ -71,4 +71,28 @@ class SecurityHeadersTest extends TestCase
         $response->assertHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
         $response->assertHeader('X-Content-Type-Options', 'nosniff');
     }
+
+    public function test_xsrf_cookie_remains_readable_while_session_cookie_is_http_only(): void
+    {
+        config([
+            'session.secure' => true,
+            'session.http_only' => true,
+            'session.same_site' => 'lax',
+        ]);
+
+        $response = $this->withServerVariables(['HTTPS' => 'on'])->get('/_test/security-headers');
+        $cookies = collect($response->headers->getCookies());
+        $xsrfCookie = $cookies->first(fn ($cookie) => $cookie->getName() === 'XSRF-TOKEN');
+        $sessionCookie = $cookies->first(fn ($cookie) => $cookie->getName() === config('session.cookie'));
+
+        $this->assertNotNull($xsrfCookie);
+        $this->assertFalse($xsrfCookie->isHttpOnly());
+        $this->assertTrue($xsrfCookie->isSecure());
+        $this->assertSame('lax', $xsrfCookie->getSameSite());
+
+        $this->assertNotNull($sessionCookie);
+        $this->assertTrue($sessionCookie->isHttpOnly());
+        $this->assertTrue($sessionCookie->isSecure());
+        $this->assertSame('lax', $sessionCookie->getSameSite());
+    }
 }
