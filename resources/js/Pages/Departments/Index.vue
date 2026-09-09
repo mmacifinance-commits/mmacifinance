@@ -20,11 +20,13 @@ const importForm = useForm({ csv_file: null })
 
 function openCreate() {
     form.reset()
+    form.clearErrors()
     editing.value = null
     showModal.value = true
 }
 
 function openEdit(department) {
+    form.clearErrors()
     form.name = department.name
     form.code = department.code
     editing.value = department.id

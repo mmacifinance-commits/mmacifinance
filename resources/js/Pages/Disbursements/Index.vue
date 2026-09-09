@@ -52,6 +52,7 @@ const form = useForm({
     notes: '',
     remarks: '',
 })
+const formErrorMessages = computed(() => Object.values(form.errors || {}).flat().filter(Boolean))
 
 const offlineRows = ref([])
 
@@ -171,6 +172,7 @@ function openCreate() {
     }
 
     form.reset()
+    form.clearErrors()
     form.expense_id = filteredExpensesForModal.value[0]?.id || ''
     if (form.expense_id) {
         const exp = props.expenses?.find(e => String(e.id) === String(form.expense_id))
@@ -187,6 +189,7 @@ function openCreate() {
 }
 
 function openEdit(d) {
+    form.clearErrors()
     Object.assign(form, {
         expense_id: d.expense_id || '',
         description: d.description,
@@ -505,6 +508,10 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
     <!-- Create/Edit Disbursement Modal -->
     <Modal :show="showModal" :title="editing ? 'Edit Disbursement' : 'Create Disbursement'" :subtitle="editing ? 'Update disbursement release details.' : 'Enter release details and submit for approval.'" max-width="5xl" @close="showModal = false">
         <form @submit.prevent="save">
+            <div v-if="formErrorMessages.length" class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+                <p class="font-semibold">The disbursement could not be saved:</p>
+                <ul class="mt-1 list-disc space-y-1 pl-5"><li v-for="message in formErrorMessages" :key="message">{{ message }}</li></ul>
+            </div>
             <div class="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
                 <!-- Linked expense picker -->
                 <div class="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">

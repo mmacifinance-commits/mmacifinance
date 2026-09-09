@@ -12,9 +12,10 @@ const showImportModal = ref(false)
 const editing = ref(null)
 const form = useForm({ name: '', description: '' })
 const importForm = useForm({ csv_file: null })
+const formErrorMessages = computed(() => Object.values(form.errors || {}).flat().filter(Boolean))
 
-function openCreate() { form.reset(); editing.value = null; showModal.value = true }
-function openEdit(c) { form.name = c.name; form.description = c.description || ''; editing.value = c.id; showModal.value = true }
+function openCreate() { form.reset(); form.clearErrors(); editing.value = null; showModal.value = true }
+function openEdit(c) { form.clearErrors(); form.name = c.name; form.description = c.description || ''; editing.value = c.id; showModal.value = true }
 function save() {
     if (editing.value) form.put(`/budget-categories/${editing.value}`, { onSuccess: () => { showModal.value = false } })
     else form.post('/budget-categories', { onSuccess: () => { showModal.value = false } })
@@ -78,6 +79,10 @@ function importCsv() {
     </div>
     <Modal :show="showModal" :title="editing ? 'Edit Category' : 'Add Category'" :subtitle="editing ? 'Update category details.' : 'Create a new budget category.'" @close="showModal = false">
         <form @submit.prevent="save">
+            <div v-if="formErrorMessages.length" class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+                <p class="font-semibold">The category could not be saved:</p>
+                <ul class="mt-1 list-disc space-y-1 pl-5"><li v-for="message in formErrorMessages" :key="message">{{ message }}</li></ul>
+            </div>
             <div class="space-y-4">
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Name</label><input v-model="form.name" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Description</label><textarea v-model="form.description" rows="2" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"></textarea></div>

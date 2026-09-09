@@ -19,6 +19,7 @@ const showImportModal = ref(false)
 const editing = ref(null)
 const form = useForm({ category_id: '', department_id: '', account_code: '', account_name: '', particular: '', description: '' })
 const importForm = useForm({ csv_file: null })
+const formErrorMessages = computed(() => Object.values(form.errors || {}).flat().filter(Boolean))
 
 const filterCategory = ref('')
 const filterDepartment = ref('')
@@ -36,8 +37,9 @@ const filteredParticulars = computed(() => {
     })
 })
 
-function openCreate() { form.reset(); editing.value = null; showModal.value = true }
+function openCreate() { form.reset(); form.clearErrors(); editing.value = null; showModal.value = true }
 function openEdit(p) {
+    form.clearErrors()
     Object.assign(form, { category_id: p.category_id, department_id: p.department_id, account_code: p.account_code, account_name: p.account_name, particular: p.particular, description: p.description || '' })
     editing.value = p.id; showModal.value = true
 }
@@ -127,6 +129,10 @@ function importCsv() {
 
     <Modal :show="showModal" :title="editing ? 'Edit Account Title' : 'Add Account Title'" :subtitle="editing ? 'Update account title details.' : 'Create a new account title line item.'" max-width="lg" @close="showModal = false">
         <form @submit.prevent="save">
+            <div v-if="formErrorMessages.length" class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+                <p class="font-semibold">The account title could not be saved:</p>
+                <ul class="mt-1 list-disc space-y-1 pl-5"><li v-for="message in formErrorMessages" :key="message">{{ message }}</li></ul>
+            </div>
             <div class="grid gap-4 sm:grid-cols-2">
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Category</label><select v-model="form.category_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required><option value="">Select Category</option><option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Responsibility Center</label><select v-model="form.department_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required><option value="">Select Responsibility Center</option><option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option></select></div>
