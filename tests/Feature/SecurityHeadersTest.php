@@ -33,6 +33,9 @@ class SecurityHeadersTest extends TestCase
         $policy = (string) $response->headers->get('Content-Security-Policy');
         $this->assertStringContainsString("default-src 'self'", $policy);
         $this->assertStringContainsString("script-src 'self'", $policy);
+        $this->assertStringContainsString("style-src 'self' https://fonts.bunny.net", $policy);
+        $this->assertStringContainsString("style-src-attr 'unsafe-inline'", $policy);
+        $this->assertStringNotContainsString("style-src 'self' 'unsafe-inline'", $policy);
         $this->assertStringContainsString("frame-ancestors 'none'", $policy);
         $this->assertStringContainsString("object-src 'none'", $policy);
         $this->assertStringContainsString('https://fonts.bunny.net', $policy);
@@ -52,5 +55,20 @@ class SecurityHeadersTest extends TestCase
         $this->assertStringContainsString("script-src 'self' 'unsafe-eval' http://127.0.0.1:5173", $policy);
         $this->assertStringContainsString('ws://127.0.0.1:5173', $policy);
         $this->assertStringNotContainsString('upgrade-insecure-requests', $policy);
+    }
+
+    public function test_security_headers_are_added_to_early_auth_redirects(): void
+    {
+        app()->detectEnvironment(fn () => 'production');
+
+        Route::middleware(['web', 'auth'])
+            ->get('/_test/protected-security-headers', fn () => response('protected'));
+
+        $response = $this->get('/_test/protected-security-headers');
+
+        $response->assertRedirect('/login');
+        $response->assertHeader('Content-Security-Policy');
+        $response->assertHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+        $response->assertHeader('X-Content-Type-Options', 'nosniff');
     }
 }
