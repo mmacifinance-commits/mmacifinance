@@ -5,9 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AnnualBudget;
 use App\Models\BudgetCategory;
 use App\Models\BudgetItem;
-use App\Models\BudgetParticular;
 use App\Models\Department;
-use App\Models\Expense;
 use App\Services\BudgetUtilizationService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -16,13 +14,23 @@ class ReportController extends Controller
 {
     public function index(Request $request, BudgetUtilizationService $utilization)
     {
-        $selectedYear = (int) ($request->query('year') ?: date('Y'));
-        $selectedMonth = $request->query('month') ? (int) $request->query('month') : null;
-        $startDate = $request->query('start_date');
-        $endDate = $request->query('end_date');
-        $departmentId = $request->query('department_id') ? (int) $request->query('department_id') : null;
-        $categoryId = $request->query('category_id') ? (int) $request->query('category_id') : null;
-        $accountTitleId = $request->query('account_title_id') ? (int) $request->query('account_title_id') : null;
+        $validated = $request->validate([
+            'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
+            'month' => ['nullable', 'integer', 'between:1,12'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date'],
+            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
+            'category_id' => ['nullable', 'integer', 'exists:budget_categories,id'],
+            'account_title_id' => ['nullable', 'integer', 'exists:budget_particulars,id'],
+        ]);
+
+        $selectedYear = (int) ($validated['year'] ?? date('Y'));
+        $selectedMonth = isset($validated['month']) ? (int) $validated['month'] : null;
+        $startDate = $validated['start_date'] ?? null;
+        $endDate = $validated['end_date'] ?? null;
+        $departmentId = isset($validated['department_id']) ? (int) $validated['department_id'] : null;
+        $categoryId = isset($validated['category_id']) ? (int) $validated['category_id'] : null;
+        $accountTitleId = isset($validated['account_title_id']) ? (int) $validated['account_title_id'] : null;
 
         $availableYears = AnnualBudget::pluck('year')
             ->concat([2024, 2025, 2026, (int) date('Y')])
@@ -35,27 +43,6 @@ class ReportController extends Controller
             [$startDate, $endDate] = [$endDate, $startDate];
         }
 
-        // Expenses Query
-        $expQuery = Expense::with(['category', 'particular.department']);
-        if ($startDate && $endDate) {
-            $expQuery->whereBetween('date_encoded', [$startDate, $endDate]);
-        } elseif ($selectedMonth) {
-            $expQuery->whereYear('date_encoded', $selectedYear)->whereMonth('date_encoded', $selectedMonth);
-        } else {
-            $expQuery->whereYear('date_encoded', $selectedYear);
-        }
-
-        if ($categoryId) {
-            $expQuery->where('category_id', $categoryId);
-        }
-        if ($accountTitleId) {
-            $expQuery->where('particular_id', $accountTitleId);
-        }
-        if ($departmentId) {
-            $expQuery->whereHas('particular', fn($q) => $q->where('department_id', $departmentId));
-        }
-
-        // Disbursements Query
         $dsbQuery = $utilization->queryForBudgetFilters(
             $selectedYear,
             $selectedMonth,
@@ -84,25 +71,18 @@ class ReportController extends Controller
 
         $postedDisbursements = (clone $dsbQuery)->get();
 
-        $monthlyPostedDisbursements = $postedDisbursements->groupBy(fn ($item) => (int) ($item->expense?->budgetItem?->month ?? 0))
-            ->map(fn ($group) => (float) $group->sum('amount'));
-
         $selectedMonthLabel = 'All Months';
-        if ($startDate && $endDate) {
-            $startMonth = (int) date('n', strtotime($startDate));
-            $endMonth = (int) date('n', strtotime($endDate));
-            $selectedBudgetItems = $annualBudgetItems->whereBetween('month', [$startMonth, $endMonth])->values();
-            $selectedMonthLabel = date('M d, Y', strtotime($startDate)) . ' - ' . date('M d, Y', strtotime($endDate));
-        } elseif ($selectedMonth) {
+        if ($selectedMonth) {
             $selectedBudgetItems = $annualBudgetItems->where('month', $selectedMonth)->values();
             $selectedMonthLabel = date('F', mktime(0, 0, 0, $selectedMonth, 1));
         } else {
             $selectedBudgetItems = $annualBudgetItems;
         }
         $monthAppropriation = (float) $selectedBudgetItems->sum('appropriation');
-        $monthExpenditure = $startDate && $endDate
-            ? (float) $postedDisbursements->sum('amount')
-            : ($selectedMonth ? (float) ($monthlyPostedDisbursements[$selectedMonth] ?? 0) : (float) $postedDisbursements->sum('amount'));
+        $selectedBudgetItemIds = $selectedBudgetItems->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $monthExpenditure = (float) $postedDisbursements
+            ->filter(fn ($disbursement) => in_array((int) ($disbursement->expense?->budget_item_id ?? 0), $selectedBudgetItemIds, true))
+            ->sum('amount');
 
         $selectedMonthPerformance = [
             'month_label' => $selectedMonthLabel,
@@ -172,10 +152,6 @@ class ReportController extends Controller
                 }),
             'categories' => BudgetCategory::all(),
             'departments' => Department::all(),
-            'expenses' => $expQuery->latest()->get(),
-            'disbursements' => $dsbQuery->latest()->get(),
-            'annualBudgetItems' => $annualBudgetItems,
-            'budgetItems' => $selectedBudgetItems,
             'selectedMonthPerformance' => $selectedMonthPerformance,
             'budgetPerformanceByYear' => $budgetPerformanceByYear,
             'yearEndUnusedBalances' => $yearEndUnusedBalances,

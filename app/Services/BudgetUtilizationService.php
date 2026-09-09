@@ -30,10 +30,8 @@ class BudgetUtilizationService
                 'expense.budgetItem',
                 fn (Builder $itemQuery) => $itemQuery->where('month', $month)
             ))
-            ->when($startDate && $endDate, fn (Builder $query) => $query->whereBetween(
-                'disbursements.date_encoded',
-                [$startDate, $endDate]
-            ))
+            ->when($startDate, fn (Builder $query) => $query->whereDate('disbursements.date_encoded', '>=', $startDate))
+            ->when($endDate, fn (Builder $query) => $query->whereDate('disbursements.date_encoded', '<=', $endDate))
             ->when($categoryId, fn (Builder $query) => $query->whereHas(
                 'expense.budgetItem',
                 fn (Builder $itemQuery) => $itemQuery->where('category_id', $categoryId)
@@ -124,8 +122,11 @@ class BudgetUtilizationService
         ?int $categoryId,
         ?int $particularId
     ): void {
-        if ($startDate && $endDate) {
-            $query->whereBetween('disbursements.date_encoded', [$startDate, $endDate]);
+        if ($startDate) {
+            $query->whereDate('disbursements.date_encoded', '>=', $startDate);
+        }
+        if ($endDate) {
+            $query->whereDate('disbursements.date_encoded', '<=', $endDate);
         }
         if ($categoryId) {
             $query->where('budget_items.category_id', $categoryId);

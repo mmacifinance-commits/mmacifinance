@@ -84,7 +84,6 @@ function buildChart() {
     }
 
     const reduceMotion = window.innerWidth < 768
-        || window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
     revealProgress = reduceMotion ? 1 : 0
     const items = chartData.value.items

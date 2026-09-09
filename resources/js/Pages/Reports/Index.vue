@@ -8,10 +8,6 @@ const props = defineProps({
     budgets: Array,
     categories: Array,
     departments: Array,
-    expenses: Array,
-    disbursements: Array,
-    annualBudgetItems: Array,
-    budgetItems: Array,
     selectedMonthPerformance: Object,
     budgetPerformanceByYear: Array,
     yearEndUnusedBalances: Array,
@@ -187,6 +183,15 @@ const selectedPeriodLabel = computed(() => {
     return props.selectedMonthPerformance?.month_label || 'All Months'
 })
 
+const selectedDateRangeLabel = computed(() => {
+    if (props.filters.start_date && props.filters.end_date) {
+        return `Posted ${props.filters.start_date} to ${props.filters.end_date}`
+    }
+    if (props.filters.start_date) return `Posted from ${props.filters.start_date}`
+    if (props.filters.end_date) return `Posted through ${props.filters.end_date}`
+    return 'All posting dates'
+})
+
 function openBreakdown(year) {
 
     breakdownYear.value = year
@@ -208,6 +213,17 @@ function applyFilters() {
     }, { preserveState: true, replace: true })
 }
 
+function applyMonthFilter() {
+    applyFilters()
+}
+
+function applyDateFilter() {
+    if (startDate.value && endDate.value && endDate.value < startDate.value) {
+        [startDate.value, endDate.value] = [endDate.value, startDate.value]
+    }
+    applyFilters()
+}
+
 function clearFilters() {
     filterYear.value = new Date().getFullYear()
     filterMonth.value = ''
@@ -218,10 +234,6 @@ function clearFilters() {
     filterAccountTitle.value = ''
     applyFilters()
 }
-
-function totalApp() { return asArray(props.annualBudgetItems).reduce((s, i) => s + Number(i.appropriation || 0), 0) }
-function totalExp() { return asArray(props.budgetItems).reduce((s, i) => s + Number(i.expenditure || 0), 0) }
-function utilRate(app, exp) { return Number(app || 0) > 0 ? ((Number(exp || 0) / Number(app || 0)) * 100).toFixed(1) : '0.0' }
 
 const yearEndSummary = computed(() => {
     return asArray(props.yearEndUnusedBalances)
@@ -260,7 +272,7 @@ const yearEndSummaryTotals = computed(() => {
             </div>
             <div>
                 <label class="block text-[11px] font-semibold text-gray-600 mb-1">Month</label>
-                <select v-model="filterMonth" @change="applyFilters" class="w-full rounded-md border-gray-300 text-xs py-1.5 bg-white">
+                <select v-model="filterMonth" @change="applyMonthFilter" class="w-full rounded-md border-gray-300 text-xs py-1.5 bg-white">
                     <option value="">All Months</option>
                     <option v-for="(mName, idx) in monthNames" :key="idx+1" :value="idx+1">{{ mName }}</option>
                 </select>
@@ -281,11 +293,11 @@ const yearEndSummaryTotals = computed(() => {
             </div>
             <div>
                 <label class="block text-[11px] font-semibold text-gray-600 mb-1">Start Date</label>
-                <input v-model="startDate" type="date" @change="applyFilters" class="w-full rounded-md border-gray-300 text-xs py-1.5 bg-white" />
+                <input v-model="startDate" type="date" @change="applyDateFilter" class="w-full rounded-md border-gray-300 text-xs py-1.5 bg-white" />
             </div>
             <div>
                 <label class="block text-[11px] font-semibold text-gray-600 mb-1">End Date</label>
-                <input v-model="endDate" type="date" @change="applyFilters" class="w-full rounded-md border-gray-300 text-xs py-1.5 bg-white" />
+                <input v-model="endDate" type="date" @change="applyDateFilter" class="w-full rounded-md border-gray-300 text-xs py-1.5 bg-white" />
             </div>
         </div>
         <div class="flex justify-end gap-2 pt-2 border-t">
@@ -297,7 +309,7 @@ const yearEndSummaryTotals = computed(() => {
         <div class="px-5 py-3 border-b bg-gray-50 flex flex-wrap items-center justify-between gap-2">
             <div>
                 <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wider">Appropriation and Expenditure for Selected Month</h3>
-                <p class="text-xs text-gray-500 mt-1">FY {{ filterYear }} - {{ selectedMonthPerformance.month_label }}</p>
+                <p class="text-xs text-gray-500 mt-1">FY {{ filterYear }} - {{ selectedMonthPerformance.month_label }} - {{ selectedDateRangeLabel }}</p>
             </div>
         </div>
         <div class="grid gap-4 p-5 md:grid-cols-3">
@@ -313,24 +325,6 @@ const yearEndSummaryTotals = computed(() => {
                 <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Expenditure</p>
                 <p class="mt-1 text-xl font-extrabold text-mustard font-sans tabular-nums">{{ PESO }}{{ fmt(selectedMonthPerformance.expenditure) }}</p>
                 <p class="mt-1 text-xs font-semibold text-gray-500">Utilization: {{ selectedMonthPerformance.utilizationRate }}%</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Summary Cards -->
-    <div class="grid gap-5 md:grid-cols-2 mb-8">
-        <div class="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden">
-            <div class="h-1.5 bg-emerald-500"></div>
-            <div class="p-5">
-                <p class="text-xs font-bold uppercase text-gray-500 mb-1">Total Appropriation</p>
-                <p class="text-2xl font-bold text-gray-900 font-sans tabular-nums">{{ PESO }}{{ fmt(totalApp()) }}</p>
-            </div>
-        </div>
-        <div class="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden">
-            <div class="h-1.5 bg-rose-500"></div>
-            <div class="p-5">
-                <p class="text-xs font-bold uppercase text-gray-500 mb-1">Total Expenditure (Posted)</p>
-                <p class="text-2xl font-bold text-gray-900 font-sans tabular-nums">{{ PESO }}{{ fmt(totalExp()) }}</p>
             </div>
         </div>
     </div>
