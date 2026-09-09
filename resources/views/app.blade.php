@@ -12,9 +12,9 @@
     <meta name="apple-mobile-web-app-title" content="BudgetTracker">
     <title inertia>{{ config('app.name', 'Budget Fund Utilization & Tracking') }}</title>
     <link rel="manifest" href="/manifest.json">
-    <link rel="preconnect" href="https://fonts.bunny.net">
+    <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
     <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700|roboto-mono:400,500,600,700&display=swap"
-        rel="stylesheet" />
+        rel="stylesheet" crossorigin="anonymous" />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @inertiaHead
 </head>
