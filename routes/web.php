@@ -1,18 +1,19 @@
 <?php
 
+use App\Http\Controllers\AnnualBudgetController;
 use App\Http\Controllers\Auth\LoginController;
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\DepartmentController;
+use App\Http\Controllers\Auth\PasswordResetController;
+use App\Http\Controllers\Auth\TwoFactorController;
 use App\Http\Controllers\BudgetCategoryController;
 use App\Http\Controllers\BudgetParticularController;
-use App\Http\Controllers\AnnualBudgetController;
-use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\DisbursementController;
-use App\Http\Controllers\ReportController;
+use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\IncomeController;
+use App\Http\Controllers\ReceiptController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RevenueController;
-use App\Http\Controllers\Auth\TwoFactorController;
-use App\Http\Controllers\Auth\PasswordResetController;
 use Illuminate\Support\Facades\Route;
 
 // --- Guest Routes ---
@@ -46,6 +47,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
     Route::get('/income', [IncomeController::class, 'index'])->name('income.index');
     Route::get('/iaeo', [RevenueController::class, 'index'])->name('iaeo.index');
+    Route::get('/receipts', [ReceiptController::class, 'index'])
+        ->middleware('role:super_admin,budget_officer,disbursement_officer,cashier')
+        ->name('receipts.index');
+    Route::middleware('role:super_admin,budget_officer,disbursement_officer,cashier')->group(function () {
+        Route::get('/receipts/export-csv', [ReceiptController::class, 'exportCsv'])->name('receipts.export-csv');
+        Route::post('/receipts/import-csv', [ReceiptController::class, 'importCsv'])->name('receipts.import-csv');
+    });
     Route::redirect('/revenue', '/iaeo', 301);
 
     // --- Budget section: Super Admin + Budget Officer can CRUD, others can only view ---

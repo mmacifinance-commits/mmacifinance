@@ -7,16 +7,18 @@ const page = usePage()
 const auth = computed(() => page.props.auth)
 const flash = computed(() => page.props.flash)
 const roleLabel = computed(() => auth.value?.user?.role_label || 'User')
+const canViewReceipts = computed(() => auth.value?.user?.role !== 'auditor')
 
-const mainNavItems = [
+const mainNavItems = computed(() => [
     { href: '/', label: 'DASHBOARD', icon: '', section: 'dashboard' },
     { href: '/iaeo', label: 'IAEO', icon: '', section: 'iaeo' },
     { href: '/annual-budgets', label: 'BUDGET', icon: '', section: 'budget' },
     { href: '/income', label: 'INCOME', icon: '', section: 'income' },
+    ...(canViewReceipts.value ? [{ href: '/receipts', label: 'RECEIPTS', icon: '', section: 'receipts' }] : []),
     { href: '/expenses', label: 'EXPENDITURES', icon: '', section: 'expenditures' },
     { href: '/disbursements', label: 'DISBURSEMENTS', icon: '', section: 'disbursements' },
     { href: '/reports', label: 'FINANCIAL REPORTS', icon: '', section: 'reports' },
-]
+])
 
 const sidebarMenus = {
     budget: [
@@ -37,6 +39,7 @@ function getActiveSection() {
     if (p === '/') return 'dashboard'
     if (p.startsWith('/annual-budgets') || p.startsWith('/budget-categories') || p.startsWith('/budget-particulars') || p.startsWith('/departments')) return 'budget'
     if (p.startsWith('/income')) return 'income'
+    if (p.startsWith('/receipts')) return 'receipts'
     if (p.startsWith('/iaeo') || p.startsWith('/revenue')) return 'iaeo'
     if (p.startsWith('/expenses')) return 'expenditures'
     if (p.startsWith('/disbursements')) return 'disbursements'
