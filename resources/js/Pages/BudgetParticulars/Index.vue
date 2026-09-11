@@ -20,6 +20,7 @@ const editing = ref(null)
 const form = useForm({ category_id: '', department_id: '', account_code: '', account_name: '', particular: '', description: '' })
 const importForm = useForm({ csv_file: null })
 const formErrorMessages = computed(() => Object.values(form.errors || {}).flat().filter(Boolean))
+const importErrorMessages = computed(() => Object.values(importForm.errors || {}).flat().filter(Boolean))
 
 const filterCategory = ref('')
 const filterDepartment = ref('')
@@ -49,6 +50,11 @@ function save() {
 }
 function remove(id) { if (confirm('Warning: this cannot be undone. Delete this Account Title?')) router.delete(`/budget-particulars/${id}`) }
 function exportCsv() { window.location.href = '/budget-particulars/export-csv' }
+function openImport() {
+    importForm.reset()
+    importForm.clearErrors()
+    showImportModal.value = true
+}
 function importCsv() {
     importForm.post('/budget-particulars/import-csv', {
         onSuccess: () => { showImportModal.value = false; importForm.reset() },
@@ -66,7 +72,7 @@ function importCsv() {
         </div>
         <div class="flex flex-wrap items-center gap-2">
             <button v-if="perms.canManageBudget" @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">Export CSV</button>
-            <button v-if="perms.canManageBudget" @click="showImportModal = true" class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Import CSV</button>
+            <button v-if="perms.canManageBudget" @click="openImport" class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Import CSV</button>
             <button v-if="perms.canManageBudget" @click="openCreate" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
                 Add Account Title
             </button>
@@ -150,6 +156,12 @@ function importCsv() {
 
     <Modal :show="showImportModal" title="Import Account Titles CSV" subtitle="Required columns: budget_category, responsibility_center, account_code, account_name, account_title, description" max-width="lg" @close="showImportModal = false">
         <form @submit.prevent="importCsv" class="space-y-4">
+            <div v-if="importErrorMessages.length" class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+                <p class="font-semibold">The CSV could not be imported:</p>
+                <ul class="mt-1 list-disc space-y-1 pl-5">
+                    <li v-for="message in importErrorMessages" :key="message">{{ message }}</li>
+                </ul>
+            </div>
             <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 <p class="font-semibold">Required columns</p>
                 <p class="mt-1 font-mono text-xs">budget_category, responsibility_center, account_code, account_name, account_title, description</p>
@@ -159,7 +171,7 @@ function importCsv() {
             </div>
             <div>
                 <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV File</label>
-                <input type="file" accept=".csv,text/csv" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" @change="(e) => importForm.csv_file = e.target.files?.[0] || null" />
+                <input type="file" accept=".csv,text/csv" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required @change="(e) => importForm.csv_file = e.target.files?.[0] || null" />
                 <p v-if="importForm.errors.csv_file" class="mt-1 text-xs text-red-500">{{ importForm.errors.csv_file }}</p>
             </div>
             <div class="flex items-center justify-end gap-3 border-t pt-5">

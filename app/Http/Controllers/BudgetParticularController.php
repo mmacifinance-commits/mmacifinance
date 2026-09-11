@@ -2,11 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\BudgetParticular;
 use App\Models\BudgetCategory;
+use App\Models\BudgetParticular;
 use App\Models\Department;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
 use Inertia\Inertia;
 
@@ -98,6 +97,7 @@ class BudgetParticularController extends Controller
         $required = ['budget_category', 'responsibility_center', 'account_code', 'account_name', 'account_title', 'description'];
         if (array_diff($required, $headers)) {
             fclose($handle);
+
             return back()->withErrors(['csv_file' => 'CSV must contain these columns: budget_category, responsibility_center, account_code, account_name, account_title, description.']);
         }
 
@@ -105,11 +105,17 @@ class BudgetParticularController extends Controller
         $created = 0;
         $updated = 0;
         $seen = [];
+        $dataRows = 0;
+        $duplicates = 0;
+        $skipped = [];
+        $line = 1;
 
         while (($row = fgetcsv($handle)) !== false) {
-            if (!array_filter($row, fn ($value) => trim((string) $value) !== '')) {
+            $line++;
+            if (! array_filter($row, fn ($value) => trim((string) $value) !== '')) {
                 continue;
             }
+            $dataRows++;
 
             $categoryRef = trim((string) ($row[$index['budget_category']] ?? ''));
             $departmentRef = trim((string) ($row[$index['responsibility_center']] ?? ''));
@@ -119,18 +125,31 @@ class BudgetParticularController extends Controller
             $description = trim((string) ($row[$index['description']] ?? ''));
 
             if ($categoryRef === '' || $departmentRef === '' || $accountCode === '' || $accountName === '' || $particular === '') {
+                $skipped[] = "Row {$line} is missing required values.";
+
                 continue;
             }
 
             $category = BudgetCategory::where('name', $categoryRef)->orWhere('id', $categoryRef)->first();
             $department = Department::where('code', $departmentRef)->orWhere('name', $departmentRef)->orWhere('id', $departmentRef)->first();
 
-            if (!$category || !$department) {
+            if (! $category || ! $department) {
+                $missing = [];
+                if (! $category) {
+                    $missing[] = "budget category '{$categoryRef}'";
+                }
+                if (! $department) {
+                    $missing[] = "responsibility center '{$departmentRef}'";
+                }
+                $skipped[] = 'Row '.$line.' could not find '.implode(' and ', $missing).'.';
+
                 continue;
             }
 
-            $key = strtolower($category->id . '|' . $department->id . '|' . $accountCode . '|' . $particular);
+            $key = strtolower($category->id.'|'.$department->id.'|'.$accountCode.'|'.$particular);
             if (isset($seen[$key])) {
+                $duplicates++;
+
                 continue;
             }
             $seen[$key] = true;
@@ -153,8 +172,37 @@ class BudgetParticularController extends Controller
 
         fclose($handle);
 
+        if ($dataRows === 0) {
+            return back()->withErrors([
+                'csv_file' => 'The CSV contains only the header row. Add at least one account title row before importing.',
+            ]);
+        }
+
+        if (($created + $updated) === 0) {
+            $details = $skipped ? ' '.implode(' ', array_slice($skipped, 0, 5)) : '';
+            if (count($skipped) > 5) {
+                $details .= ' And '.(count($skipped) - 5).' more row(s).';
+            }
+            if ($duplicates > 0) {
+                $details .= " {$duplicates} duplicate row(s) were ignored.";
+            }
+
+            return back()->withErrors([
+                'csv_file' => trim('No account titles were imported.'.$details),
+            ]);
+        }
+
+        $message = "Account titles imported successfully. Created: {$created}, Updated: {$updated}.";
+        if ($skipped || $duplicates) {
+            $message .= ' Skipped '.count($skipped).' invalid row(s)';
+            if ($duplicates) {
+                $message .= " and {$duplicates} duplicate row(s)";
+            }
+            $message .= '.';
+        }
+
         return redirect()
             ->route('budget-particulars.index')
-            ->with('success', "Account titles imported successfully. Created: {$created}, Updated: {$updated}.");
+            ->with('success', $message);
     }
 }
