@@ -35,6 +35,8 @@ const mobileMenuOpen = ref(false)
 const showFlash = ref(true)
 const pageLoading = ref(false)
 let loadingHideTimer = null
+let loadingStartedAt = 0
+const minimumLoadingMs = 2000
 
 const currentPath = computed(() => page.url)
 
@@ -72,13 +74,16 @@ function logout() {
 function handleGlobalLoading(event) {
     clearTimeout(loadingHideTimer)
     if (event.detail?.active) {
+        loadingStartedAt = Date.now()
         pageLoading.value = true
         return
     }
 
+    const elapsed = Date.now() - loadingStartedAt
+    const remaining = Math.max(minimumLoadingMs - elapsed, 0)
     loadingHideTimer = setTimeout(() => {
         pageLoading.value = false
-    }, 120)
+    }, remaining)
 }
 
 onMounted(() => {
@@ -195,6 +200,7 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
         <div class="relative flex flex-1 min-w-0">
             <LoadingOverlay
                 :show="pageLoading"
+                full-screen
                 text="Loading..."
                 subtext="Please wait while the page updates."
             />
