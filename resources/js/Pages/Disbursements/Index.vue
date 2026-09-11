@@ -175,9 +175,9 @@ function fmtDate(d) { return d ? new Date(d).toLocaleDateString('en-PH', { year:
 const PESO = '₱'
 
 function openCreate() {
-    const budgetYears = (props.budgetYears || []).map(y => Number(y))
-    if (filterYear.value !== 'all' && budgetYears.length && !budgetYears.includes(Number(filterYear.value))) {
-        alert(`No annual budget exists for FY ${filterYear.value}. Please create the annual budget first.`)
+    const selectedPeriodExists = (props.fiscalPeriods || []).some(period => String(period.id) === String(filterYear.value))
+    if (filterYear.value !== 'all' && !selectedPeriodExists) {
+        alert('The selected fiscal period is no longer available. Refresh the page and select an existing annual budget.')
         return
     }
 

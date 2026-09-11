@@ -185,13 +185,6 @@ function expenseAuditLogs(expense) {
 }
 
 function openCreate() {
-    const year = new Date().getFullYear()
-    const budgetYears = (props.budgetYears || []).map(y => Number(y))
-    if (budgetYears.length && !budgetYears.includes(year)) {
-        alert(`No annual budget exists for FY ${year}. Please create the annual budget first.`)
-        return
-    }
-
     form.reset()
     form.clearErrors()
     saveError.value = ''
