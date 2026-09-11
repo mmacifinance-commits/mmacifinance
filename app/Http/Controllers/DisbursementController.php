@@ -6,15 +6,17 @@ use App\Models\AnnualBudget;
 use App\Models\AuditTrail;
 use App\Models\Disbursement;
 use App\Models\Expense;
+use App\Services\CashFlowService;
+use App\Support\SpreadsheetImportExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Response;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
-use App\Support\SpreadsheetImportExport;
 
 class DisbursementController extends Controller
 {
+    public function __construct(private readonly CashFlowService $cashFlow) {}
+
     public function index(Request $request)
     {
         $yearExpression = DB::getDriverName() === 'sqlite'
@@ -321,15 +323,34 @@ class DisbursementController extends Controller
             'remarks' => 'nullable|string',
         ]);
 
-        $disbursement->update([
-            'status' => 'posted',
-            'posted_by_id' => auth()->id(),
-            'remarks' => $request->remarks ?: 'Posted to general ledger & official expenditures updated.',
-        ]);
+        try {
+            DB::transaction(function () use ($disbursement, $request) {
+                $lockedDisbursement = Disbursement::query()
+                    ->with('expense.budgetItem.budget')
+                    ->lockForUpdate()
+                    ->findOrFail($disbursement->id);
 
-        AuditTrail::log($disbursement, 'posted', auth()->user(), $request->remarks ?: 'Posted to general ledger.');
+                if ($lockedDisbursement->status !== 'approved') {
+                    throw ValidationException::withMessages([
+                        'status' => 'Disbursement must be approved before posting.',
+                    ]);
+                }
 
-        $this->syncExpensePaidAmount($disbursement->expense_id);
+                $this->cashFlow->ensureSufficientCashForPosting($lockedDisbursement);
+
+                $lockedDisbursement->update([
+                    'status' => 'posted',
+                    'posted_by_id' => auth()->id(),
+                    'remarks' => $request->remarks ?: 'Posted to general ledger & official expenditures updated.',
+                ]);
+
+                AuditTrail::log($lockedDisbursement, 'posted', auth()->user(), $request->remarks ?: 'Posted to general ledger.');
+
+                $this->syncExpensePaidAmount($lockedDisbursement->expense_id);
+            });
+        } catch (ValidationException $exception) {
+            return redirect()->back()->withErrors($exception->errors())->withInput();
+        }
 
         return redirect()->route('disbursements.index')->with('success', 'Disbursement posted successfully. Expenditures updated.');
     }

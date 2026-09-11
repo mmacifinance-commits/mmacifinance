@@ -3,16 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\Income;
+use App\Services\CashFlowService;
 use App\Services\FiscalPeriodService;
+use App\Support\SpreadsheetImportExport;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Response;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
-use App\Support\SpreadsheetImportExport;
 
 class ReceiptController extends Controller
 {
-    public function index(Request $request, FiscalPeriodService $fiscalPeriods)
+    public function index(Request $request, FiscalPeriodService $fiscalPeriods, CashFlowService $cashFlow)
     {
         $periods = $fiscalPeriods->all();
         $selectedPeriod = $fiscalPeriods->resolve(
@@ -24,6 +24,8 @@ class ReceiptController extends Controller
 
         $query = $this->receiptQuery($selectedPeriod, $search, $term);
         $summaryRows = (clone $query)->get();
+        $totalReceipts = (float) $summaryRows->sum(fn (Income $income) => (float) $income->amount);
+        $postedDisbursements = $cashFlow->totalPostedDisbursements($selectedPeriod);
         $summaryByType = $summaryRows
             ->groupBy(fn (Income $income) => $this->receiptType($income))
             ->map(fn ($rows, $type) => [
@@ -62,7 +64,9 @@ class ReceiptController extends Controller
                 'term' => $term,
             ],
             'summary' => [
-                'totalAmount' => (float) $summaryRows->sum(fn (Income $income) => (float) $income->amount),
+                'totalAmount' => $totalReceipts,
+                'postedDisbursements' => $postedDisbursements,
+                'cashOnHand' => round($totalReceipts - $postedDisbursements, 2),
                 'recordCount' => $summaryRows->count(),
                 'withReceiptNo' => $summaryRows->filter(fn (Income $income) => filled($income->receipt_no))->count(),
                 'byType' => $summaryByType,
@@ -153,6 +157,7 @@ class ReceiptController extends Controller
 
             if ($receiptNo === '' || $source === '' || $description === '' || $dateEncoded === '') {
                 $skipped[] = "Row {$line} is missing receipt_no, source, description, or date_encoded.";
+
                 continue;
             }
 

@@ -166,28 +166,37 @@ function deleteReceipt(item) {
         </div>
     </div>
 
-    <div class="mb-6 grid gap-4 md:grid-cols-3">
+    <div class="mb-6 grid gap-4 md:grid-cols-4">
         <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div class="h-1 bg-navy-dark"></div>
             <div class="p-4">
                 <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Total Receipts</p>
                 <p class="mt-0.5 text-xl font-extrabold text-navy-dark">{{ PESO }}{{ fmt(summary?.totalAmount) }}</p>
+                <p class="mt-1 text-xs text-gray-500">Actual collected cash.</p>
+            </div>
+        </div>
+        <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+            <div class="h-1 bg-rose-500"></div>
+            <div class="p-4">
+                <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Posted Disbursements</p>
+                <p class="mt-0.5 text-xl font-extrabold text-rose-700">{{ PESO }}{{ fmt(summary?.postedDisbursements) }}</p>
+                <p class="mt-1 text-xs text-gray-500">Actual cash already paid out.</p>
             </div>
         </div>
         <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div class="h-1 bg-emerald-500"></div>
             <div class="p-4">
-                <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Receipt Records</p>
-                <p class="mt-0.5 text-xl font-extrabold text-slate-800">{{ summary?.recordCount || 0 }}</p>
-                <p class="mt-1 text-xs text-gray-500">{{ summary?.withReceiptNo || 0 }} with receipt no.</p>
+                <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Cash On Hand</p>
+                <p class="mt-0.5 text-xl font-extrabold text-emerald-700">{{ PESO }}{{ fmt(summary?.cashOnHand) }}</p>
+                <p class="mt-1 text-xs text-gray-500">Receipts less posted disbursements.</p>
             </div>
         </div>
         <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div class="h-1 bg-amber-500"></div>
             <div class="p-4">
-                <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Top Receipt Type</p>
-                <p class="mt-0.5 truncate text-xl font-extrabold text-amber-700">{{ summary?.byType?.[0]?.type || 'None' }}</p>
-                <p class="mt-1 text-xs text-gray-500">{{ summary?.byType?.[0]?.count || 0 }} record(s)</p>
+                <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Receipt Records</p>
+                <p class="mt-0.5 text-xl font-extrabold text-slate-800">{{ summary?.recordCount || 0 }}</p>
+                <p class="mt-1 text-xs text-gray-500">{{ summary?.withReceiptNo || 0 }} with receipt no.</p>
             </div>
         </div>
     </div>
