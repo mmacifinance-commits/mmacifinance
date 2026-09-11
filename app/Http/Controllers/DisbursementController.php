@@ -7,6 +7,7 @@ use App\Models\AuditTrail;
 use App\Models\Disbursement;
 use App\Models\Expense;
 use App\Services\CashFlowService;
+use App\Services\FiscalPeriodLockService;
 use App\Support\SpreadsheetImportExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -146,6 +147,11 @@ class DisbursementController extends Controller
         }
     }
 
+    protected function ensureLinkedFiscalPeriodOpen(Expense $expense, string $field = 'expense_id'): void
+    {
+        app(FiscalPeriodLockService::class)->ensureExpenseOpen($expense, $field);
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -167,6 +173,7 @@ class DisbursementController extends Controller
         $selectedExpense = Expense::findOrFail($validated['expense_id']);
         $this->ensureApprovedLinkedExpense($selectedExpense);
         $this->ensureDatesWithinLinkedFiscalPeriod($selectedExpense, $validated['date_encoded']);
+        $this->ensureLinkedFiscalPeriodOpen($selectedExpense);
 
         $dsb = DB::transaction(function () use ($request, $validated, $selectedExpense) {
             $draftDisbursement = new Disbursement($validated);
@@ -250,6 +257,8 @@ class DisbursementController extends Controller
         $selectedExpense = Expense::findOrFail($validated['expense_id']);
         $this->ensureApprovedLinkedExpense($selectedExpense);
         $this->ensureDatesWithinLinkedFiscalPeriod($selectedExpense, $validated['date_encoded']);
+        $this->ensureLinkedFiscalPeriodOpen($disbursement->expense, 'expense_id');
+        $this->ensureLinkedFiscalPeriodOpen($selectedExpense, 'expense_id');
 
         // Same escalation as store(): a Cashier saving release details goes straight to for_approval
         if (auth()->user()?->isCashier() && in_array($validated['status'], ['for_release', 'for_approval'])) {
@@ -289,6 +298,8 @@ class DisbursementController extends Controller
 
     public function submitForApproval(Request $request, Disbursement $disbursement)
     {
+        $this->ensureLinkedFiscalPeriodOpen($disbursement->expense);
+
         $request->validate([
             'remarks' => 'nullable|string',
         ]);
@@ -311,6 +322,8 @@ class DisbursementController extends Controller
 
     public function approve(Request $request, Disbursement $disbursement)
     {
+        $this->ensureLinkedFiscalPeriodOpen($disbursement->expense);
+
         $request->validate([
             'remarks' => 'nullable|string',
         ]);
@@ -333,6 +346,8 @@ class DisbursementController extends Controller
 
     public function postDisbursement(Request $request, Disbursement $disbursement)
     {
+        $this->ensureLinkedFiscalPeriodOpen($disbursement->expense);
+
         if (! auth()->user()?->canPostDisbursements()) {
             abort(403, 'Only the Head of Finance can post disbursements.');
         }
@@ -379,6 +394,8 @@ class DisbursementController extends Controller
 
     public function reject(Request $request, Disbursement $disbursement)
     {
+        $this->ensureLinkedFiscalPeriodOpen($disbursement->expense);
+
         $request->validate([
             'remarks' => 'required|string|max:500',
         ]);
@@ -402,6 +419,8 @@ class DisbursementController extends Controller
 
     public function returnForRevision(Request $request, Disbursement $disbursement)
     {
+        $this->ensureLinkedFiscalPeriodOpen($disbursement->expense);
+
         $request->validate([
             'remarks' => 'required|string|max:500',
         ]);
@@ -422,6 +441,8 @@ class DisbursementController extends Controller
 
     public function destroy(Disbursement $disbursement)
     {
+        $this->ensureLinkedFiscalPeriodOpen($disbursement->expense);
+
         // Deleting a finalized disbursement reverses official expenditure — Head of Finance only.
         if (in_array($disbursement->status, ['approved', 'posted']) && ! auth()->user()?->canApproveDisbursements()) {
             abort(403, 'Only the Head of Finance can delete an approved or posted disbursement.');
@@ -467,6 +488,8 @@ class DisbursementController extends Controller
 
     public function importCsv(Request $request)
     {
+        $lock = app(FiscalPeriodLockService::class);
+
         $request->validate(SpreadsheetImportExport::validationRules('csv_file', true));
 
         try {
@@ -530,6 +553,7 @@ class DisbursementController extends Controller
 
             try {
                 $this->ensureDatesWithinLinkedFiscalPeriod($expense, $row['date_encoded']);
+                $lock->ensureExpenseOpen($expense, 'csv_file');
             } catch (ValidationException $exception) {
                 return back()->withErrors([
                     'csv_file' => 'Row '.($i + 2).' cannot be imported: '.$exception->validator->errors()->first(),

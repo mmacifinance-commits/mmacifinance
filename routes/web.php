@@ -71,6 +71,8 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:super_admin,budget_officer')->group(function () {
         Route::post('/annual-budgets', [AnnualBudgetController::class, 'store'])->name('annual-budgets.store');
         Route::put('/annual-budgets/{annual_budget}/period', [AnnualBudgetController::class, 'updatePeriod'])->name('annual-budgets.period.update');
+        Route::post('/annual-budgets/{annual_budget}/close', [AnnualBudgetController::class, 'close'])->name('annual-budgets.close');
+        Route::post('/annual-budgets/{annual_budget}/reopen', [AnnualBudgetController::class, 'reopen'])->name('annual-budgets.reopen');
         Route::delete('/annual-budgets/{annual_budget}', [AnnualBudgetController::class, 'destroy'])->name('annual-budgets.destroy');
         Route::post('annual-budgets/{annual_budget}/items', [AnnualBudgetController::class, 'storeItem'])->name('annual-budgets.items.store');
         Route::put('annual-budgets/{annual_budget}/items/{item}', [AnnualBudgetController::class, 'updateItem'])->name('annual-budgets.items.update');

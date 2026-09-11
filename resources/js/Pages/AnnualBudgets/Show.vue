@@ -29,6 +29,9 @@ const searchTerm = ref('')
 const importForm = useForm({
     csv_file: null,
 })
+const closeForm = useForm({
+    close_remarks: '',
+})
 
 const itemForm = useForm({
     category_id: '',
@@ -39,6 +42,7 @@ const itemForm = useForm({
 })
 
 const itemErrorMessages = computed(() => [...new Set(Object.values(itemForm.errors).filter(Boolean))])
+const isClosed = computed(() => Boolean(props.budget?.is_closed || props.budget?.closed_at))
 
 const availableDepartments = computed(() => {
     const titles = props.accountTitles || props.particulars || []
@@ -201,6 +205,23 @@ function handleImportCsv() {
     })
 }
 
+function closeBudget() {
+    if (!confirm(`Close ${props.budget.fiscal_year_label}? Users will no longer be able to edit budgets, income, receipts, expenses, or disbursements inside this fiscal period until it is reopened.`)) return
+
+    closeForm.post(`/annual-budgets/${props.budget.id}/close`, {
+        preserveScroll: true,
+    })
+}
+
+function reopenBudget() {
+    if (!confirm(`Reopen ${props.budget.fiscal_year_label}? This will allow corrections inside the fiscal period again.`)) return
+
+    closeForm.post(`/annual-budgets/${props.budget.id}/reopen`, {
+        preserveScroll: true,
+        onSuccess: () => closeForm.reset(),
+    })
+}
+
 function catBalancePercent(group) {
     return group.totals.appropriation > 0 ? (((group.totals.appropriation - group.totals.expenditure) / group.totals.appropriation) * 100).toFixed(0) : '0'
 }
@@ -221,16 +242,26 @@ function catBalancePercent(group) {
                     <span class="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-navy/10 text-navy border border-navy/20">
                         {{ budget.ref_no || ('AB-' + budget.year + '-000' + budget.id) }}
                     </span>
+                    <span v-if="isClosed" class="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-rose-700">
+                        Closed
+                    </span>
                 </div>
                 <p class="text-sm text-gray-500">{{ budget.fiscal_year_label }} — {{ budget.period_label }}</p>
+                <p v-if="isClosed" class="mt-1 text-xs text-rose-600">This fiscal period is locked for edits. Reopen it before making corrections.</p>
             </div>
         </div>
         <div class="flex items-center gap-2">
             <button @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition shadow-sm">
                 Export CSV
             </button>
-            <button v-if="perms.canManageBudget" @click="showImportModal = true" class="rounded-lg bg-navy-dark px-4 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
+            <button v-if="perms.canManageBudget && !isClosed" @click="showImportModal = true" class="rounded-lg bg-navy-dark px-4 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
                 Import CSV
+            </button>
+            <button v-if="perms.canManageBudget && !isClosed" @click="closeBudget" :disabled="closeForm.processing" class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100 transition shadow-sm">
+                Close FY
+            </button>
+            <button v-if="perms.canManageBudget && isClosed" @click="reopenBudget" :disabled="closeForm.processing" class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 transition shadow-sm">
+                Reopen FY
             </button>
         </div>
     </div>
@@ -262,7 +293,7 @@ function catBalancePercent(group) {
             />
         </div>
 
-        <button v-if="perms.canManageBudget" @click="openAddItem" class="ml-auto rounded-lg bg-navy-dark px-4 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
+        <button v-if="perms.canManageBudget && !isClosed" @click="openAddItem" class="ml-auto rounded-lg bg-navy-dark px-4 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
             Add Monthly Allocation Item
         </button>
     </div>
@@ -287,7 +318,7 @@ function catBalancePercent(group) {
                         <th class="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-white">Expenditure</th>
                         <th class="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-white">Balance</th>
                         <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-white">Util %</th>
-                        <th v-if="perms.canManageBudget" class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-white">Actions</th>
+                        <th v-if="perms.canManageBudget && !isClosed" class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-white">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -314,7 +345,7 @@ function catBalancePercent(group) {
                                 {{ Number(item.appropriation) > 0 ? ((Number(item.expenditure) / Number(item.appropriation)) * 100).toFixed(0) : 0 }}%
                             </span>
                         </td>
-                        <td v-if="perms.canManageBudget" class="px-4 py-3 text-center align-middle">
+                        <td v-if="perms.canManageBudget && !isClosed" class="px-4 py-3 text-center align-middle">
                             <div class="inline-flex items-center gap-1.5">
                                 <button @click="openEditItem(item)" class="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded text-xs font-semibold shadow-sm transition border border-indigo-200">
                                     Edit
@@ -333,7 +364,7 @@ function catBalancePercent(group) {
                         <td class="px-4 py-2.5 text-right text-gray-900">₱{{ fmt(group.totals.expenditure) }}</td>
                         <td class="px-4 py-2.5 text-right text-gray-900">₱{{ fmt(group.totals.appropriation - group.totals.expenditure) }}</td>
                         <td class="px-4 py-2.5 text-center text-emerald-700 text-xs">{{ catBalancePercent(group) }}% Balance</td>
-                        <td v-if="perms.canManageBudget"></td>
+                        <td v-if="perms.canManageBudget && !isClosed"></td>
                     </tr>
                 </tfoot>
             </table>

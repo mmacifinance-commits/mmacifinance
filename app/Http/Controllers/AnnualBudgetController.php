@@ -11,6 +11,7 @@ use App\Models\Disbursement;
 use App\Models\Expense;
 use App\Models\Income;
 use App\Models\IncomeAllocation;
+use App\Services\FiscalPeriodLockService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +22,11 @@ use App\Support\SpreadsheetImportExport;
 
 class AnnualBudgetController extends Controller
 {
+    protected function ensureBudgetOpen(AnnualBudget $annualBudget, string $field = 'fiscal_period_id'): void
+    {
+        app(FiscalPeriodLockService::class)->ensureBudgetOpen($annualBudget, $field);
+    }
+
     protected function ensureIncomeExistsForPeriod(string $startDate, string $endDate, string $errorField = 'start_date'): void
     {
         if (! Income::whereBetween('date_encoded', [$startDate, $endDate])->exists()) {
@@ -311,6 +317,8 @@ class AnnualBudgetController extends Controller
 
     public function importCsv(Request $request, AnnualBudget $annualBudget)
     {
+        $this->ensureBudgetOpen($annualBudget, 'csv_file');
+
         $request->validate(SpreadsheetImportExport::validationRules('csv_file', false));
 
         try {
@@ -534,6 +542,8 @@ class AnnualBudgetController extends Controller
 
     public function updatePeriod(Request $request, AnnualBudget $annualBudget)
     {
+        $this->ensureBudgetOpen($annualBudget, 'start_date');
+
         $validated = $request->validate([
             'start_date' => 'required|date',
             'end_date' => 'required|date|after:start_date',
@@ -605,6 +615,8 @@ class AnnualBudgetController extends Controller
 
     public function storeItem(Request $request, AnnualBudget $annualBudget)
     {
+        $this->ensureBudgetOpen($annualBudget, 'allocation_month');
+
         $validated = $request->validate([
             'category_id' => 'required|exists:budget_categories,id',
             'department_id' => 'required|exists:departments,id',
@@ -661,6 +673,7 @@ class AnnualBudgetController extends Controller
     public function updateItem(Request $request, AnnualBudget $annualBudget, BudgetItem $item)
     {
         abort_unless((int) $item->budget_id === (int) $annualBudget->id, 404);
+        $this->ensureBudgetOpen($annualBudget, 'allocation_month');
 
         $validated = $request->validate([
             'category_id' => 'required|exists:budget_categories,id',
@@ -730,6 +743,8 @@ class AnnualBudgetController extends Controller
 
     public function destroyItem(AnnualBudget $annualBudget, BudgetItem $item)
     {
+        $this->ensureBudgetOpen($annualBudget, 'allocation_month');
+
         IncomeAllocation::where('budget_item_id', $item->id)->delete();
         AuditTrail::log($item, 'deleted', auth()->user(), "Deleted Monthly Budget Allocation item {$item->ref_no}");
         $item->delete();
@@ -739,6 +754,8 @@ class AnnualBudgetController extends Controller
 
     public function destroy(AnnualBudget $annualBudget)
     {
+        $this->ensureBudgetOpen($annualBudget, 'fiscal_period_id');
+
         DB::transaction(function () use ($annualBudget) {
             $items = $annualBudget->items()->get();
             $itemIds = $items->pluck('id');
@@ -778,5 +795,43 @@ class AnnualBudgetController extends Controller
         });
 
         return redirect()->route('annual-budgets.index')->with('success', 'Annual Budget deleted.');
+    }
+
+    public function close(Request $request, AnnualBudget $annualBudget)
+    {
+        $validated = $request->validate([
+            'close_remarks' => 'nullable|string|max:500',
+        ]);
+
+        if ($annualBudget->closed_at) {
+            return back()->with('success', "{$annualBudget->fiscal_year_label} is already closed.");
+        }
+
+        $annualBudget->update([
+            'closed_at' => now(),
+            'closed_by_id' => auth()->id(),
+            'close_remarks' => $validated['close_remarks'] ?? null,
+        ]);
+
+        AuditTrail::log($annualBudget, 'closed', auth()->user(), "Closed {$annualBudget->fiscal_year_label} ({$annualBudget->period_label})");
+
+        return back()->with('success', "{$annualBudget->fiscal_year_label} closed successfully.");
+    }
+
+    public function reopen(AnnualBudget $annualBudget)
+    {
+        if (! $annualBudget->closed_at) {
+            return back()->with('success', "{$annualBudget->fiscal_year_label} is already open.");
+        }
+
+        $annualBudget->update([
+            'closed_at' => null,
+            'closed_by_id' => null,
+            'close_remarks' => null,
+        ]);
+
+        AuditTrail::log($annualBudget, 'reopened', auth()->user(), "Reopened {$annualBudget->fiscal_year_label} ({$annualBudget->period_label})");
+
+        return back()->with('success', "{$annualBudget->fiscal_year_label} reopened successfully.");
     }
 }

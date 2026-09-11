@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\BudgetItem;
 use App\Models\Income;
 use App\Services\BudgetUtilizationService;
+use App\Services\FiscalPeriodLockService;
 use App\Services\FiscalPeriodService;
 use App\Support\SpreadsheetImportExport;
 use Illuminate\Http\Request;
@@ -124,6 +125,7 @@ class IncomeController extends Controller
 
         $validated['receipt_no'] = filled($validated['receipt_no'] ?? null) ? trim($validated['receipt_no']) : null;
         $validated['receipt_type'] = filled($validated['receipt_type'] ?? null) ? trim($validated['receipt_type']) : null;
+        app(FiscalPeriodLockService::class)->ensureDateOpen($validated['date_encoded']);
         $validated['income_no'] = sprintf('INC-%s-%04d', date('Y'), Income::count() + 1);
         $validated['created_by_id'] = auth()->id();
 
@@ -150,6 +152,8 @@ class IncomeController extends Controller
 
         $validated['receipt_no'] = filled($validated['receipt_no'] ?? null) ? trim($validated['receipt_no']) : null;
         $validated['receipt_type'] = filled($validated['receipt_type'] ?? null) ? trim($validated['receipt_type']) : null;
+        app(FiscalPeriodLockService::class)->ensureDateOpen($income->date_encoded);
+        app(FiscalPeriodLockService::class)->ensureDateOpen($validated['date_encoded']);
         $income->update($validated);
 
         if ($request->header('X-Offline-Sync')) {
@@ -161,6 +165,7 @@ class IncomeController extends Controller
 
     public function destroy(Income $income)
     {
+        app(FiscalPeriodLockService::class)->ensureDateOpen($income->date_encoded);
         $income->delete();
 
         return redirect()->back()->with('success', 'Income item deleted successfully.');
@@ -194,6 +199,7 @@ class IncomeController extends Controller
 
     public function importCsv(Request $request)
     {
+        $lock = app(FiscalPeriodLockService::class);
         $request->validate(SpreadsheetImportExport::validationRules('csv_file', true));
 
         try {
@@ -233,6 +239,8 @@ class IncomeController extends Controller
             if ($source === '' || $description === '' || $dateEncoded === '') {
                 continue;
             }
+
+            $lock->ensureDateOpen($dateEncoded, 'csv_file');
 
             $income = $receiptNo !== ''
                 ? Income::firstOrNew(['receipt_no' => $receiptNo])

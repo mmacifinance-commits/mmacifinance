@@ -6,23 +6,26 @@ use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
 
 class AnnualBudget extends Model
 {
-    protected $fillable = ['ref_no', 'year', 'start_date', 'end_date', 'semester'];
+    protected $fillable = ['ref_no', 'year', 'start_date', 'end_date', 'closed_at', 'closed_by_id', 'close_remarks', 'semester'];
 
     protected $casts = [
         'year' => 'integer',
         'start_date' => 'date',
         'end_date' => 'date',
+        'closed_at' => 'datetime',
     ];
 
     protected $appends = [
         'fiscal_year_label',
         'period_label',
         'fiscal_months',
+        'is_closed',
     ];
 
     protected static function boot()
@@ -57,6 +60,11 @@ class AnnualBudget extends Model
     public function incomeAllocations(): HasMany
     {
         return $this->hasMany(IncomeAllocation::class);
+    }
+
+    public function closedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'closed_by_id');
     }
 
     public function fiscalStart(): Carbon
@@ -123,6 +131,11 @@ class AnnualBudget extends Model
     public function getFiscalMonthsAttribute(): array
     {
         return $this->orderedFiscalMonths()->all();
+    }
+
+    public function getIsClosedAttribute(): bool
+    {
+        return filled($this->closed_at);
     }
 
     public function scopeOverlapping(Builder $query, string $startDate, string $endDate): Builder

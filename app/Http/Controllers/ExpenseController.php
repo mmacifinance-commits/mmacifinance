@@ -9,6 +9,7 @@ use App\Models\BudgetItem;
 use App\Models\BudgetParticular;
 use App\Models\Expense;
 use App\Services\BudgetUtilizationService;
+use App\Services\FiscalPeriodLockService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
@@ -116,6 +117,8 @@ class ExpenseController extends Controller
         $nextNum = $lastExpense ? intval(substr($lastExpense->ref_no, 3)) + 1 : 1;
         $validated['ref_no'] = 'EXP'.str_pad($nextNum, 8, '0', STR_PAD_LEFT);
         $budgetItem = $this->validateSelectedBudgetItem($validated);
+        app(FiscalPeriodLockService::class)->ensureBudgetOpen($budgetItem->budget, 'budget_item_id');
+        app(FiscalPeriodLockService::class)->ensureDateOpen($validated['date_encoded']);
         $this->ensureAmountWithinAllocation($budgetItem, (float) $validated['amount']);
         $validated['budget_item_id'] = $budgetItem->id;
 
@@ -167,6 +170,9 @@ class ExpenseController extends Controller
         }
 
         $budgetItem = $this->validateSelectedBudgetItem($validated);
+        app(FiscalPeriodLockService::class)->ensureExpenseOpen($expense, 'budget_item_id');
+        app(FiscalPeriodLockService::class)->ensureBudgetOpen($budgetItem->budget, 'budget_item_id');
+        app(FiscalPeriodLockService::class)->ensureDateOpen($validated['date_encoded']);
         $this->ensureAmountWithinAllocation($budgetItem, (float) $validated['amount'], $expense);
         $validated['budget_item_id'] = $budgetItem->id;
         if ((int) $expense->budget_item_id !== (int) $validated['budget_item_id'] && $expense->disbursements()->exists()) {
@@ -190,6 +196,8 @@ class ExpenseController extends Controller
 
     public function submitForApproval(Request $request, Expense $expense)
     {
+        app(FiscalPeriodLockService::class)->ensureExpenseOpen($expense);
+
         $request->validate([
             'remarks' => 'nullable|string|max:500',
         ]);
@@ -220,6 +228,8 @@ class ExpenseController extends Controller
 
     public function approve(Request $request, Expense $expense)
     {
+        app(FiscalPeriodLockService::class)->ensureExpenseOpen($expense);
+
         $request->validate([
             'remarks' => 'nullable|string|max:500',
         ]);
@@ -250,6 +260,8 @@ class ExpenseController extends Controller
 
     public function returnForRevision(Request $request, Expense $expense)
     {
+        app(FiscalPeriodLockService::class)->ensureExpenseOpen($expense);
+
         $request->validate([
             'remarks' => 'required|string|max:500',
         ]);
@@ -279,6 +291,8 @@ class ExpenseController extends Controller
 
     public function reject(Request $request, Expense $expense)
     {
+        app(FiscalPeriodLockService::class)->ensureExpenseOpen($expense);
+
         $request->validate([
             'remarks' => 'required|string|max:500',
         ]);
@@ -308,6 +322,8 @@ class ExpenseController extends Controller
 
     public function destroy(Expense $expense)
     {
+        app(FiscalPeriodLockService::class)->ensureExpenseOpen($expense);
+
         $expense->delete();
         AuditTrail::log($expense, 'deleted', auth()->user(), 'Expense record deleted.');
 
@@ -341,6 +357,8 @@ class ExpenseController extends Controller
 
     public function importCsv(Request $request)
     {
+        $lock = app(FiscalPeriodLockService::class);
+
         $request->validate(SpreadsheetImportExport::validationRules('csv_file', true));
 
         try {
@@ -434,6 +452,8 @@ class ExpenseController extends Controller
             }
 
             $budgetItem = BudgetItem::findOrFail($parsedRows[$i]['budget_item_id']);
+            $lock->ensureBudgetOpen($budgetItem->budget, 'csv_file');
+            $lock->ensureDateOpen($row['date_encoded'], 'csv_file');
             $existingExpense = Expense::where('ref_no', $row['ref_no'])->first();
             $available = app(BudgetUtilizationService::class)->availableForExpense($budgetItem, $existingExpense);
             if ($row['amount'] > $available) {

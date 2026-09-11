@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Income;
 use App\Services\CashFlowService;
+use App\Services\FiscalPeriodLockService;
 use App\Services\FiscalPeriodService;
 use App\Support\SpreadsheetImportExport;
 use Illuminate\Http\Request;
@@ -25,7 +26,7 @@ class ReceiptController extends Controller
         $query = $this->receiptQuery($selectedPeriod, $search, $term);
         $summaryRows = (clone $query)->get();
         $totalReceipts = (float) $summaryRows->sum(fn (Income $income) => (float) $income->amount);
-        $postedDisbursements = $cashFlow->totalPostedDisbursements($selectedPeriod);
+        $cashSummary = $cashFlow->summary($selectedPeriod);
         $summaryByType = $summaryRows
             ->groupBy(fn (Income $income) => $this->receiptType($income))
             ->map(fn ($rows, $type) => [
@@ -79,8 +80,10 @@ class ReceiptController extends Controller
             ],
             'summary' => [
                 'totalAmount' => $totalReceipts,
-                'postedDisbursements' => $postedDisbursements,
-                'cashOnHand' => round($totalReceipts - $postedDisbursements, 2),
+                'postedDisbursements' => $cashSummary['postedDisbursements'],
+                'committedDisbursements' => $cashSummary['committedDisbursements'],
+                'cashOnHand' => $cashSummary['cashOnHand'],
+                'availableForDisbursement' => $cashSummary['availableForDisbursement'],
                 'recordCount' => $summaryRows->count(),
                 'withReceiptNo' => $summaryRows->filter(fn (Income $income) => filled($income->receipt_no))->count(),
                 'byType' => $summaryByType,
@@ -124,6 +127,7 @@ class ReceiptController extends Controller
 
     public function importCsv(Request $request)
     {
+        $lock = app(FiscalPeriodLockService::class);
         $request->validate(SpreadsheetImportExport::validationRules('csv_file', true));
 
         try {
@@ -168,6 +172,8 @@ class ReceiptController extends Controller
 
                 continue;
             }
+
+            $lock->ensureDateOpen($dateEncoded, 'csv_file');
 
             $income = Income::firstOrNew(['receipt_no' => $receiptNo]);
             $isNew = ! $income->exists;
@@ -214,6 +220,7 @@ class ReceiptController extends Controller
 
         $validated['receipt_no'] = trim($validated['receipt_no']);
         $validated['receipt_type'] = trim($validated['receipt_type']);
+        app(FiscalPeriodLockService::class)->ensureDateOpen($validated['date_encoded']);
         $validated['income_no'] = sprintf('INC-%s-%04d', date('Y'), Income::count() + 1);
         $validated['created_by_id'] = auth()->id();
 
@@ -238,6 +245,8 @@ class ReceiptController extends Controller
 
         $validated['receipt_no'] = trim($validated['receipt_no']);
         $validated['receipt_type'] = trim($validated['receipt_type']);
+        app(FiscalPeriodLockService::class)->ensureDateOpen($receipt->date_encoded);
+        app(FiscalPeriodLockService::class)->ensureDateOpen($validated['date_encoded']);
         $receipt->update($validated);
 
         return redirect()->route('receipts.index')->with('success', 'Receipt updated successfully.');
@@ -247,6 +256,7 @@ class ReceiptController extends Controller
     {
         abort_if(blank($receipt->receipt_no), 404);
 
+        app(FiscalPeriodLockService::class)->ensureDateOpen($receipt->date_encoded);
         $receipt->delete();
 
         return redirect()->route('receipts.index')->with('success', 'Receipt deleted successfully.');
