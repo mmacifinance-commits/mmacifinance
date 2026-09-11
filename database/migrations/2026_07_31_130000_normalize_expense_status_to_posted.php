@@ -30,7 +30,7 @@ return new class extends Migration {
             ->update(['status' => 'approved']);
 
         if (DB::getDriverName() === 'mysql') {
-            DB::statement("ALTER TABLE expenses MODIFY status ENUM('pending', 'approved', 'cancelled') NOT NULL DEFAULT 'pending'");
+            DB::statement("ALTER TABLE expenses MODIFY status ENUM('pending', 'for_approval', 'approved', 'returned_for_revision', 'rejected', 'posted', 'cancelled') NOT NULL DEFAULT 'pending'");
         }
     }
 };

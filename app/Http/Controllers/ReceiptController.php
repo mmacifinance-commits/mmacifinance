@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Income;
+use App\Models\AuditTrail;
 use App\Services\CashFlowService;
 use App\Services\FiscalPeriodLockService;
 use App\Services\FiscalPeriodService;
@@ -188,6 +189,7 @@ class ReceiptController extends Controller
                 $income->created_by_id = auth()->id();
             }
             $income->save();
+            AuditTrail::log($income, 'imported', auth()->user(), $isNew ? 'Receipt created from CSV/Excel.' : 'Receipt updated from CSV/Excel.');
 
             $isNew ? $created++ : $updated++;
         }
@@ -224,7 +226,8 @@ class ReceiptController extends Controller
         $validated['income_no'] = sprintf('INC-%s-%04d', date('Y'), Income::count() + 1);
         $validated['created_by_id'] = auth()->id();
 
-        Income::create($validated);
+        $receipt = Income::create($validated);
+        AuditTrail::log($receipt, 'created', auth()->user(), 'Receipt created.');
 
         return redirect()->route('receipts.index')->with('success', 'Receipt created successfully.');
     }
@@ -248,6 +251,9 @@ class ReceiptController extends Controller
         app(FiscalPeriodLockService::class)->ensureDateOpen($receipt->date_encoded);
         app(FiscalPeriodLockService::class)->ensureDateOpen($validated['date_encoded']);
         $receipt->update($validated);
+        AuditTrail::log($receipt, 'modified', auth()->user(), 'Receipt updated.', [
+            'changes' => $validated,
+        ]);
 
         return redirect()->route('receipts.index')->with('success', 'Receipt updated successfully.');
     }
@@ -257,6 +263,7 @@ class ReceiptController extends Controller
         abort_if(blank($receipt->receipt_no), 404);
 
         app(FiscalPeriodLockService::class)->ensureDateOpen($receipt->date_encoded);
+        AuditTrail::log($receipt, 'deleted', auth()->user(), 'Receipt deleted.');
         $receipt->delete();
 
         return redirect()->route('receipts.index')->with('success', 'Receipt deleted successfully.');

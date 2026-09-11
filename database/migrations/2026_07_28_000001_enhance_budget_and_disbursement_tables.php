@@ -77,15 +77,22 @@ return new class extends Migration {
         Schema::dropIfExists('audit_trails');
 
         Schema::table('disbursements', function (Blueprint $table) {
-            $table->dropColumn([
-                'remarks',
+            foreach ([
                 'prepared_by_id',
                 'released_by_id',
                 'submitted_by_id',
                 'approved_by_id',
                 'rejected_by_id',
                 'posted_by_id',
-            ]);
+            ] as $column) {
+                if (Schema::hasColumn('disbursements', $column)) {
+                    $table->dropConstrainedForeignId($column);
+                }
+            }
+
+            if (Schema::hasColumn('disbursements', 'remarks')) {
+                $table->dropColumn('remarks');
+            }
         });
 
         Schema::table('budget_items', function (Blueprint $table) {

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\BudgetCategory;
+use App\Models\AuditTrail;
 use App\Support\SpreadsheetImportExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
@@ -64,7 +65,8 @@ class BudgetCategoryController extends Controller
             'name.max' => 'Budget category name cannot exceed 255 characters.',
         ]);
 
-        BudgetCategory::create($validated);
+        $category = BudgetCategory::create($validated);
+        AuditTrail::log($category, 'created', auth()->user(), 'Budget category created.');
 
         return redirect()
             ->route('budget-categories.index')
@@ -121,6 +123,9 @@ class BudgetCategoryController extends Controller
         ]);
 
         $budgetCategory->update($validated);
+        AuditTrail::log($budgetCategory, 'modified', auth()->user(), 'Budget category updated.', [
+            'changes' => $validated,
+        ]);
 
         return redirect()
             ->route('budget-categories.index')
@@ -132,6 +137,7 @@ class BudgetCategoryController extends Controller
      */
     public function destroy(BudgetCategory $budgetCategory)
     {
+        AuditTrail::log($budgetCategory, 'deleted', auth()->user(), 'Budget category deleted.');
         $budgetCategory->delete();
 
         return redirect()
@@ -231,13 +237,15 @@ class BudgetCategoryController extends Controller
             if ($category) {
                 $category->description = $description;
                 $category->save();
+                AuditTrail::log($category, 'imported', auth()->user(), 'Budget category updated from CSV/Excel.');
 
                 $updated++;
             } else {
-                BudgetCategory::create([
+                $category = BudgetCategory::create([
                     'name' => $name,
                     'description' => $description,
                 ]);
+                AuditTrail::log($category, 'imported', auth()->user(), 'Budget category created from CSV/Excel.');
 
                 $created++;
             }

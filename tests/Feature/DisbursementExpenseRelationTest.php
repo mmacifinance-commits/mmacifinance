@@ -10,6 +10,7 @@ use App\Models\BudgetParticular;
 use App\Models\Department;
 use App\Models\AnnualBudget;
 use App\Models\BudgetItem;
+use App\Models\Income;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -31,6 +32,16 @@ class DisbursementExpenseRelationTest extends TestCase
             'particular_id' => $part->id,
             'month' => 7,
             'appropriation' => 10000,
+        ]);
+        Income::create([
+            'income_no' => 'INC-DSB-REL',
+            'receipt_no' => 'OR-DSB-REL',
+            'receipt_type' => 'Enrollment',
+            'source' => 'Enrollment Collections',
+            'description' => 'Cash available for linked disbursement',
+            'amount' => 10000,
+            'date_encoded' => '2026-07-01',
+            'created_by_id' => $user->id,
         ]);
 
         $expense = Expense::create([

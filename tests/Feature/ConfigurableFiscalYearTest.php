@@ -228,14 +228,22 @@ class ConfigurableFiscalYearTest extends TestCase
         $item = BudgetItem::where('budget_id', $budget->id)->firstOrFail();
         $this->assertSame('2027-01-01', $item->allocation_month->format('Y-m-d'));
 
-        $content = $this->actingAs($user)
-            ->get(route('annual-budgets.export-csv', $budget))
-            ->streamedContent();
-        $this->assertStringContainsString('fiscal_year_label', $content);
-        $this->assertStringContainsString('fiscal_start_date', $content);
-        $this->assertStringContainsString('fiscal_end_date', $content);
-        $this->assertStringContainsString('allocation_month', $content);
-        $this->assertStringContainsString('2027-01', $content);
+        $export = $this->actingAs($user)->get(route('annual-budgets.export-csv', $budget));
+        $export->assertDownload();
+
+        [$headers, $rows] = \App\Support\SpreadsheetImportExport::readRows(new UploadedFile(
+            $export->baseResponse->getFile()->getPathname(),
+            'annual-budget-export.xlsx',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            null,
+            true
+        ));
+
+        $this->assertContains('fiscal_year_label', $headers);
+        $this->assertContains('fiscal_start_date', $headers);
+        $this->assertContains('fiscal_end_date', $headers);
+        $this->assertContains('allocation_month', $headers);
+        $this->assertSame('2027-01', $rows[0][5]);
     }
 
     private function crossCalendarBudget(): AnnualBudget

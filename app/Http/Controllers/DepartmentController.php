@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Department;
+use App\Models\AuditTrail;
 use App\Support\SpreadsheetImportExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
@@ -27,7 +28,8 @@ class DepartmentController extends Controller
             'code' => 'required|string|max:10|unique:departments,code',
         ]);
 
-        Department::create($validated);
+        $department = Department::create($validated);
+        AuditTrail::log($department, 'created', auth()->user(), 'Responsibility center created.');
 
         return redirect()->route('departments.index')->with('success', 'Responsibility center created.');
     }
@@ -42,6 +44,9 @@ class DepartmentController extends Controller
         ]);
 
         $department->update($validated);
+        AuditTrail::log($department, 'modified', auth()->user(), 'Responsibility center updated.', [
+            'changes' => $validated,
+        ]);
 
         return redirect()->route('departments.index')->with('success', 'Responsibility center updated.');
     }
@@ -56,6 +61,7 @@ class DepartmentController extends Controller
                 ->with('error', 'This responsibility center is used by account titles. Reassign or delete those account titles first.');
         }
 
+        AuditTrail::log($department, 'deleted', auth()->user(), 'Responsibility center deleted.');
         $department->delete();
 
         return redirect()->route('departments.index')->with('success', 'Responsibility center deleted.');
@@ -123,6 +129,7 @@ class DepartmentController extends Controller
             $department->name = $name;
             $department->code = $code;
             $department->save();
+            AuditTrail::log($department, 'imported', auth()->user(), $department->wasRecentlyCreated ? 'Responsibility center created from CSV/Excel.' : 'Responsibility center updated from CSV/Excel.');
 
             $department->wasRecentlyCreated ? $created++ : $updated++;
         }

@@ -34,7 +34,10 @@ return new class extends Migration {
             ALTER TABLE expenses
             MODIFY status ENUM(
                 'pending',
+                'for_approval',
                 'approved',
+                'returned_for_revision',
+                'rejected',
                 'posted',
                 'cancelled'
             ) NOT NULL DEFAULT 'pending'

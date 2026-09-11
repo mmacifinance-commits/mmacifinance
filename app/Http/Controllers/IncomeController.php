@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\BudgetItem;
+use App\Models\AuditTrail;
 use App\Models\Income;
 use App\Services\BudgetUtilizationService;
 use App\Services\FiscalPeriodLockService;
@@ -130,6 +131,7 @@ class IncomeController extends Controller
         $validated['created_by_id'] = auth()->id();
 
         $income = Income::create($validated);
+        AuditTrail::log($income, 'created', auth()->user(), 'Income record created.');
 
         if ($request->header('X-Offline-Sync')) {
             return response()->json(['id' => $income->id, 'resource' => 'income', 'record' => $income->fresh()], 201);
@@ -155,6 +157,9 @@ class IncomeController extends Controller
         app(FiscalPeriodLockService::class)->ensureDateOpen($income->date_encoded);
         app(FiscalPeriodLockService::class)->ensureDateOpen($validated['date_encoded']);
         $income->update($validated);
+        AuditTrail::log($income, 'modified', auth()->user(), 'Income record updated.', [
+            'changes' => $validated,
+        ]);
 
         if ($request->header('X-Offline-Sync')) {
             return response()->json(['id' => $income->id, 'resource' => 'income', 'record' => $income->fresh()]);
@@ -166,6 +171,7 @@ class IncomeController extends Controller
     public function destroy(Income $income)
     {
         app(FiscalPeriodLockService::class)->ensureDateOpen($income->date_encoded);
+        AuditTrail::log($income, 'deleted', auth()->user(), 'Income record deleted.');
         $income->delete();
 
         return redirect()->back()->with('success', 'Income item deleted successfully.');
@@ -263,6 +269,7 @@ class IncomeController extends Controller
                 $income->created_by_id = auth()->id();
             }
             $income->save();
+            AuditTrail::log($income, 'imported', auth()->user(), $isNew ? 'Income record created from CSV/Excel.' : 'Income record updated from CSV/Excel.');
 
             $isNew ? $created++ : $updated++;
         }

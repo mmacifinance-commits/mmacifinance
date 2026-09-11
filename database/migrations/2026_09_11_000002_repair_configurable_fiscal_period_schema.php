@@ -76,11 +76,9 @@ return new class extends Migration
             });
         }
 
-        if (Schema::hasIndex('budget_items', 'budget_items_budget_particular_month_unique')) {
-            Schema::table('budget_items', function (Blueprint $table) {
-                $table->dropUnique('budget_items_budget_particular_month_unique');
-            });
-        }
+        // Keep the legacy month index in place for MySQL because it may be
+        // reused as the supporting index for the budget_items foreign keys.
+        // The allocation-month unique index below is the authoritative rule.
 
         if (! Schema::hasIndex('budget_items', 'budget_items_budget_particular_allocation_month_unique')) {
             Schema::table('budget_items', function (Blueprint $table) {

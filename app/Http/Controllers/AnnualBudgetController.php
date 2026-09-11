@@ -451,6 +451,10 @@ class AnnualBudgetController extends Controller
                 }
 
                 $item = $annualBudget->items()->create(array_merge($itemData, ['expenditure' => 0]));
+                AuditTrail::log($item, 'imported', auth()->user(), "Monthly Budget Allocation imported for {$allocationMonth->format('F Y')}.", [
+                    'budget_id' => $annualBudget->id,
+                    'appropriation' => (float) $itemData['appropriation'],
+                ]);
 
                 if ($item->wasRecentlyCreated) {
                     $rowsCreated++;

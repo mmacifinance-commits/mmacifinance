@@ -3,6 +3,7 @@
 use Carbon\Carbon;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -76,11 +77,9 @@ return new class extends Migration
             $table->date('allocation_month')->nullable(false)->change();
         });
 
-        if (Schema::hasIndex('budget_items', 'budget_items_budget_particular_month_unique')) {
-            Schema::table('budget_items', function (Blueprint $table) {
-                $table->dropUnique('budget_items_budget_particular_month_unique');
-            });
-        }
+        // Keep the legacy month index in place for MySQL because it may be
+        // reused as the supporting index for the budget_items foreign keys.
+        // The allocation-month unique index below is the authoritative rule.
 
         if (! Schema::hasIndex('budget_items', 'budget_items_budget_particular_allocation_month_unique')) {
             Schema::table('budget_items', function (Blueprint $table) {
@@ -98,8 +97,19 @@ return new class extends Migration
             $table->dropUnique('budget_items_budget_particular_allocation_month_unique');
             $table->dropIndex('budget_items_allocation_month_index');
             $table->dropColumn('allocation_month');
-            $table->unique(['budget_id', 'particular_id', 'month'], 'budget_items_budget_particular_month_unique');
         });
+
+        if (! Schema::hasIndex('budget_items', 'budget_items_budget_particular_month_unique')) {
+            try {
+                Schema::table('budget_items', function (Blueprint $table) {
+                    $table->unique(['budget_id', 'particular_id', 'month'], 'budget_items_budget_particular_month_unique');
+                });
+            } catch (QueryException $exception) {
+                if ((int) ($exception->errorInfo[1] ?? 0) !== 1061) {
+                    throw $exception;
+                }
+            }
+        }
 
         Schema::table('annual_budgets', function (Blueprint $table) {
             $table->dropIndex('annual_budgets_period_index');

@@ -11,9 +11,11 @@ use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\DisbursementController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\IncomeController;
+use App\Http\Controllers\ImportPreviewController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RevenueController;
+use App\Http\Controllers\SystemBackupController;
 use Illuminate\Support\Facades\Route;
 
 // --- Guest Routes ---
@@ -41,6 +43,7 @@ Route::middleware('guest')->group(function () {
 // --- Authenticated Routes ---
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
+    Route::post('/imports/{module}/preview', ImportPreviewController::class)->name('imports.preview');
 
     // Everyone can view the dashboard and reports
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
@@ -94,6 +97,7 @@ Route::middleware('auth')->group(function () {
 
     // Responsibility centers are organization-wide setup data. Head of Finance only.
     Route::middleware('role:super_admin')->group(function () {
+        Route::get('/system/backup/export', [SystemBackupController::class, 'export'])->name('system.backup.export');
         Route::post('/departments', [DepartmentController::class, 'store'])->name('departments.store');
         Route::put('/departments/{department}', [DepartmentController::class, 'update'])->name('departments.update');
         Route::delete('/departments/{department}', [DepartmentController::class, 'destroy'])->name('departments.destroy');

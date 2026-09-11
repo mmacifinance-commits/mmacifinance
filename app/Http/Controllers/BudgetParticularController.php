@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\BudgetCategory;
+use App\Models\AuditTrail;
 use App\Models\BudgetParticular;
 use App\Models\Department;
 use Illuminate\Http\Request;
@@ -35,7 +36,8 @@ class BudgetParticularController extends Controller
             'description' => 'nullable|string',
         ]);
 
-        BudgetParticular::create($validated);
+        $particular = BudgetParticular::create($validated);
+        AuditTrail::log($particular, 'created', auth()->user(), 'Account title created.');
 
         return redirect()->route('budget-particulars.index')->with('success', 'Account Title created successfully.');
     }
@@ -52,12 +54,16 @@ class BudgetParticularController extends Controller
         ]);
 
         $budgetParticular->update($validated);
+        AuditTrail::log($budgetParticular, 'modified', auth()->user(), 'Account title updated.', [
+            'changes' => $validated,
+        ]);
 
         return redirect()->route('budget-particulars.index')->with('success', 'Account Title updated successfully.');
     }
 
     public function destroy(BudgetParticular $budgetParticular)
     {
+        AuditTrail::log($budgetParticular, 'deleted', auth()->user(), 'Account title deleted.');
         $budgetParticular->delete();
 
         return redirect()->route('budget-particulars.index')->with('success', 'Account Title deleted successfully.');
@@ -165,6 +171,7 @@ class BudgetParticularController extends Controller
                     'description' => $description !== '' ? $description : null,
                 ]
             );
+            AuditTrail::log($item, 'imported', auth()->user(), $item->wasRecentlyCreated ? 'Account title created from CSV/Excel.' : 'Account title updated from CSV/Excel.');
 
             $item->wasRecentlyCreated ? $created++ : $updated++;
         }

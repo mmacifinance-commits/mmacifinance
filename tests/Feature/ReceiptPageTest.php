@@ -26,6 +26,7 @@ class ReceiptPageTest extends TestCase
         Income::create([
             'income_no' => 'INC-ENROLL',
             'receipt_no' => 'OR-ENROLL-001',
+            'receipt_type' => 'Enrollment',
             'source' => 'Enrollment Collections',
             'description' => 'Enrollment Fee',
             'amount' => 10000,
@@ -34,6 +35,7 @@ class ReceiptPageTest extends TestCase
         Income::create([
             'income_no' => 'INC-MIDTERM',
             'receipt_no' => 'OR-MID-001',
+            'receipt_type' => 'Midterm',
             'source' => 'Midterm Collections',
             'description' => 'Midterm Assessment',
             'amount' => 12000,
@@ -42,6 +44,7 @@ class ReceiptPageTest extends TestCase
         Income::create([
             'income_no' => 'INC-FINAL',
             'receipt_no' => 'OR-FINAL-001',
+            'receipt_type' => 'Final Exam',
             'source' => 'Final Exam Collections',
             'description' => 'Final Exam Assessment',
             'amount' => 15000,
@@ -79,6 +82,7 @@ class ReceiptPageTest extends TestCase
         $this->actingAs($user)
             ->post('/receipts', [
                 'receipt_no' => 'OR-CRUD-001',
+                'receipt_type' => 'Enrollment',
                 'source' => 'Enrollment Collections',
                 'description' => 'Enrollment Receipt',
                 'amount' => 2500,
@@ -99,6 +103,7 @@ class ReceiptPageTest extends TestCase
         $this->actingAs($user)
             ->put("/receipts/{$receipt->id}", [
                 'receipt_no' => 'OR-CRUD-002',
+                'receipt_type' => 'Midterm',
                 'source' => 'Midterm Collections',
                 'description' => 'Midterm Receipt',
                 'amount' => 3000,
@@ -132,6 +137,7 @@ class ReceiptPageTest extends TestCase
         Income::create([
             'income_no' => 'INC-DUPLICATE',
             'receipt_no' => 'OR-DUPLICATE',
+            'receipt_type' => 'Enrollment',
             'source' => 'Enrollment Collections',
             'description' => 'Existing receipt',
             'amount' => 1000,
@@ -142,6 +148,7 @@ class ReceiptPageTest extends TestCase
             ->from('/receipts')
             ->post('/receipts', [
                 'receipt_no' => '',
+                'receipt_type' => 'Enrollment',
                 'source' => 'Enrollment Collections',
                 'description' => 'Missing receipt number',
                 'amount' => 1000,
@@ -154,6 +161,7 @@ class ReceiptPageTest extends TestCase
             ->from('/receipts')
             ->post('/receipts', [
                 'receipt_no' => 'OR-DUPLICATE',
+                'receipt_type' => 'Enrollment',
                 'source' => 'Enrollment Collections',
                 'description' => 'Duplicate receipt number',
                 'amount' => 1000,
@@ -186,6 +194,7 @@ class ReceiptPageTest extends TestCase
         Income::create([
             'income_no' => 'INC-EXPORT',
             'receipt_no' => 'OR-EXPORT-001',
+            'receipt_type' => 'Enrollment',
             'source' => 'Enrollment Collections',
             'description' => 'Enrollment Fee',
             'amount' => 10000,

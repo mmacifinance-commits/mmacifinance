@@ -8,6 +8,7 @@ use App\Models\BudgetParticular;
 use App\Models\Department;
 use App\Models\Disbursement;
 use App\Models\Expense;
+use App\Models\Income;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -59,11 +60,33 @@ class BudgetAndDisbursementEnhancementTest extends TestCase
             'description' => 'Supplies for printing',
         ]);
 
+        $budget = AnnualBudget::create([
+            'year' => 2026,
+            'semester' => 'Full Year (Jan-Dec)',
+        ]);
+        $budgetItem = $budget->items()->create([
+            'category_id' => $this->category->id,
+            'particular_id' => $this->accountTitle->id,
+            'month' => 1,
+            'appropriation' => 10000,
+        ]);
+        Income::create([
+            'income_no' => 'INC-CASH-2026',
+            'receipt_no' => 'OR-CASH-2026',
+            'receipt_type' => 'Enrollment',
+            'source' => 'Enrollment Collections',
+            'description' => 'Cash receipts for disbursement tests',
+            'amount' => 10000,
+            'date_encoded' => '2026-01-01',
+            'created_by_id' => $this->superAdmin->id,
+        ]);
+
         $this->expense = Expense::create([
             'ref_no' => 'EXP-2026-0001',
             'description' => 'Bond Paper Purchase',
             'category_id' => $this->category->id,
             'particular_id' => $this->accountTitle->id,
+            'budget_item_id' => $budgetItem->id,
             'amount' => 5000.00,
             'paid' => 0.00,
             'date_encoded' => '2026-01-15',
@@ -95,17 +118,7 @@ class BudgetAndDisbursementEnhancementTest extends TestCase
 
     public function test_cashier_can_create_disbursement_and_submit_for_approval()
     {
-        $budget = AnnualBudget::create([
-            'year' => 2026,
-            'semester' => 'Full Year (Jan-Dec)',
-        ]);
-        $item = $budget->items()->create([
-            'category_id' => $this->category->id,
-            'particular_id' => $this->accountTitle->id,
-            'month' => 1,
-            'appropriation' => 10000,
-        ]);
-        $this->expense->update(['status' => 'approved', 'budget_item_id' => $item->id]);
+        $this->expense->update(['status' => 'approved']);
 
         $response = $this->actingAs($this->cashier)->post('/disbursements', [
             'expense_id' => $this->expense->id,

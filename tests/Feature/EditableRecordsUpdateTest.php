@@ -78,6 +78,7 @@ class EditableRecordsUpdateTest extends TestCase
 
         $payload = [
             'receipt_no' => 'OR-2026-0001',
+            'receipt_type' => 'Enrollment',
             'source' => 'Updated Source',
             'description' => 'Updated income',
             'amount' => 60000,
@@ -103,6 +104,7 @@ class EditableRecordsUpdateTest extends TestCase
 
         $this->actingAs($user)->post('/income', [
             'receipt_no' => 'OR-SEARCH-001',
+            'receipt_type' => 'Enrollment',
             'source' => 'Collections',
             'description' => 'Receipt income',
             'amount' => 7500,
@@ -130,8 +132,8 @@ class EditableRecordsUpdateTest extends TestCase
         $this->assertSame('OR-SEARCH-001', $exportRows[0][1]);
 
         $csv = implode("\n", [
-            'income_no,receipt_no,source,description,amount,date_encoded,notes',
-            'INC-IGNORED,OR-IMPORT-001,Imported Collections,Imported income,12000,2026-08-02,Imported with receipt',
+            'income_no,receipt_no,receipt_type,source,description,amount,date_encoded,notes',
+            'INC-IGNORED,OR-IMPORT-001,Enrollment,Imported Collections,Imported income,12000,2026-08-02,Imported with receipt',
             '',
         ]);
 
@@ -289,6 +291,16 @@ class EditableRecordsUpdateTest extends TestCase
             'particular_id' => $accountTitle->id,
             'month' => 8,
             'appropriation' => 30000,
+        ]);
+        Income::create([
+            'income_no' => 'INC-FIXTURE-CASH',
+            'receipt_no' => 'OR-FIXTURE-CASH',
+            'receipt_type' => 'Enrollment',
+            'source' => 'Enrollment Collections',
+            'description' => 'Cash available for edit tests',
+            'amount' => 30000,
+            'date_encoded' => '2026-08-01',
+            'created_by_id' => $user->id,
         ]);
         $expense = Expense::create([
             'ref_no' => 'EXP00000001',
