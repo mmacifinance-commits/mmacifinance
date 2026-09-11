@@ -515,7 +515,7 @@ class AnnualBudgetController extends Controller
 
         return Inertia::render('AnnualBudgets/Index', [
             'budgets' => $budgets,
-            'availableYears' => AnnualBudget::distinct()->orderByDesc('start_date')->pluck('year'),
+            'availableYears' => AnnualBudget::distinct()->orderByDesc('year')->pluck('year'),
         ]);
     }
 
@@ -538,7 +538,7 @@ class AnnualBudgetController extends Controller
             'categories' => BudgetCategory::all(),
             'particulars' => BudgetParticular::with('category', 'department')->get(),
             'accountTitles' => BudgetParticular::with('category', 'department')->get(),
-            'availableYears' => AnnualBudget::distinct()->orderByDesc('start_date')->pluck('year'),
+            'availableYears' => AnnualBudget::distinct()->orderByDesc('year')->pluck('year'),
             'allBudgets' => AnnualBudget::select('id', 'year', 'start_date', 'end_date', 'ref_no', 'semester')->orderByDesc('start_date')->get(),
         ]);
     }
