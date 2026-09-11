@@ -8,45 +8,40 @@ const props = defineProps({
     categories: { type: Array, default: () => [] }
 })
 
-const perms = computed(() => usePage().props.permissions || {})
-const showModal = ref(false)
-const showImportModal = ref(false)
+const page = usePage()
+const canManage = computed(() => !!page.props.permissions?.canManageBudget)
+
+const showForm = ref(false)
+const showImport = ref(false)
 const editing = ref(null)
+const MAX_TITLES = 5
 
-const form = useForm({
-    name: '',
-    description: ''
-})
+const form = useForm({ name: '', description: '' })
+const importForm = useForm({ csv_file: null })
 
-const importForm = useForm({
-    csv_file: null
-})
-
-const MAX_VISIBLE_TITLES = 5
-
-const formErrors = computed(() =>
+const errors = computed(() =>
     Object.values(form.errors || {}).flat().filter(Boolean)
 )
 
-const clean = value =>
-    String(value || '').trim().replace(/\s+/g, ' ')
+const clean = value => String(value || '').trim().replace(/\s+/g, ' ')
+const normalize = value => clean(value).toLowerCase()
+const visibleTitles = category =>
+    (category.particulars || []).slice(0, MAX_TITLES)
 
-const normalize = value =>
-    clean(value).toLowerCase()
-
-const visibleParticulars = category =>
-    (category.particulars || []).slice(0, MAX_VISIBLE_TITLES)
-
-function closeForm() {
-    showModal.value = false
+function resetForm() {
     editing.value = null
     form.reset()
     form.clearErrors()
 }
 
+function closeForm() {
+    showForm.value = false
+    resetForm()
+}
+
 function openCreate() {
-    closeForm()
-    showModal.value = true
+    resetForm()
+    showForm.value = true
 }
 
 function openEdit(category) {
@@ -54,7 +49,7 @@ function openEdit(category) {
     form.name = category.name
     form.description = category.description || ''
     editing.value = category.id
-    showModal.value = true
+    showForm.value = true
 }
 
 function save() {
@@ -65,16 +60,17 @@ function save() {
     if (!name)
         return form.setError('name', 'Budget category name is required.')
 
-    const duplicate = props.categories.some(category =>
-        normalize(category.name) === normalize(name) &&
-        Number(category.id) !== Number(editing.value)
-    )
-
-    if (duplicate)
+    if (
+        props.categories.some(c =>
+            normalize(c.name) === normalize(name) &&
+            Number(c.id) !== Number(editing.value)
+        )
+    ) {
         return form.setError(
             'name',
             `"${name}" already exists as a budget category.`
         )
+    }
 
     form.name = name
     form.description = clean(form.description)
@@ -94,11 +90,15 @@ function remove(id) {
         router.delete(`/budget-categories/${id}`)
 }
 
+const exportCsv = () =>
+    window.location.assign('/budget-categories/export-csv')
+
 function importCsv() {
     importForm.post('/budget-categories/import-csv', {
         onSuccess: () => {
-            showImportModal.value = false
+            showImport.value = false
             importForm.reset()
+            importForm.clearErrors()
         }
     })
 }
@@ -119,19 +119,16 @@ function importCsv() {
                 </p>
             </div>
 
-            <div
-                v-if="perms.canManageBudget"
-                class="flex flex-wrap items-center gap-2"
-            >
+            <div v-if="canManage" class="flex flex-wrap gap-2">
                 <button
-                    @click="window.location.href = '/budget-categories/export-csv'"
+                    @click="exportCsv"
                     class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
                 >
                     Export CSV
                 </button>
 
                 <button
-                    @click="showImportModal = true"
+                    @click="showImport = true"
                     class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-100"
                 >
                     Import CSV
@@ -151,10 +148,10 @@ function importCsv() {
             <div class="overflow-x-auto">
                 <table class="w-full min-w-[900px] table-fixed text-sm">
                     <colgroup>
-                        <col class="w-[20%]">
-                        <col class="w-[25%]">
-                        <col class="w-[40%]">
-                        <col v-if="perms.canManageBudget" class="w-[15%]">
+                        <col class="w-[20%]" />
+                        <col class="w-[25%]" />
+                        <col class="w-[40%]" />
+                        <col v-if="canManage" class="w-[15%]" />
                     </colgroup>
 
                     <thead>
@@ -169,7 +166,7 @@ function importCsv() {
                                 Account Titles
                             </th>
                             <th
-                                v-if="perms.canManageBudget"
+                                v-if="canManage"
                                 class="px-5 py-3.5 text-center text-xs font-bold uppercase"
                             >
                                 Actions
@@ -197,7 +194,7 @@ function importCsv() {
                                     class="mx-auto flex max-w-[520px] flex-wrap justify-center gap-1.5"
                                 >
                                     <span
-                                        v-for="item in visibleParticulars(category)"
+                                        v-for="item in visibleTitles(category)"
                                         :key="item.id"
                                         :title="item.particular"
                                         class="max-w-[220px] truncate rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
@@ -206,22 +203,18 @@ function importCsv() {
                                     </span>
 
                                     <span
-                                        v-if="category.particulars.length > MAX_VISIBLE_TITLES"
+                                        v-if="category.particulars.length > MAX_TITLES"
                                         :title="`${category.particulars.length} total Account Titles`"
                                         class="rounded-md bg-gray-200 px-2.5 py-1 text-xs font-semibold text-gray-700"
                                     >
-                                        +{{ category.particulars.length - MAX_VISIBLE_TITLES }}
-                                        more
+                                        +{{ category.particulars.length - MAX_TITLES }} more
                                     </span>
                                 </div>
 
                                 <span v-else class="text-gray-400">—</span>
                             </td>
 
-                            <td
-                                v-if="perms.canManageBudget"
-                                class="px-5 py-4 text-center"
-                            >
+                            <td v-if="canManage" class="px-5 py-4 text-center">
                                 <div class="inline-flex gap-2">
                                     <button
                                         @click="openEdit(category)"
@@ -242,7 +235,7 @@ function importCsv() {
 
                         <tr v-if="!categories.length">
                             <td
-                                :colspan="perms.canManageBudget ? 4 : 3"
+                                :colspan="canManage ? 4 : 3"
                                 class="px-5 py-10 text-center text-gray-500"
                             >
                                 No budget categories found.
@@ -257,16 +250,16 @@ function importCsv() {
             </div>
         </div>
 
-        <!-- Add/Edit Modal -->
+        <!-- Add / Edit -->
         <Modal
-            :show="showModal"
+            :show="showForm"
             :title="editing ? 'Edit Category' : 'Add Category'"
             :subtitle="editing ? 'Update category details.' : 'Create a new budget category.'"
-            @close="showModal = false"
+            @close="closeForm"
         >
             <form @submit.prevent="save">
                 <div
-                    v-if="formErrors.length"
+                    v-if="errors.length"
                     class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
                 >
                     <p class="font-semibold">
@@ -274,7 +267,7 @@ function importCsv() {
                     </p>
 
                     <ul class="mt-1 list-disc pl-5">
-                        <li v-for="error in formErrors" :key="error">
+                        <li v-for="error in errors" :key="error">
                             {{ error }}
                         </li>
                     </ul>
@@ -295,14 +288,14 @@ function importCsv() {
                             :class="[
                                 'w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2',
                                 form.errors.name
-                                    ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
+                                    ? 'border-red-400 focus:ring-red-100'
                                     : 'border-gray-300 focus:border-navy focus:ring-navy/10'
                             ]"
-                        >
+                        />
 
                         <p
                             v-if="form.errors.name"
-                            class="mt-1.5 text-xs font-medium text-red-600"
+                            class="mt-1 text-xs text-red-600"
                         >
                             {{ form.errors.name }}
                         </p>
@@ -331,7 +324,7 @@ function importCsv() {
                 <div class="mt-4 flex justify-end gap-3 border-t pt-5">
                     <button
                         type="button"
-                        @click="showModal = false"
+                        @click="closeForm"
                         class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                     >
                         Cancel
@@ -340,25 +333,26 @@ function importCsv() {
                     <button
                         type="submit"
                         :disabled="form.processing"
-                        class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-navy disabled:opacity-60"
+                        class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy disabled:opacity-60"
                     >
-                        {{ form.processing
-                            ? 'Saving...'
-                            : editing
-                                ? 'Update'
-                                : 'Create'
+                        {{
+                            form.processing
+                                ? 'Saving...'
+                                : editing
+                                    ? 'Update'
+                                    : 'Create'
                         }}
                     </button>
                 </div>
             </form>
         </Modal>
 
-        <!-- CSV Import Modal -->
+        <!-- CSV Import -->
         <Modal
-            :show="showImportModal"
+            :show="showImport"
             title="Import Budget Categories CSV"
             subtitle="Required columns: budget_category, description"
-            @close="showImportModal = false"
+            @close="showImport = false"
         >
             <form @submit.prevent="importCsv" class="space-y-4">
                 <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -383,7 +377,7 @@ function importCsv() {
                         accept=".csv,text/csv"
                         class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
                         @change="importForm.csv_file = $event.target.files?.[0] || null"
-                    >
+                    />
 
                     <p
                         v-if="importForm.errors.csv_file"
@@ -396,7 +390,7 @@ function importCsv() {
                 <div class="flex justify-end gap-3 border-t pt-5">
                     <button
                         type="button"
-                        @click="showImportModal = false"
+                        @click="showImport = false"
                         class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                     >
                         Cancel
@@ -405,7 +399,7 @@ function importCsv() {
                     <button
                         type="submit"
                         :disabled="importForm.processing"
-                        class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-navy disabled:opacity-60"
+                        class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy disabled:opacity-60"
                     >
                         {{ importForm.processing ? 'Importing...' : 'Import CSV' }}
                     </button>
