@@ -22,34 +22,22 @@ return new class extends Migration
             });
         }
 
-        if (! Schema::hasIndex('annual_budgets', 'annual_budgets_period_index')) {
-            Schema::table('annual_budgets', function (Blueprint $table) {
-                $table->index(['start_date', 'end_date'], 'annual_budgets_period_index');
-            });
-        }
-
         if (! Schema::hasColumn('budget_items', 'allocation_month')) {
             Schema::table('budget_items', function (Blueprint $table) {
                 $table->date('allocation_month')->nullable()->after('month');
             });
         }
 
-        if (! Schema::hasIndex('budget_items', 'budget_items_allocation_month_index')) {
-            Schema::table('budget_items', function (Blueprint $table) {
-                $table->index(['budget_id', 'allocation_month'], 'budget_items_allocation_month_index');
-            });
-        }
-
         DB::table('annual_budgets')->orderBy('id')->each(function ($budget) {
-            $startDate = Carbon::create((int) $budget->year, 1, 1)->startOfDay();
-            $endDate = $startDate->copy()->endOfYear()->startOfDay();
+            $startDate = Carbon::create((int) $budget->year, 1, 1)->toDateString();
+            $endDate = Carbon::create((int) $budget->year, 12, 31)->toDateString();
 
             $periodUpdates = [];
             if ($budget->start_date === null) {
-                $periodUpdates['start_date'] = $startDate->toDateString();
+                $periodUpdates['start_date'] = $startDate;
             }
             if ($budget->end_date === null) {
-                $periodUpdates['end_date'] = $endDate->toDateString();
+                $periodUpdates['end_date'] = $endDate;
             }
             if ($periodUpdates !== []) {
                 DB::table('annual_budgets')->where('id', $budget->id)->update($periodUpdates);
@@ -76,6 +64,18 @@ return new class extends Migration
             $table->date('allocation_month')->nullable(false)->change();
         });
 
+        if (! Schema::hasIndex('annual_budgets', 'annual_budgets_period_index')) {
+            Schema::table('annual_budgets', function (Blueprint $table) {
+                $table->index(['start_date', 'end_date'], 'annual_budgets_period_index');
+            });
+        }
+
+        if (! Schema::hasIndex('budget_items', 'budget_items_allocation_month_index')) {
+            Schema::table('budget_items', function (Blueprint $table) {
+                $table->index(['budget_id', 'allocation_month'], 'budget_items_allocation_month_index');
+            });
+        }
+
         if (Schema::hasIndex('budget_items', 'budget_items_budget_particular_month_unique')) {
             Schema::table('budget_items', function (Blueprint $table) {
                 $table->dropUnique('budget_items_budget_particular_month_unique');
@@ -94,16 +94,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::table('budget_items', function (Blueprint $table) {
-            $table->dropUnique('budget_items_budget_particular_allocation_month_unique');
-            $table->dropIndex('budget_items_allocation_month_index');
-            $table->dropColumn('allocation_month');
-            $table->unique(['budget_id', 'particular_id', 'month'], 'budget_items_budget_particular_month_unique');
-        });
-
-        Schema::table('annual_budgets', function (Blueprint $table) {
-            $table->dropIndex('annual_budgets_period_index');
-            $table->dropColumn(['start_date', 'end_date']);
-        });
+        // This repair migration intentionally leaves the authoritative fiscal schema intact.
     }
 };
