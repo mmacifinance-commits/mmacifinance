@@ -4,88 +4,94 @@ import Modal from '@/Components/Modal.vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
 
-const perms = computed(() => usePage().props.permissions || {})
-
 const props = defineProps({
-    categories: {
-        type: Array,
-        default: () => [],
-    },
+    categories: { type: Array, default: () => [] }
 })
 
+const perms = computed(() => usePage().props.permissions || {})
 const showModal = ref(false)
 const showImportModal = ref(false)
 const editing = ref(null)
 
 const form = useForm({
     name: '',
-    description: '',
+    description: ''
 })
 
 const importForm = useForm({
-    csv_file: null,
+    csv_file: null
 })
 
-const formErrorMessages = computed(() =>
-    Object.values(form.errors || {})
-        .flat()
-        .filter(Boolean)
-)
-
-// Maximum number of Account Titles displayed in each row
 const MAX_VISIBLE_TITLES = 5
 
-function visibleParticulars(category) {
-    return (category.particulars || []).slice(0, MAX_VISIBLE_TITLES)
+const formErrors = computed(() =>
+    Object.values(form.errors || {}).flat().filter(Boolean)
+)
+
+const clean = value =>
+    String(value || '').trim().replace(/\s+/g, ' ')
+
+const normalize = value =>
+    clean(value).toLowerCase()
+
+const visibleParticulars = category =>
+    (category.particulars || []).slice(0, MAX_VISIBLE_TITLES)
+
+function closeForm() {
+    showModal.value = false
+    editing.value = null
+    form.reset()
+    form.clearErrors()
 }
 
 function openCreate() {
-    form.reset()
-    form.clearErrors()
-    editing.value = null
+    closeForm()
     showModal.value = true
 }
 
 function openEdit(category) {
     form.clearErrors()
-
     form.name = category.name
     form.description = category.description || ''
-
     editing.value = category.id
     showModal.value = true
 }
 
 function save() {
-    if (editing.value) {
-        form.put(`/budget-categories/${editing.value}`, {
-            onSuccess: () => {
-                showModal.value = false
-            },
-        })
+    form.clearErrors()
 
-        return
+    const name = clean(form.name)
+
+    if (!name)
+        return form.setError('name', 'Budget category name is required.')
+
+    const duplicate = props.categories.some(category =>
+        normalize(category.name) === normalize(name) &&
+        Number(category.id) !== Number(editing.value)
+    )
+
+    if (duplicate)
+        return form.setError(
+            'name',
+            `"${name}" already exists as a budget category.`
+        )
+
+    form.name = name
+    form.description = clean(form.description)
+
+    const options = {
+        preserveScroll: true,
+        onSuccess: closeForm
     }
 
-    form.post('/budget-categories', {
-        onSuccess: () => {
-            showModal.value = false
-        },
-    })
+    editing.value
+        ? form.put(`/budget-categories/${editing.value}`, options)
+        : form.post('/budget-categories', options)
 }
 
 function remove(id) {
-    if (
-        confirm(
-            'Warning: this cannot be undone. Delete category?'
-        )
-    ) {
+    if (confirm('Warning: this cannot be undone. Delete category?'))
         router.delete(`/budget-categories/${id}`)
-    }
-}
-
-function exportCsv() {
-    window.location.href = '/budget-categories/export-csv'
 }
 
 function importCsv() {
@@ -93,7 +99,7 @@ function importCsv() {
         onSuccess: () => {
             showImportModal.value = false
             importForm.reset()
-        },
+        }
     })
 }
 </script>
@@ -102,39 +108,38 @@ function importCsv() {
     <Head title="Budget Categories" />
 
     <AppLayout>
-        <!-- Page Header -->
+        <!-- Header -->
         <div class="mb-6 flex items-center justify-between gap-4">
             <div>
                 <h2 class="text-xl font-bold text-gray-900">
                     Budget Categories
                 </h2>
-
                 <p class="text-sm text-gray-500">
                     Manage budget classification categories
                 </p>
             </div>
 
-            <div class="flex flex-wrap items-center gap-2">
+            <div
+                v-if="perms.canManageBudget"
+                class="flex flex-wrap items-center gap-2"
+            >
                 <button
-                    v-if="perms.canManageBudget"
-                    @click="exportCsv"
-                    class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50"
+                    @click="window.location.href = '/budget-categories/export-csv'"
+                    class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
                 >
                     Export CSV
                 </button>
 
                 <button
-                    v-if="perms.canManageBudget"
                     @click="showImportModal = true"
-                    class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100"
+                    class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-100"
                 >
                     Import CSV
                 </button>
 
                 <button
-                    v-if="perms.canManageBudget"
                     @click="openCreate"
-                    class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-navy"
+                    class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-navy"
                 >
                     Add Category
                 </button>
@@ -142,47 +147,30 @@ function importCsv() {
         </div>
 
         <!-- Table -->
-        <div
-            class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
-        >
-            <div class="w-full overflow-x-auto">
+        <div class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+            <div class="overflow-x-auto">
                 <table class="w-full min-w-[900px] table-fixed text-sm">
-                    <!-- Fixed column widths -->
                     <colgroup>
-                        <col class="w-[20%]" />
-                        <col class="w-[25%]" />
-                        <col class="w-[40%]" />
-                        <col
-                            v-if="perms.canManageBudget"
-                            class="w-[15%]"
-                        />
+                        <col class="w-[20%]">
+                        <col class="w-[25%]">
+                        <col class="w-[40%]">
+                        <col v-if="perms.canManageBudget" class="w-[15%]">
                     </colgroup>
 
                     <thead>
-                        <tr
-                            class="border-b-2 border-mustard bg-navy-dark text-white"
-                        >
-                            <th
-                                class="px-5 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-white"
-                            >
+                        <tr class="border-b-2 border-mustard bg-navy-dark text-white">
+                            <th class="px-5 py-3.5 text-left text-xs font-bold uppercase">
                                 Name
                             </th>
-
-                            <th
-                                class="px-5 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-white"
-                            >
+                            <th class="px-5 py-3.5 text-left text-xs font-bold uppercase">
                                 Description
                             </th>
-
-                            <th
-                                class="px-5 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-white"
-                            >
+                            <th class="px-5 py-3.5 text-center text-xs font-bold uppercase">
                                 Account Titles
                             </th>
-
                             <th
                                 v-if="perms.canManageBudget"
-                                class="px-5 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-white"
+                                class="px-5 py-3.5 text-center text-xs font-bold uppercase"
                             >
                                 Actions
                             </th>
@@ -193,84 +181,58 @@ function importCsv() {
                         <tr
                             v-for="category in categories"
                             :key="category.id"
-                            class="border-b border-gray-100 transition-colors hover:bg-gray-50/50"
+                            class="border-b border-gray-100 hover:bg-gray-50/50"
                         >
-                            <!-- Category Name -->
-                            <td
-                                class="whitespace-normal break-words px-5 py-4 align-middle font-medium text-gray-800"
-                            >
+                            <td class="break-words px-5 py-4 font-medium text-gray-800">
                                 {{ category.name }}
                             </td>
 
-                            <!-- Description -->
-                            <td
-                                class="whitespace-normal break-words px-5 py-4 align-middle text-xs leading-5 text-gray-500"
-                            >
+                            <td class="break-words px-5 py-4 text-xs leading-5 text-gray-500">
                                 {{ category.description || '-' }}
                             </td>
 
-                            <!-- Account Titles -->
-                            <td
-                                class="px-5 py-4 text-center align-middle text-gray-600"
-                            >
+                            <td class="px-5 py-4 text-center">
                                 <div
-                                    v-if="
-                                        category.particulars &&
-                                        category.particulars.length
-                                    "
+                                    v-if="category.particulars?.length"
                                     class="mx-auto flex max-w-[520px] flex-wrap justify-center gap-1.5"
                                 >
                                     <span
-                                        v-for="particular in visibleParticulars(category)"
-                                        :key="particular.id"
-                                        :title="particular.particular"
-                                        class="inline-block max-w-[220px] truncate rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
+                                        v-for="item in visibleParticulars(category)"
+                                        :key="item.id"
+                                        :title="item.particular"
+                                        class="max-w-[220px] truncate rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
                                     >
-                                        {{ particular.particular }}
+                                        {{ item.particular }}
                                     </span>
 
                                     <span
-                                        v-if="
-                                            category.particulars.length >
-                                            MAX_VISIBLE_TITLES
-                                        "
+                                        v-if="category.particulars.length > MAX_VISIBLE_TITLES"
                                         :title="`${category.particulars.length} total Account Titles`"
-                                        class="inline-block rounded-md bg-gray-200 px-2.5 py-1 text-xs font-semibold text-gray-700"
+                                        class="rounded-md bg-gray-200 px-2.5 py-1 text-xs font-semibold text-gray-700"
                                     >
-                                        +{{
-                                            category.particulars.length -
-                                            MAX_VISIBLE_TITLES
-                                        }}
+                                        +{{ category.particulars.length - MAX_VISIBLE_TITLES }}
                                         more
                                     </span>
                                 </div>
 
-                                <span
-                                    v-else
-                                    class="text-sm text-gray-400"
-                                >
-                                    —
-                                </span>
+                                <span v-else class="text-gray-400">—</span>
                             </td>
 
-                            <!-- Actions -->
                             <td
                                 v-if="perms.canManageBudget"
-                                class="px-5 py-4 text-center align-middle"
+                                class="px-5 py-4 text-center"
                             >
-                                <div
-                                    class="inline-flex items-center justify-center gap-2"
-                                >
+                                <div class="inline-flex gap-2">
                                     <button
                                         @click="openEdit(category)"
-                                        class="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm transition-all duration-150 hover:bg-indigo-100"
+                                        class="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
                                     >
                                         Edit
                                     </button>
 
                                     <button
                                         @click="remove(category.id)"
-                                        class="rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-sm transition-all duration-150 hover:bg-rose-100"
+                                        class="rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
                                     >
                                         Delete
                                     </button>
@@ -278,14 +240,9 @@ function importCsv() {
                             </td>
                         </tr>
 
-                        <!-- Empty State -->
-                        <tr v-if="categories.length === 0">
+                        <tr v-if="!categories.length">
                             <td
-                                :colspan="
-                                    perms.canManageBudget
-                                        ? 4
-                                        : 3
-                                "
+                                :colspan="perms.canManageBudget ? 4 : 3"
                                 class="px-5 py-10 text-center text-gray-500"
                             >
                                 No budget categories found.
@@ -295,78 +252,64 @@ function importCsv() {
                 </table>
             </div>
 
-            <!-- Footer -->
-            <div
-                class="border-t bg-gray-50 px-5 py-2.5 text-xs text-gray-500"
-            >
+            <div class="border-t bg-gray-50 px-5 py-2.5 text-xs text-gray-500">
                 Total Records: {{ categories.length }}
             </div>
         </div>
 
-        <!-- Add/Edit Category Modal -->
+        <!-- Add/Edit Modal -->
         <Modal
             :show="showModal"
-            :title="
-                editing
-                    ? 'Edit Category'
-                    : 'Add Category'
-            "
-            :subtitle="
-                editing
-                    ? 'Update category details.'
-                    : 'Create a new budget category.'
-            "
+            :title="editing ? 'Edit Category' : 'Add Category'"
+            :subtitle="editing ? 'Update category details.' : 'Create a new budget category.'"
             @close="showModal = false"
         >
             <form @submit.prevent="save">
-                <!-- Validation Errors -->
                 <div
-                    v-if="formErrorMessages.length"
+                    v-if="formErrors.length"
                     class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-                    role="alert"
                 >
                     <p class="font-semibold">
                         The category could not be saved:
                     </p>
 
-                    <ul class="mt-1 list-disc space-y-1 pl-5">
-                        <li
-                            v-for="message in formErrorMessages"
-                            :key="message"
-                        >
-                            {{ message }}
+                    <ul class="mt-1 list-disc pl-5">
+                        <li v-for="error in formErrors" :key="error">
+                            {{ error }}
                         </li>
                     </ul>
                 </div>
 
                 <div class="space-y-4">
-                    <!-- Name -->
                     <div>
-                        <label
-                            class="mb-1.5 block text-sm font-medium text-gray-700"
-                        >
+                        <label class="mb-1.5 block text-sm font-medium text-gray-700">
                             Name
                         </label>
 
                         <input
                             v-model="form.name"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+                            maxlength="255"
+                            autocomplete="off"
                             required
-                        />
+                            @input="form.clearErrors('name')"
+                            :class="[
+                                'w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2',
+                                form.errors.name
+                                    ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
+                                    : 'border-gray-300 focus:border-navy focus:ring-navy/10'
+                            ]"
+                        >
 
                         <p
                             v-if="form.errors.name"
-                            class="mt-1 text-xs text-red-500"
+                            class="mt-1.5 text-xs font-medium text-red-600"
                         >
                             {{ form.errors.name }}
                         </p>
                     </div>
 
-                    <!-- Description -->
                     <div>
-                        <label
-                            class="mb-1.5 block text-sm font-medium text-gray-700"
-                        >
+                        <label class="mb-1.5 block text-sm font-medium text-gray-700">
                             Description
                         </label>
 
@@ -374,7 +317,7 @@ function importCsv() {
                             v-model="form.description"
                             rows="2"
                             class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
-                        ></textarea>
+                        />
 
                         <p
                             v-if="form.errors.description"
@@ -385,14 +328,11 @@ function importCsv() {
                     </div>
                 </div>
 
-                <!-- Modal Buttons -->
-                <div
-                    class="mt-4 flex items-center justify-end gap-3 border-t pt-5"
-                >
+                <div class="mt-4 flex justify-end gap-3 border-t pt-5">
                     <button
                         type="button"
                         @click="showModal = false"
-                        class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                        class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                     >
                         Cancel
                     </button>
@@ -400,53 +340,41 @@ function importCsv() {
                     <button
                         type="submit"
                         :disabled="form.processing"
-                        class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-navy disabled:cursor-not-allowed disabled:opacity-60"
+                        class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-navy disabled:opacity-60"
                     >
-                        {{
-                            form.processing
-                                ? 'Saving...'
-                                : editing
-                                    ? 'Update'
-                                    : 'Create'
+                        {{ form.processing
+                            ? 'Saving...'
+                            : editing
+                                ? 'Update'
+                                : 'Create'
                         }}
                     </button>
                 </div>
             </form>
         </Modal>
 
-        <!-- Import CSV Modal -->
+        <!-- CSV Import Modal -->
         <Modal
             :show="showImportModal"
             title="Import Budget Categories CSV"
             subtitle="Required columns: budget_category, description"
             @close="showImportModal = false"
         >
-            <form
-                @submit.prevent="importCsv"
-                class="space-y-4"
-            >
-                <div
-                    class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
-                >
-                    <p class="font-semibold">
-                        Required columns
-                    </p>
-
+            <form @submit.prevent="importCsv" class="space-y-4">
+                <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <p class="font-semibold">Required columns</p>
                     <p class="mt-1 font-mono text-xs">
                         budget_category, description
                     </p>
-
                     <p class="mt-2 text-xs">
-                        Budget Categories group Account Titles and Annual
-                        Budget Allocations. Use clear category names because
-                        Expenditures depend on these categories later.
+                        Budget Categories group Account Titles and Annual Budget
+                        Allocations. Use clear category names because Expenditures
+                        depend on these categories later.
                     </p>
                 </div>
 
                 <div>
-                    <label
-                        class="mb-1.5 block text-sm font-medium text-gray-700"
-                    >
+                    <label class="mb-1.5 block text-sm font-medium text-gray-700">
                         CSV File
                     </label>
 
@@ -454,12 +382,8 @@ function importCsv() {
                         type="file"
                         accept=".csv,text/csv"
                         class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
-                        @change="
-                            (e) =>
-                                importForm.csv_file =
-                                    e.target.files?.[0] || null
-                        "
-                    />
+                        @change="importForm.csv_file = $event.target.files?.[0] || null"
+                    >
 
                     <p
                         v-if="importForm.errors.csv_file"
@@ -469,13 +393,11 @@ function importCsv() {
                     </p>
                 </div>
 
-                <div
-                    class="flex items-center justify-end gap-3 border-t pt-5"
-                >
+                <div class="flex justify-end gap-3 border-t pt-5">
                     <button
                         type="button"
                         @click="showImportModal = false"
-                        class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                        class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                     >
                         Cancel
                     </button>
@@ -483,13 +405,9 @@ function importCsv() {
                     <button
                         type="submit"
                         :disabled="importForm.processing"
-                        class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-navy disabled:cursor-not-allowed disabled:opacity-60"
+                        class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-navy disabled:opacity-60"
                     >
-                        {{
-                            importForm.processing
-                                ? 'Importing...'
-                                : 'Import CSV'
-                        }}
+                        {{ importForm.processing ? 'Importing...' : 'Import CSV' }}
                     </button>
                 </div>
             </form>
