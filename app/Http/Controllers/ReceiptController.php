@@ -46,13 +46,27 @@ class ReceiptController extends Controller
                 'id' => $income->id,
                 'income_no' => $income->income_no,
                 'receipt_no' => $income->receipt_no,
+                'receipt_type' => $this->receiptType($income),
                 'source' => $income->source,
                 'description' => $income->description,
                 'amount' => (float) $income->amount,
                 'date_encoded' => $income->date_encoded?->toDateString(),
                 'notes' => $income->notes,
-                'receipt_type' => $this->receiptType($income),
+                'updated_at' => $income->updated_at?->toISOString(),
             ]);
+
+        $typeOptions = Income::query()
+            ->whereNotNull('receipt_no')
+            ->where('receipt_no', '<>', '')
+            ->whereNotNull('receipt_type')
+            ->where('receipt_type', '<>', '')
+            ->distinct()
+            ->orderBy('receipt_type')
+            ->pluck('receipt_type')
+            ->map(fn (string $type) => ['value' => $type, 'label' => $type])
+            ->prepend(['value' => '', 'label' => 'All Receipt Types'])
+            ->values()
+            ->all();
 
         return Inertia::render('Receipts/Index', [
             'receipts' => $receipts,
@@ -71,14 +85,7 @@ class ReceiptController extends Controller
                 'withReceiptNo' => $summaryRows->filter(fn (Income $income) => filled($income->receipt_no))->count(),
                 'byType' => $summaryByType,
             ],
-            'termOptions' => [
-                ['value' => '', 'label' => 'All Receipt Types'],
-                ['value' => 'enrollment', 'label' => 'Enrollment'],
-                ['value' => 'premidterm', 'label' => 'Premidterm / Prelim'],
-                ['value' => 'midterm', 'label' => 'Midterm'],
-                ['value' => 'prefinal', 'label' => 'Pre-Final'],
-                ['value' => 'final', 'label' => 'Final Exam'],
-            ],
+            'termOptions' => $typeOptions,
         ]);
     }
 
@@ -129,7 +136,7 @@ class ReceiptController extends Controller
             return back()->withErrors(['csv_file' => 'CSV/Excel file is empty.']);
         }
 
-        $required = ['receipt_no', 'source', 'description', 'amount', 'date_encoded'];
+        $required = ['receipt_no', 'receipt_type', 'source', 'description', 'amount', 'date_encoded'];
         foreach ($required as $column) {
             if (! in_array($column, $header, true)) {
                 return back()->withErrors(['csv_file' => "Missing required column: {$column}"]);
@@ -149,20 +156,22 @@ class ReceiptController extends Controller
             }
 
             $receiptNo = trim((string) ($row[$index['receipt_no']] ?? ''));
+            $receiptType = trim((string) ($row[$index['receipt_type']] ?? ''));
             $source = trim((string) ($row[$index['source']] ?? ''));
             $description = trim((string) ($row[$index['description']] ?? ''));
             $amount = (float) ($row[$index['amount']] ?? 0);
             $dateEncoded = trim((string) ($row[$index['date_encoded']] ?? ''));
             $notes = isset($index['notes']) ? trim((string) ($row[$index['notes']] ?? '')) : '';
 
-            if ($receiptNo === '' || $source === '' || $description === '' || $dateEncoded === '') {
-                $skipped[] = "Row {$line} is missing receipt_no, source, description, or date_encoded.";
+            if ($receiptNo === '' || $receiptType === '' || $source === '' || $description === '' || $dateEncoded === '') {
+                $skipped[] = "Row {$line} is missing receipt_no, receipt_type, source, description, or date_encoded.";
 
                 continue;
             }
 
             $income = Income::firstOrNew(['receipt_no' => $receiptNo]);
             $isNew = ! $income->exists;
+            $income->receipt_type = $receiptType;
             $income->source = $source;
             $income->description = $description;
             $income->amount = $amount;
@@ -195,6 +204,7 @@ class ReceiptController extends Controller
     {
         $validated = $request->validate([
             'receipt_no' => ['required', 'string', 'max:100', Rule::unique('incomes', 'receipt_no')],
+            'receipt_type' => ['required', 'string', 'max:100'],
             'source' => 'required|string|max:255',
             'description' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
@@ -203,6 +213,7 @@ class ReceiptController extends Controller
         ]);
 
         $validated['receipt_no'] = trim($validated['receipt_no']);
+        $validated['receipt_type'] = trim($validated['receipt_type']);
         $validated['income_no'] = sprintf('INC-%s-%04d', date('Y'), Income::count() + 1);
         $validated['created_by_id'] = auth()->id();
 
@@ -217,6 +228,7 @@ class ReceiptController extends Controller
 
         $validated = $request->validate([
             'receipt_no' => ['required', 'string', 'max:100', Rule::unique('incomes', 'receipt_no')->ignore($receipt->id)],
+            'receipt_type' => ['required', 'string', 'max:100'],
             'source' => 'required|string|max:255',
             'description' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
@@ -225,6 +237,7 @@ class ReceiptController extends Controller
         ]);
 
         $validated['receipt_no'] = trim($validated['receipt_no']);
+        $validated['receipt_type'] = trim($validated['receipt_type']);
         $receipt->update($validated);
 
         return redirect()->route('receipts.index')->with('success', 'Receipt updated successfully.');
@@ -241,16 +254,7 @@ class ReceiptController extends Controller
 
     private function receiptType(Income $income): string
     {
-        $text = strtolower($income->source.' '.$income->description);
-
-        return match (true) {
-            str_contains($text, 'enrollment') => 'Enrollment',
-            str_contains($text, 'premidterm'), str_contains($text, 'pre midterm'), str_contains($text, 'prelim') => 'Premidterm / Prelim',
-            str_contains($text, 'midterm') => 'Midterm',
-            str_contains($text, 'pre-final'), str_contains($text, 'prefinal') => 'Pre-Final',
-            str_contains($text, 'final exam'), str_contains($text, 'final') => 'Final Exam',
-            default => 'Cash Receipt',
-        };
+        return filled($income->receipt_type) ? (string) $income->receipt_type : 'Cash Receipt';
     }
 
     private function receiptQuery($selectedPeriod, string $search, string $term)
@@ -264,19 +268,14 @@ class ReceiptController extends Controller
             ->where('receipt_no', '<>', '');
 
         if ($term !== '') {
-            $patterns = $this->termPatterns($term);
-            $query->where(function ($q) use ($patterns) {
-                foreach ($patterns as $pattern) {
-                    $q->orWhere('source', 'like', "%{$pattern}%")
-                        ->orWhere('description', 'like', "%{$pattern}%");
-                }
-            });
+            $query->where('receipt_type', $term);
         }
 
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
                 $q->where('income_no', 'like', "%{$search}%")
                     ->orWhere('receipt_no', 'like', "%{$search}%")
+                    ->orWhere('receipt_type', 'like', "%{$search}%")
                     ->orWhere('source', 'like', "%{$search}%")
                     ->orWhere('description', 'like', "%{$search}%")
                     ->orWhere('notes', 'like', "%{$search}%");
@@ -284,17 +283,5 @@ class ReceiptController extends Controller
         }
 
         return $query;
-    }
-
-    private function termPatterns(string $term): array
-    {
-        return match ($term) {
-            'enrollment' => ['enrollment'],
-            'premidterm' => ['premidterm', 'pre midterm', 'prelim'],
-            'midterm' => ['midterm'],
-            'prefinal' => ['pre-final', 'prefinal'],
-            'final' => ['final exam'],
-            default => [],
-        };
     }
 }

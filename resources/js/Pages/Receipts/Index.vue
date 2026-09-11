@@ -1,6 +1,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
+import SystemAlert from '@/Components/SystemAlert.vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import { computed, ref } from 'vue'
 
@@ -22,6 +23,7 @@ const editingReceiptId = ref(null)
 const importForm = useForm({ csv_file: null })
 const receiptForm = useForm({
     receipt_no: '',
+    receipt_type: '',
     source: '',
     description: '',
     amount: '',
@@ -88,6 +90,7 @@ function openEditReceipt(item) {
     editingReceiptId.value = item.id
     receiptForm.clearErrors()
     receiptForm.receipt_no = item.receipt_no || ''
+    receiptForm.receipt_type = item.receipt_type || ''
     receiptForm.source = item.source || ''
     receiptForm.description = item.description || ''
     receiptForm.amount = item.amount || ''
@@ -129,7 +132,7 @@ function deleteReceipt(item) {
     <div class="mb-6 flex items-center justify-between gap-4">
         <div>
             <h2 class="text-xl font-bold text-gray-900">Receipts</h2>
-            <p class="text-sm text-gray-500">Cash receipts from enrollment, premidterm, midterm, pre-final, and final exam collections</p>
+            <p class="text-sm text-gray-500">Cash receipts grouped by the receipt type you enter for each record.</p>
         </div>
         <div class="flex flex-wrap gap-2">
             <button @click="openCreateReceipt" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-navy">Add Receipt</button>
@@ -266,14 +269,9 @@ function deleteReceipt(item) {
         />
     </div>
 
-    <Modal :show="showReceiptModal" :title="editingReceiptId ? 'Edit Receipt' : 'Add Receipt'" subtitle="Receipt number is required and must be unique." max-width="2xl" @close="showReceiptModal = false">
+    <Modal :show="showReceiptModal" :title="editingReceiptId ? 'Edit Receipt' : 'Add Receipt'" subtitle="Receipt number and receipt type are required." max-width="2xl" @close="showReceiptModal = false">
         <form @submit.prevent="saveReceipt" class="space-y-4">
-            <div v-if="receiptErrorMessages.length" class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
-                <p class="font-semibold">Please correct the following before saving:</p>
-                <ul class="mt-1 list-disc space-y-1 pl-5">
-                    <li v-for="message in receiptErrorMessages" :key="message">{{ message }}</li>
-                </ul>
-            </div>
+            <SystemAlert v-if="receiptErrorMessages.length" tone="error" title="Please correct the following before saving" :messages="receiptErrorMessages" />
 
             <div class="grid gap-4 md:grid-cols-2">
                 <div class="space-y-1">
@@ -281,6 +279,25 @@ function deleteReceipt(item) {
                     <input v-model="receiptForm.receipt_no" type="text" required class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm shadow-sm focus:border-navy focus:ring-navy" :class="{ 'border-red-400': receiptForm.errors.receipt_no }" />
                     <p v-if="receiptForm.errors.receipt_no" class="text-xs text-red-600">{{ receiptForm.errors.receipt_no }}</p>
                 </div>
+                <div class="space-y-1">
+                    <label class="block text-sm font-medium text-gray-700">Receipt Type <span class="text-red-600">*</span></label>
+                    <input
+                        v-model="receiptForm.receipt_type"
+                        list="receipt-type-options"
+                        type="text"
+                        required
+                        placeholder="Example: Enrollment"
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm shadow-sm focus:border-navy focus:ring-navy"
+                        :class="{ 'border-red-400': receiptForm.errors.receipt_type }"
+                    />
+                    <datalist id="receipt-type-options">
+                        <option v-for="option in termOptions.filter(option => option.value)" :key="option.value" :value="option.value" />
+                    </datalist>
+                    <p v-if="receiptForm.errors.receipt_type" class="text-xs text-red-600">{{ receiptForm.errors.receipt_type }}</p>
+                </div>
+            </div>
+
+            <div class="grid gap-4 md:grid-cols-2">
                 <div class="space-y-1">
                     <label class="block text-sm font-medium text-gray-700">Date <span class="text-red-600">*</span></label>
                     <input v-model="receiptForm.date_encoded" type="date" required class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm shadow-sm focus:border-navy focus:ring-navy" :class="{ 'border-red-400': receiptForm.errors.date_encoded }" />
@@ -320,18 +337,13 @@ function deleteReceipt(item) {
         </form>
     </Modal>
 
-    <Modal :show="showImportModal" title="Import Receipts CSV" subtitle="Upload cash receipt rows. Required columns: receipt_no, source, description, amount, date_encoded." max-width="lg" @close="showImportModal = false">
+    <Modal :show="showImportModal" title="Import Receipts CSV" subtitle="Upload cash receipt rows. Required columns: receipt_no, receipt_type, source, description, amount, date_encoded." max-width="lg" @close="showImportModal = false">
         <form @submit.prevent="importCsv" class="space-y-4">
-            <div v-if="importErrorMessages.length" class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
-                <p class="font-semibold">The receipts CSV could not be imported:</p>
-                <ul class="mt-1 list-disc space-y-1 pl-5">
-                    <li v-for="message in importErrorMessages" :key="message">{{ message }}</li>
-                </ul>
-            </div>
+            <SystemAlert v-if="importErrorMessages.length" tone="error" title="The receipts file could not be imported" :messages="importErrorMessages" />
             <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 <p class="font-semibold">Required columns</p>
-                <p class="mt-1 font-mono text-xs">receipt_no, source, description, amount, date_encoded</p>
-                <p class="mt-2 text-xs">Optional columns: <span class="font-mono">income_no</span>, <span class="font-mono">receipt_type</span>, <span class="font-mono">notes</span></p>
+                <p class="mt-1 font-mono text-xs">receipt_no, receipt_type, source, description, amount, date_encoded</p>
+                <p class="mt-2 text-xs">Optional columns: <span class="font-mono">income_no</span>, <span class="font-mono">notes</span></p>
             </div>
             <div>
                 <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV File</label>

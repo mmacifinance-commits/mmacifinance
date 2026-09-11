@@ -1,6 +1,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
+import SystemAlert from '@/Components/SystemAlert.vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import { computed, ref } from 'vue'
 
@@ -23,6 +24,7 @@ const editing = ref(null)
 const form = useForm({ receipt_no: '', source: '', description: '', amount: 0, date_encoded: '', notes: '' })
 const importForm = useForm({ csv_file: null })
 const formErrorMessages = computed(() => Object.values(form.errors || {}).flat().filter(Boolean))
+const importErrorMessages = computed(() => Object.values(importForm.errors || {}).flat().filter(Boolean))
 const PESO = '\u20b1'
 
 const selectedFiscalPeriod = ref(props.filters?.fiscal_period_id || '')
@@ -213,10 +215,7 @@ function importCsv() {
 
     <Modal :show="showModal" :title="editing ? 'Edit Income' : 'Add Income'" :subtitle="editing ? 'Update income details.' : 'Create a new income item.'" max-width="lg" @close="showModal = false">
         <form @submit.prevent="save">
-            <div v-if="formErrorMessages.length" class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
-                <p class="font-semibold">The income record could not be saved:</p>
-                <ul class="mt-1 list-disc space-y-1 pl-5"><li v-for="message in formErrorMessages" :key="message">{{ message }}</li></ul>
-            </div>
+            <SystemAlert v-if="formErrorMessages.length" class="mb-4" tone="error" title="The income record could not be saved" :messages="formErrorMessages" />
             <div class="grid gap-4 sm:grid-cols-2">
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Receipt No.</label><input v-model="form.receipt_no" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" placeholder="Official receipt or collection ref" /></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Source</label><input v-model="form.source" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
@@ -234,6 +233,7 @@ function importCsv() {
 
     <Modal :show="showImportModal" title="Import Income CSV" subtitle="Upload a CSV with required columns: source, description, amount, date_encoded, notes. Optional: receipt_no." max-width="lg" @close="showImportModal = false">
         <form @submit.prevent="importCsv" class="space-y-4">
+            <SystemAlert v-if="importErrorMessages.length" tone="error" title="The income file could not be imported" :messages="importErrorMessages" />
             <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 <p class="font-semibold">Required columns</p>
                 <p class="mt-1 font-mono text-xs">source, description, amount, date_encoded, notes</p>
@@ -251,4 +251,3 @@ function importCsv() {
     </Modal>
 </AppLayout>
 </template>
-

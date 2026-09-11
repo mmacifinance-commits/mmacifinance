@@ -4,6 +4,27 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { queueOfflineAction, savePageSnapshot } from '@/composables/useOfflineQueue';
 import { findRecordVersion, offlinePolicy } from '@/offlinePolicy';
 
+let pendingVisits = 0
+let loadingTimer = null
+
+function setGlobalLoading(active) {
+    document.documentElement.classList.toggle('app-loading', active)
+}
+
+router.on('start', () => {
+    pendingVisits += 1
+    clearTimeout(loadingTimer)
+    loadingTimer = setTimeout(() => setGlobalLoading(true), 120)
+})
+
+router.on('finish', () => {
+    pendingVisits = Math.max(0, pendingVisits - 1)
+    if (pendingVisits === 0) {
+        clearTimeout(loadingTimer)
+        setGlobalLoading(false)
+    }
+})
+
 function containsBinary(value) {
     if (!value || typeof value !== 'object') return false
     if (value instanceof Blob || value instanceof File || value instanceof FormData) return true
@@ -156,23 +177,10 @@ router.on('navigate', (event) => {
     savePageSnapshot(page).catch(() => null)
 })
 
-const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
-
 // Service Worker Registration
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', async () => {
         try {
-            if (isLocalHost) {
-                // Local testing now needs the same SW behavior so cached pages can be
-                // validated offline. Clear older workers/caches once, then register.
-                const registrations = await navigator.serviceWorker.getRegistrations()
-                await Promise.all(registrations.map((registration) => registration.unregister()))
-                const keys = await caches?.keys?.().catch(() => [])
-                if (keys?.length) {
-                    await Promise.all(keys.map((key) => caches.delete(key)))
-                }
-            }
-
             const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
             console.log('[SW] Registered, scope:', registration.scope)
 

@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { Link, usePage, router } from '@inertiajs/vue3'
 import OfflineBanner from '@/Components/OfflineBanner.vue'
+import SystemAlert from '@/Components/SystemAlert.vue'
 
 const page = usePage()
 const auth = computed(() => page.props.auth)
@@ -160,19 +161,10 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
         </nav>
 
         <!-- Flash Messages -->
-        <div v-if="showFlash && (flash?.success || flash?.error || flash?.warning)" class="fixed left-3 right-3 top-20 z-50 sm:left-auto sm:right-4 sm:w-80">
-            <div v-if="flash?.success" class="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700 shadow-lg flex justify-between items-center">
-                <span>Success: {{ flash.success }}</span>
-                <button @click="showFlash = false" class="text-green-500 hover:text-green-700 ml-2">&times;</button>
-            </div>
-            <div v-if="flash?.error" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 shadow-lg flex justify-between items-center">
-                <span>Error: {{ flash.error }}</span>
-                <button @click="showFlash = false" class="text-red-500 hover:text-red-700 ml-2">&times;</button>
-            </div>
-            <div v-if="flash?.warning" class="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 shadow-lg flex justify-between items-center">
-                <span>⚠ {{ flash.warning }}</span>
-                <button @click="showFlash = false" class="text-amber-600 hover:text-amber-800 ml-2">&times;</button>
-            </div>
+        <div v-if="showFlash && (flash?.success || flash?.error || flash?.warning)" class="fixed left-3 right-3 top-20 z-50 space-y-2 sm:left-auto sm:right-4 sm:w-96">
+            <SystemAlert v-if="flash?.success" tone="success" title="Success" :messages="flash.success" dismissible @dismiss="showFlash = false" />
+            <SystemAlert v-if="flash?.error" tone="error" title="Error" :messages="flash.error" dismissible @dismiss="showFlash = false" />
+            <SystemAlert v-if="flash?.warning" tone="warning" title="Warning" :messages="flash.warning" dismissible @dismiss="showFlash = false" />
         </div>
 
         <!-- Body: Sidebar + Content -->

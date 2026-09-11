@@ -114,6 +114,7 @@ const isSyncing = ref(false)
 const syncError = ref(null)
 const lastSynced = ref(null)
 const lastSnapshotAt = ref(null)
+let listenersInstalled = false
 
 async function refreshCount() {
   try {
@@ -122,6 +123,10 @@ async function refreshCount() {
   } catch {
     queueCount.value = 0
   }
+}
+
+function notifyQueueChanged() {
+  window.dispatchEvent(new CustomEvent('offline:queue-changed'))
 }
 
 export async function queueOfflineAction(method, url, data = {}, label = '', metadata = {}) {
@@ -146,6 +151,7 @@ export async function queueOfflineAction(method, url, data = {}, label = '', met
   await dbPut(item)
   await refreshCount()
   window.dispatchEvent(new CustomEvent('offline:queued', { detail: item }))
+  notifyQueueChanged()
   return item
 }
 
@@ -222,19 +228,24 @@ async function sendAction(item) {
 export function useOfflineQueue() {
 
   // Update isOnline reactively
-  function handleOnline() { isOnline.value = true }
-  function handleOffline() { isOnline.value = false }
+  function handleOnline() { isOnline.value = true; refreshCount() }
+  function handleOffline() { isOnline.value = false; refreshCount() }
+  function handleQueueChanged() { refreshCount() }
 
   onMounted(async () => {
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
+    if (!listenersInstalled) {
+      window.addEventListener('online', handleOnline)
+      window.addEventListener('offline', handleOffline)
+      window.addEventListener('focus', handleQueueChanged)
+      window.addEventListener('offline:queue-changed', handleQueueChanged)
+      listenersInstalled = true
+    }
     isOnline.value = navigator.onLine
     await refreshCount()
   })
 
   onUnmounted(() => {
-    window.removeEventListener('online', handleOnline)
-    window.removeEventListener('offline', handleOffline)
+    // Shared singleton listeners stay installed so queue state survives layout/page remounts.
   })
 
   /**
@@ -320,6 +331,7 @@ export function useOfflineQueue() {
             }
           }
           await dbDelete(item.id)
+          notifyQueueChanged()
           completed.add(item.id)
           if (item.tempId) completed.add(item.tempId)
           succeeded++
@@ -330,6 +342,7 @@ export function useOfflineQueue() {
           item.status = 'error'
           item.lastError = err.message
           await dbPut(item)
+          notifyQueueChanged()
         }
       }
     } finally {
@@ -359,6 +372,7 @@ export function useOfflineQueue() {
   async function removeFromQueue(id) {
     await dbDelete(id)
     await refreshCount()
+    notifyQueueChanged()
   }
 
   async function retryQueueItem(id) {
@@ -370,6 +384,7 @@ export function useOfflineQueue() {
     item.serverRecord = null
     await dbPut(item)
     await refreshCount()
+    notifyQueueChanged()
   }
 
   /**
@@ -378,6 +393,7 @@ export function useOfflineQueue() {
   async function clearQueue() {
     await dbClearAll()
     await refreshCount()
+    notifyQueueChanged()
   }
 
   return {
@@ -408,7 +424,11 @@ export async function savePageSnapshot(page) {
   const cacheable = [
     /^\/$/,
     /^\/income(?:\/|$)/,
+    /^\/receipts(?:\/|$)/,
     /^\/annual-budgets(?:\/|$)/,
+    /^\/budget-categories(?:\/|$)/,
+    /^\/budget-particulars(?:\/|$)/,
+    /^\/departments(?:\/|$)/,
     /^\/expenses(?:\/|$)/,
     /^\/disbursements(?:\/|$)/,
     /^\/iaeo(?:\/|$)/,

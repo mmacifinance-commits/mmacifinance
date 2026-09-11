@@ -1,6 +1,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
+import SystemAlert from '@/Components/SystemAlert.vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
 
@@ -135,10 +136,7 @@ function importCsv() {
 
     <Modal :show="showModal" :title="editing ? 'Edit Account Title' : 'Add Account Title'" :subtitle="editing ? 'Update account title details.' : 'Create a new account title line item.'" max-width="lg" @close="showModal = false">
         <form @submit.prevent="save">
-            <div v-if="formErrorMessages.length" class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
-                <p class="font-semibold">The account title could not be saved:</p>
-                <ul class="mt-1 list-disc space-y-1 pl-5"><li v-for="message in formErrorMessages" :key="message">{{ message }}</li></ul>
-            </div>
+            <SystemAlert v-if="formErrorMessages.length" class="mb-4" tone="error" title="The account title could not be saved" :messages="formErrorMessages" />
             <div class="grid gap-4 sm:grid-cols-2">
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Category</label><select v-model="form.category_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required><option value="">Select Category</option><option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Responsibility Center</label><select v-model="form.department_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required><option value="">Select Responsibility Center</option><option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option></select></div>
@@ -156,12 +154,7 @@ function importCsv() {
 
     <Modal :show="showImportModal" title="Import Account Titles CSV" subtitle="Required columns: budget_category, responsibility_center, account_code, account_name, account_title, description" max-width="lg" @close="showImportModal = false">
         <form @submit.prevent="importCsv" class="space-y-4">
-            <div v-if="importErrorMessages.length" class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
-                <p class="font-semibold">The CSV could not be imported:</p>
-                <ul class="mt-1 list-disc space-y-1 pl-5">
-                    <li v-for="message in importErrorMessages" :key="message">{{ message }}</li>
-                </ul>
-            </div>
+            <SystemAlert v-if="importErrorMessages.length" tone="error" title="The account titles file could not be imported" :messages="importErrorMessages" />
             <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 <p class="font-semibold">Required columns</p>
                 <p class="mt-1 font-mono text-xs">budget_category, responsibility_center, account_code, account_name, account_title, description</p>
@@ -172,7 +165,6 @@ function importCsv() {
             <div>
                 <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV File</label>
                 <input type="file" accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required @change="(e) => importForm.csv_file = e.target.files?.[0] || null" />
-                <p v-if="importForm.errors.csv_file" class="mt-1 text-xs text-red-500">{{ importForm.errors.csv_file }}</p>
             </div>
             <div class="flex items-center justify-end gap-3 border-t pt-5">
                 <button type="button" @click="showImportModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>

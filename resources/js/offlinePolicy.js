@@ -7,6 +7,10 @@ const ONLINE_ONLY_PATTERNS = [
 
 const SAFE_DRAFT_PATTERNS = [
     { resource: 'income', rank: 10, pattern: /^\/income(?:\/\d+)?$/ },
+    { resource: 'receipt', rank: 11, pattern: /^\/receipts(?:\/\d+)?$/ },
+    { resource: 'department', rank: 15, pattern: /^\/departments(?:\/\d+)?$/ },
+    { resource: 'budgetCategory', rank: 16, pattern: /^\/budget-categories(?:\/\d+)?$/ },
+    { resource: 'accountTitle', rank: 17, pattern: /^\/budget-particulars(?:\/\d+)?$/ },
     { resource: 'budget', rank: 20, pattern: /^\/annual-budgets(?:\/\d+\/items(?:\/\d+)?)?$/ },
     { resource: 'expense', rank: 30, pattern: /^\/expenses(?:\/\d+)?$/ },
     { resource: 'disbursement', rank: 40, pattern: /^\/disbursements(?:\/\d+)?$/ },
@@ -43,6 +47,10 @@ export function findRecordVersion(props, resource, pathname) {
 
     const roots = {
         income: ['incomeRecords'],
+        receipt: ['receipts'],
+        department: ['departments'],
+        budgetCategory: ['categories'],
+        accountTitle: ['particulars', 'accountTitles'],
         budget: ['budgets', 'budget', 'annualBudgetItems', 'budgetItems'],
         expense: ['expenses'],
         disbursement: ['disbursements'],

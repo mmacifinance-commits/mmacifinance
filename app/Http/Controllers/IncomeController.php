@@ -6,11 +6,10 @@ use App\Models\BudgetItem;
 use App\Models\Income;
 use App\Services\BudgetUtilizationService;
 use App\Services\FiscalPeriodService;
+use App\Support\SpreadsheetImportExport;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Response;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
-use App\Support\SpreadsheetImportExport;
 
 class IncomeController extends Controller
 {
@@ -115,6 +114,7 @@ class IncomeController extends Controller
     {
         $validated = $request->validate([
             'receipt_no' => ['nullable', 'string', 'max:100', Rule::unique('incomes', 'receipt_no')],
+            'receipt_type' => ['nullable', 'string', 'max:100', 'required_with:receipt_no'],
             'source' => 'required|string|max:255',
             'description' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
@@ -123,6 +123,7 @@ class IncomeController extends Controller
         ]);
 
         $validated['receipt_no'] = filled($validated['receipt_no'] ?? null) ? trim($validated['receipt_no']) : null;
+        $validated['receipt_type'] = filled($validated['receipt_type'] ?? null) ? trim($validated['receipt_type']) : null;
         $validated['income_no'] = sprintf('INC-%s-%04d', date('Y'), Income::count() + 1);
         $validated['created_by_id'] = auth()->id();
 
@@ -139,6 +140,7 @@ class IncomeController extends Controller
     {
         $validated = $request->validate([
             'receipt_no' => ['nullable', 'string', 'max:100', Rule::unique('incomes', 'receipt_no')->ignore($income->id)],
+            'receipt_type' => ['nullable', 'string', 'max:100', 'required_with:receipt_no'],
             'source' => 'required|string|max:255',
             'description' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
@@ -147,6 +149,7 @@ class IncomeController extends Controller
         ]);
 
         $validated['receipt_no'] = filled($validated['receipt_no'] ?? null) ? trim($validated['receipt_no']) : null;
+        $validated['receipt_type'] = filled($validated['receipt_type'] ?? null) ? trim($validated['receipt_type']) : null;
         $income->update($validated);
 
         if ($request->header('X-Offline-Sync')) {
@@ -166,7 +169,7 @@ class IncomeController extends Controller
     public function exportCsv()
     {
         $fileName = 'income-export-'.now()->format('Y-m-d_His');
-        $rows = [['income_no', 'receipt_no', 'source', 'description', 'amount', 'date_encoded', 'notes']];
+        $rows = [['income_no', 'receipt_no', 'receipt_type', 'source', 'description', 'amount', 'date_encoded', 'notes']];
 
         Income::query()
             ->orderBy('date_encoded')
@@ -176,6 +179,7 @@ class IncomeController extends Controller
                     $rows[] = [
                         $income->income_no,
                         $income->receipt_no,
+                        $income->receipt_type,
                         $income->source,
                         $income->description,
                         $income->amount,
@@ -220,6 +224,7 @@ class IncomeController extends Controller
 
             $source = trim((string) ($row[$index['source']] ?? ''));
             $receiptNo = isset($index['receipt_no']) ? trim((string) ($row[$index['receipt_no']] ?? '')) : '';
+            $receiptType = isset($index['receipt_type']) ? trim((string) ($row[$index['receipt_type']] ?? '')) : '';
             $description = trim((string) ($row[$index['description']] ?? ''));
             $amount = (float) ($row[$index['amount']] ?? 0);
             $dateEncoded = trim((string) ($row[$index['date_encoded']] ?? ''));
@@ -239,6 +244,7 @@ class IncomeController extends Controller
 
             $isNew = ! $income->exists;
             $income->receipt_no = $receiptNo !== '' ? $receiptNo : null;
+            $income->receipt_type = $receiptNo !== '' ? ($receiptType !== '' ? $receiptType : 'Cash Receipt') : null;
             $income->source = $source;
             $income->description = $description;
             $income->amount = $amount;

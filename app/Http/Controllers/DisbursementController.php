@@ -65,6 +65,8 @@ class DisbursementController extends Controller
 
         $defaultYear = $yearsFromDsb->first() ?? $budgetYears->sortDesc()->values()->first() ?? $currentYear;
 
+        $fiscalPeriods = AnnualBudget::query()->orderByDesc('start_date')->get(['id', 'year', 'start_date', 'end_date', 'ref_no']);
+
         return Inertia::render('Disbursements/Index', [
             'disbursements' => $disbursements,
             'expenses' => Expense::with('budgetItem.budget:id,year,start_date,end_date')
@@ -80,7 +82,10 @@ class DisbursementController extends Controller
                     'status'
                 )->latest('date_encoded')->get(),
             'budgetYears' => AnnualBudget::pluck('year')->values()->toArray(),
-            'fiscalPeriods' => AnnualBudget::query()->orderByDesc('start_date')->get(['id', 'year', 'start_date', 'end_date', 'ref_no']),
+            'fiscalPeriods' => $fiscalPeriods,
+            'cashFlowByFiscalPeriod' => $fiscalPeriods
+                ->mapWithKeys(fn (AnnualBudget $budget) => [$budget->id => $this->cashFlow->summary($budget)])
+                ->all(),
             'defaultFiscalPeriodId' => AnnualBudget::query()
                 ->whereDate('start_date', '<=', now())
                 ->whereDate('end_date', '>=', now())
@@ -148,7 +153,7 @@ class DisbursementController extends Controller
             'description' => 'required|string|max:255',
             'source' => 'required|string|max:255',
             'pay_to' => 'required|string|max:255',
-            'amount' => 'required|numeric|min:0',
+            'amount' => 'required|numeric|min:0.01',
             'method' => 'required|in:check,cash,bank_transfer',
             'date_encoded' => 'required|date',
             'status' => 'required|in:'.implode(',', $this->allowedStatuses()),
@@ -163,34 +168,42 @@ class DisbursementController extends Controller
         $this->ensureApprovedLinkedExpense($selectedExpense);
         $this->ensureDatesWithinLinkedFiscalPeriod($selectedExpense, $validated['date_encoded']);
 
-        $lastDsb = Disbursement::latest('id')->first();
-        $nextNum = $lastDsb ? intval(substr($lastDsb->disbursement_no, 3)) + 1 : 1;
-        $validated['disbursement_no'] = 'DSB'.str_pad($nextNum, 8, '0', STR_PAD_LEFT);
-        $validated['prepared_by_id'] = auth()->id();
+        $dsb = DB::transaction(function () use ($request, $validated, $selectedExpense) {
+            $draftDisbursement = new Disbursement($validated);
+            $draftDisbursement->expense()->associate($selectedExpense);
+            $this->cashFlow->ensureSufficientCashForDisbursement($draftDisbursement);
 
-        if ($request->header('X-Offline-Sync')) {
-            $validated['status'] = 'draft';
-            unset($validated['released_by_id'], $validated['submitted_by_id'], $validated['approved_by_id'], $validated['posted_by_id']);
-        }
+            $lastDsb = Disbursement::latest('id')->lockForUpdate()->first();
+            $nextNum = $lastDsb ? intval(substr($lastDsb->disbursement_no, 3)) + 1 : 1;
+            $validated['disbursement_no'] = 'DSB'.str_pad($nextNum, 8, '0', STR_PAD_LEFT);
+            $validated['prepared_by_id'] = auth()->id();
 
-        // If Cashier sets status to for_approval directly upon saving release details
-        if (! $request->header('X-Offline-Sync') && auth()->user()?->isCashier() && in_array($validated['status'], ['for_release', 'for_approval'])) {
-            $validated['status'] = 'for_approval';
-            $validated['released_by_id'] = auth()->id();
-            $validated['submitted_by_id'] = auth()->id();
-        }
+            if ($request->header('X-Offline-Sync')) {
+                $validated['status'] = 'draft';
+                unset($validated['released_by_id'], $validated['submitted_by_id'], $validated['approved_by_id'], $validated['posted_by_id']);
+            }
 
-        if ($validated['status'] === 'for_release') {
-            $validated['released_by_id'] = $validated['released_by_id'] ?? auth()->id();
-        }
+            // If Cashier sets status to for_approval directly upon saving release details
+            if (! $request->header('X-Offline-Sync') && auth()->user()?->isCashier() && in_array($validated['status'], ['for_release', 'for_approval'])) {
+                $validated['status'] = 'for_approval';
+                $validated['released_by_id'] = auth()->id();
+                $validated['submitted_by_id'] = auth()->id();
+            }
 
-        $dsb = Disbursement::create($validated);
+            if ($validated['status'] === 'for_release') {
+                $validated['released_by_id'] = $validated['released_by_id'] ?? auth()->id();
+            }
 
-        AuditTrail::log($dsb, 'created', auth()->user(), $validated['remarks'] ?? 'Disbursement record created.');
+            $dsb = Disbursement::create($validated);
 
-        if ($dsb->status === 'posted') {
-            $this->syncExpensePaidAmount($dsb->expense_id);
-        }
+            AuditTrail::log($dsb, 'created', auth()->user(), $validated['remarks'] ?? 'Disbursement record created.');
+
+            if ($dsb->status === 'posted') {
+                $this->syncExpensePaidAmount($dsb->expense_id);
+            }
+
+            return $dsb;
+        });
 
         if ($request->header('X-Offline-Sync')) {
             return response()->json(['id' => $dsb->id, 'resource' => 'disbursement', 'record' => $dsb->fresh()], 201);
@@ -214,7 +227,7 @@ class DisbursementController extends Controller
             'description' => 'required|string|max:255',
             'source' => 'required|string|max:255',
             'pay_to' => 'required|string|max:255',
-            'amount' => 'required|numeric|min:0',
+            'amount' => 'required|numeric|min:0.01',
             'method' => 'required|in:check,cash,bank_transfer',
             'date_encoded' => 'required|date',
             'status' => 'required|in:'.implode(',', $this->allowedStatuses()),
@@ -249,7 +262,16 @@ class DisbursementController extends Controller
             $validated['released_by_id'] = $validated['released_by_id'] ?? auth()->id();
         }
 
-        $disbursement->update($validated);
+        DB::transaction(function () use ($disbursement, $validated, $selectedExpense) {
+            $draftDisbursement = $disbursement->replicate();
+            $draftDisbursement->id = $disbursement->id;
+            $draftDisbursement->exists = true;
+            $draftDisbursement->fill($validated);
+            $draftDisbursement->expense()->associate($selectedExpense);
+            $this->cashFlow->ensureSufficientCashForDisbursement($draftDisbursement);
+
+            $disbursement->update($validated);
+        });
 
         AuditTrail::log($disbursement, 'modified', auth()->user(), $validated['remarks'] ?? 'Disbursement details updated.');
 
@@ -473,6 +495,7 @@ class DisbursementController extends Controller
                 continue;
             }
             $parsedRows[] = [
+                'line' => count($parsedRows) + 2,
                 'disbursement_no' => trim((string) ($row[$index['disbursement_no']] ?? '')),
                 'expense_ref_no' => trim((string) ($row[$index['expense_ref_no']] ?? '')),
                 'description' => trim((string) ($row[$index['description']] ?? '')),
@@ -496,6 +519,10 @@ class DisbursementController extends Controller
                 return back()->withErrors(['csv_file' => 'Row '.($i + 2).' has an invalid status.']);
             }
 
+            if ($row['amount'] <= 0) {
+                return back()->withErrors(['csv_file' => 'Row '.($i + 2).' must have an amount greater than zero.']);
+            }
+
             $expense = Expense::where('ref_no', $row['expense_ref_no'])->where('status', 'approved')->first();
             if (! $expense) {
                 return back()->withErrors(['csv_file' => 'Row '.($i + 2)." requires an approved expense with ref_no {$row['expense_ref_no']} before importing disbursements."]);
@@ -505,7 +532,7 @@ class DisbursementController extends Controller
                 $this->ensureDatesWithinLinkedFiscalPeriod($expense, $row['date_encoded']);
             } catch (ValidationException $exception) {
                 return back()->withErrors([
-                    'csv_file' => 'Row '.($i + 2).' is outside the linked fiscal period: '.$exception->validator->errors()->first(),
+                    'csv_file' => 'Row '.($i + 2).' cannot be imported: '.$exception->validator->errors()->first(),
                 ]);
             }
         }
@@ -513,37 +540,51 @@ class DisbursementController extends Controller
         $created = 0;
         $updated = 0;
 
-        DB::transaction(function () use ($parsedRows, &$created, &$updated) {
-            foreach ($parsedRows as $row) {
-                $expense = Expense::where('ref_no', $row['expense_ref_no'])->where('status', 'approved')->first();
-                if (! $expense) {
-                    continue;
+        try {
+            DB::transaction(function () use ($parsedRows, &$created, &$updated) {
+                foreach ($parsedRows as $row) {
+                    $expense = Expense::where('ref_no', $row['expense_ref_no'])->where('status', 'approved')->first();
+                    if (! $expense) {
+                        continue;
+                    }
+
+                    $disbursement = Disbursement::firstOrNew(['disbursement_no' => $row['disbursement_no']]);
+                    $isNew = ! $disbursement->exists;
+                    $disbursement->disbursement_no = $row['disbursement_no'];
+                    $disbursement->expense_id = $expense->id;
+                    $disbursement->description = $row['description'];
+                    $disbursement->source = $row['source'];
+                    $disbursement->pay_to = $row['pay_to'];
+                    $disbursement->amount = $row['amount'];
+                    $disbursement->method = in_array($row['method'], ['check', 'cash', 'bank_transfer'], true) ? $row['method'] : 'check';
+                    $disbursement->date_encoded = $row['date_encoded'];
+                    $disbursement->status = $row['status'];
+                    $disbursement->notes = $row['notes'] !== '' ? $row['notes'] : null;
+                    $disbursement->remarks = $row['remarks'] !== '' ? $row['remarks'] : null;
+                    $disbursement->prepared_by_id = auth()->id();
+                    $disbursement->expense()->associate($expense);
+
+                    try {
+                        $this->cashFlow->ensureSufficientCashForDisbursement($disbursement);
+                    } catch (ValidationException $exception) {
+                        throw ValidationException::withMessages([
+                            'csv_file' => 'Row '.$row['line'].' cannot be imported: '.$exception->validator->errors()->first(),
+                        ]);
+                    }
+
+                    $disbursement->save();
+
+                    AuditTrail::log($disbursement, $isNew ? 'created' : 'modified', auth()->user(), $row['remarks'] !== '' ? $row['remarks'] : ($isNew ? 'Disbursement imported from CSV/Excel.' : 'Disbursement updated from CSV/Excel.'));
+                    if ($disbursement->status === 'posted') {
+                        $this->syncExpensePaidAmount($disbursement->expense_id);
+                    }
+
+                    $isNew ? $created++ : $updated++;
                 }
-
-                $disbursement = Disbursement::firstOrNew(['disbursement_no' => $row['disbursement_no']]);
-                $isNew = ! $disbursement->exists;
-                $disbursement->disbursement_no = $row['disbursement_no'];
-                $disbursement->expense_id = $expense->id;
-                $disbursement->description = $row['description'];
-                $disbursement->source = $row['source'];
-                $disbursement->pay_to = $row['pay_to'];
-                $disbursement->amount = $row['amount'];
-                $disbursement->method = in_array($row['method'], ['check', 'cash', 'bank_transfer'], true) ? $row['method'] : 'check';
-                $disbursement->date_encoded = $row['date_encoded'];
-                $disbursement->status = $row['status'];
-                $disbursement->notes = $row['notes'] !== '' ? $row['notes'] : null;
-                $disbursement->remarks = $row['remarks'] !== '' ? $row['remarks'] : null;
-                $disbursement->prepared_by_id = auth()->id();
-                $disbursement->save();
-
-                AuditTrail::log($disbursement, $isNew ? 'created' : 'modified', auth()->user(), $row['remarks'] !== '' ? $row['remarks'] : ($isNew ? 'Disbursement imported from CSV/Excel.' : 'Disbursement updated from CSV/Excel.'));
-                if ($disbursement->status === 'posted') {
-                    $this->syncExpensePaidAmount($disbursement->expense_id);
-                }
-
-                $isNew ? $created++ : $updated++;
-            }
-        });
+            });
+        } catch (ValidationException $exception) {
+            return back()->withErrors($exception->errors());
+        }
 
         return redirect()->back()->with('success', "Disbursement CSV/Excel imported successfully. Created: {$created}, Updated: {$updated}");
     }

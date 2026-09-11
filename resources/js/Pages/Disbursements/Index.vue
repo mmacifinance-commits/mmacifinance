@@ -1,9 +1,11 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
+import SystemAlert from '@/Components/SystemAlert.vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
 import { useOfflineQueue } from '@/composables/useOfflineQueue'
+import { downloadFile } from '@/utils/downloadFile'
 
 const { isOnline, offlinePost, offlinePut } = useOfflineQueue()
 
@@ -20,6 +22,7 @@ const props = defineProps({
     expenses: Array,
     budgetYears: Array,
     fiscalPeriods: Array,
+    cashFlowByFiscalPeriod: Object,
     availableYears: Array,
     defaultYear: [Number, String],
     defaultFiscalPeriodId: [Number, String],
@@ -28,6 +31,12 @@ const props = defineProps({
 })
 
 const disbursementItems = computed(() => props.disbursements?.data || props.disbursements || [])
+
+function fiscalPeriodLabel(periodId) {
+    if (!periodId || periodId === 'all') return 'all years'
+    const period = (props.fiscalPeriods || []).find(row => String(row.id) === String(periodId))
+    return period?.fiscal_year_label || 'selected fiscal period'
+}
 
 const showModal = ref(false)
 const showImportModal = ref(false)
@@ -40,6 +49,8 @@ const actionForm = useForm({
     remarks: ''
 })
 const importForm = useForm({ csv_file: null })
+const pageErrorMessages = ref([])
+const isExporting = ref(false)
 
 const editing = ref(null)
 const form = useForm({
@@ -55,6 +66,7 @@ const form = useForm({
     remarks: '',
 })
 const formErrorMessages = computed(() => Object.values(form.errors || {}).flat().filter(Boolean))
+const importErrorMessages = computed(() => Object.values(importForm.errors || {}).flat().filter(Boolean))
 
 const offlineRows = ref([])
 
@@ -159,6 +171,39 @@ const selectedExpense = computed(() => {
     return props.expenses?.find(e => String(e.id) === String(form.expense_id)) || null
 })
 
+const selectedCashFlow = computed(() => {
+    const budgetId = selectedExpense.value?.budget_item?.budget?.id || filterYear.value
+    if (!budgetId || budgetId === 'all') return null
+    return props.cashFlowByFiscalPeriod?.[budgetId] || null
+})
+
+const selectedExpenseRemaining = computed(() => {
+    if (!selectedExpense.value) return 0
+    return Math.max(0, Number(selectedExpense.value.amount || 0) - Number(selectedExpense.value.paid || 0))
+})
+
+const availableCashForDisbursement = computed(() => Number(selectedCashFlow.value?.availableForDisbursement || 0))
+
+const cashValidationMessage = computed(() => {
+    if (!showModal.value || !selectedExpense.value) return ''
+    const amount = Number(form.amount || 0)
+    if (amount <= 0) {
+        return 'Enter a disbursement amount greater than zero.'
+    }
+    if (availableCashForDisbursement.value <= 0) {
+        return 'No actual cash on hand is available for this fiscal period. Add receipt records before creating a disbursement.'
+    }
+    if (amount > availableCashForDisbursement.value) {
+        return `The disbursement amount is higher than available cash on hand (${PESO}${fmt(availableCashForDisbursement.value)}).`
+    }
+    if (amount > selectedExpenseRemaining.value) {
+        return `The disbursement amount is higher than the selected expense balance (${PESO}${fmt(selectedExpenseRemaining.value)}).`
+    }
+    return ''
+})
+
+const canSaveDisbursement = computed(() => !form.processing && !cashValidationMessage.value)
+
 function expenseFiscalAttribution(expense) {
     const item = expense?.budget_item
     const budget = item?.budget
@@ -228,6 +273,12 @@ function onExpenseSelect(event) {
 }
 
 async function save() {
+    pageErrorMessages.value = []
+    if (cashValidationMessage.value) {
+        form.setError('amount', cashValidationMessage.value)
+        return
+    }
+
     const data = {
         expense_id: form.expense_id,
         description: form.description,
@@ -250,7 +301,10 @@ async function save() {
             if (index >= 0) offlineRows.value[index] = { ...offlineRows.value[index], ...data }
             showModal.value = false
         } else {
-            form.put(`/disbursements/${editing.value}`, { onSuccess: () => { showModal.value = false } })
+            form.put(`/disbursements/${editing.value}`, {
+                onSuccess: () => { showModal.value = false },
+                onError: () => { pageErrorMessages.value = [] },
+            })
         }
     } else {
         const tempId = `offline-disbursement-${crypto.randomUUID()}`
@@ -266,7 +320,10 @@ async function save() {
             })
             showModal.value = false
         } else {
-            form.post('/disbursements', { onSuccess: () => { showModal.value = false } })
+            form.post('/disbursements', {
+                onSuccess: () => { showModal.value = false },
+                onError: () => { pageErrorMessages.value = [] },
+            })
         }
     }
 }
@@ -285,17 +342,34 @@ function submitForApproval(d) {
     }
 }
 
-function exportCsv() {
-    if (!isOnline.value) return alert('CSV export requires an internet connection.')
-    window.location.href = '/disbursements/export-csv'
+async function exportCsv() {
+    if (!isOnline.value) {
+        pageErrorMessages.value = ['CSV export requires an internet connection.']
+        return
+    }
+
+    pageErrorMessages.value = []
+    isExporting.value = true
+    try {
+        await downloadFile('/disbursements/export-csv', 'disbursements-export.xlsx')
+    } catch (error) {
+        pageErrorMessages.value = [error?.message || 'The disbursements export could not be downloaded.']
+    } finally {
+        isExporting.value = false
+    }
 }
 function importCsv() {
-    if (!isOnline.value) return alert('CSV import requires an internet connection.')
+    if (!isOnline.value) {
+        pageErrorMessages.value = ['CSV import requires an internet connection.']
+        return
+    }
+    pageErrorMessages.value = []
     importForm.post('/disbursements/import-csv', {
         forceFormData: true,
         preserveScroll: true,
         preserveState: true,
         onSuccess: () => { showImportModal.value = false; importForm.reset() },
+        onError: () => { pageErrorMessages.value = [] },
     })
 }
 
@@ -357,13 +431,15 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
             <p class="text-sm text-gray-500">Manage payment release, approval, and posting of linked expenses to General Ledger</p>
         </div>
         <div v-if="perms.canManageDisbursements || perms.isCashier || perms.isSuperAdmin" class="flex flex-wrap gap-2">
-            <button @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">Export CSV</button>
+            <button @click="exportCsv" :disabled="isExporting" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60">{{ isExporting ? 'Exporting...' : 'Export CSV' }}</button>
             <button @click="showImportModal = true" class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Import CSV</button>
             <button @click="openCreate" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
                 Create Payment Release
             </button>
         </div>
     </div>
+
+    <SystemAlert v-if="pageErrorMessages.length" class="mb-4" tone="error" title="Action failed" :messages="pageErrorMessages" dismissible @dismiss="pageErrorMessages = []" />
 
     <!-- Filters -->
     <div class="flex flex-col sm:flex-row gap-4 mb-6">
@@ -512,10 +588,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
     <!-- Create/Edit Disbursement Modal -->
     <Modal :show="showModal" :title="editing ? 'Edit Disbursement' : 'Create Disbursement'" :subtitle="editing ? 'Update disbursement release details.' : 'Enter release details and submit for approval.'" max-width="5xl" @close="showModal = false">
         <form @submit.prevent="save">
-            <div v-if="formErrorMessages.length" class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
-                <p class="font-semibold">The disbursement could not be saved:</p>
-                <ul class="mt-1 list-disc space-y-1 pl-5"><li v-for="message in formErrorMessages" :key="message">{{ message }}</li></ul>
-            </div>
+            <SystemAlert v-if="formErrorMessages.length" class="mb-4" tone="error" title="The disbursement could not be saved" :messages="formErrorMessages" />
             <div class="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
                 <!-- Linked expense picker -->
                 <div class="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
@@ -561,7 +634,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                     </div>
 
                     <p class="text-xs text-slate-500">
-                        Showing {{ filteredExpensesForModal.length }} approved expenses eligible for disbursement for {{ filterYear === 'all' ? 'all years' : `FY ${filterYear}` }}.
+                        Showing {{ filteredExpensesForModal.length }} approved expenses eligible for disbursement for {{ fiscalPeriodLabel(filterYear) }}.
                     </p>
 
                     <div v-if="selectedExpense" class="rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
@@ -589,6 +662,12 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                                 <p class="text-[10px] uppercase tracking-wide text-slate-400">Remaining</p>
                                 <p class="mt-1 font-semibold text-slate-900">{{ PESO }}{{ fmt(Math.max(0, Number(selectedExpense.amount || 0) - Number(selectedExpense.paid || 0))) }}</p>
                             </div>
+                        </div>
+                        <div class="mt-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                            <p class="font-semibold">Cash available for new disbursements: {{ PESO }}{{ fmt(availableCashForDisbursement) }}</p>
+                            <p class="mt-0.5 text-emerald-800">
+                                Receipts: {{ PESO }}{{ fmt(selectedCashFlow?.receipts) }} · Already committed: {{ PESO }}{{ fmt(selectedCashFlow?.committedDisbursements) }}
+                            </p>
                         </div>
                     </div>
 
@@ -644,9 +723,12 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                         </select>
                     </div>
                     <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1.5">Notes / Purpose</label><input v-model="form.notes" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" placeholder="Supporting details or notes" /></div>
+                    <div v-if="cashValidationMessage" class="sm:col-span-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+                        {{ cashValidationMessage }}
+                    </div>
                     <div class="sm:col-span-2 flex items-center justify-end gap-3 pt-2 border-t mt-2">
                         <button type="button" @click="showModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                        <button type="submit" :disabled="form.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy shadow-sm">
+                        <button type="submit" :disabled="!canSaveDisbursement" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy shadow-sm disabled:cursor-not-allowed disabled:opacity-50">
                             {{ form.processing ? 'Saving...' : (editing ? 'Update Record' : (perms.isCashier ? 'Submit for Approval' : 'Save Record')) }}
                         </button>
                     </div>
@@ -733,9 +815,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                 <p class="mt-1 font-mono text-xs">disbursement_no, expense_ref_no, description, source, pay_to, amount, method, date_encoded, status, notes, remarks</p>
                 <p class="mt-2 text-xs">Only approved expenses can be linked. Import status is limited to draft, for_release, or for_approval so workflow stamps stay intact.</p>
             </div>
-            <div v-if="importForm.errors.csv_file" class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                {{ importForm.errors.csv_file }}
-            </div>
+            <SystemAlert v-if="importErrorMessages.length" tone="error" title="The disbursements file could not be imported" :messages="importErrorMessages" />
             <div>
                 <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV File</label>
                 <input type="file" accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" @change="e => importForm.csv_file = e.target.files[0]" class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm" required />
@@ -748,4 +828,3 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
     </Modal>
 </AppLayout>
 </template>
-
