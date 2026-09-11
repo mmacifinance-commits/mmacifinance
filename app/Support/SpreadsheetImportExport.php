@@ -3,7 +3,11 @@
 namespace App\Support;
 
 use Illuminate\Http\UploadedFile;
-use Symfony\Component\Process\Process;
+use PhpOffice\PhpSpreadsheet\Cell\Cell;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Shared\Date;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class SpreadsheetImportExport
@@ -31,81 +35,50 @@ class SpreadsheetImportExport
             throw new \RuntimeException('The uploaded spreadsheet file could not be opened.');
         }
 
-        $python = self::pythonExecutable();
-        $script = <<<'PY'
-import csv
-import json
-import os
-import sys
-from pathlib import Path
+        $readerPath = self::copyUploadWithExtension($file, $path);
 
-try:
-    from openpyxl import load_workbook
-except Exception:
-    load_workbook = None
-
-try:
-    import xlrd
-except Exception:
-    xlrd = None
-
-
-def read_csv(path):
-    with open(path, newline='', encoding='utf-8-sig') as handle:
-        return list(csv.reader(handle))
-
-
-def read_xlsx(path):
-    if load_workbook is None:
-        raise RuntimeError('openpyxl is required to read .xlsx files.')
-    workbook = load_workbook(path, read_only=True, data_only=True)
-    sheet = workbook.active
-    return [list(row) for row in sheet.iter_rows(values_only=True)]
-
-
-def read_xls(path):
-    if xlrd is None:
-        raise RuntimeError('xlrd is required to read .xls files.')
-    workbook = xlrd.open_workbook(path)
-    sheet = workbook.sheet_by_index(0)
-    return [list(sheet.row_values(row_index)) for row_index in range(sheet.nrows)]
-
-
-path = sys.argv[1]
-ext = Path(path).suffix.lower()
-
-if ext in {'.csv', '.txt'}:
-    payload = read_csv(path)
-elif ext in {'.xlsx', '.xlsm'}:
-    payload = read_xlsx(path)
-elif ext == '.xls':
-    payload = read_xls(path)
-else:
-    raise SystemExit(2)
-
-print(json.dumps(payload))
-PY;
-
-        $process = new Process([$python, '-c', $script, $path]);
-        $process->run();
-
-        if (! $process->isSuccessful()) {
-            throw new \RuntimeException('Unable to read the uploaded spreadsheet file.');
+        try {
+            $reader = IOFactory::createReaderForFile($readerPath);
+            $reader->setReadDataOnly(true);
+            $spreadsheet = $reader->load($readerPath);
+        } catch (\Throwable $exception) {
+            throw new \RuntimeException('Unable to read the uploaded spreadsheet file.', 0, $exception);
+        } finally {
+            if ($readerPath !== $path) {
+                @unlink($readerPath);
+            }
         }
 
-        $payload = json_decode(trim((string) $process->getOutput()), true);
+        $worksheet = $spreadsheet->getActiveSheet();
+        $highestColumn = $worksheet->getHighestDataColumn();
+        $rows = [];
 
-        if (! is_array($payload) || empty($payload)) {
+        foreach ($worksheet->getRowIterator() as $row) {
+            $values = [];
+            $cellIterator = $row->getCellIterator('A', $highestColumn);
+            $cellIterator->setIterateOnlyExistingCells(false);
+
+            foreach ($cellIterator as $cell) {
+                $values[] = self::cellValue($cell);
+            }
+
+            $rows[] = array_map(
+                fn ($value) => $value === null ? '' : $value,
+                $values
+            );
+        }
+
+        if ($rows === []) {
             return [[], []];
         }
 
         $headers = array_map(
             fn ($value) => strtolower(trim((string) $value)),
-            array_values($payload[0])
+            array_values($rows[0])
         );
 
         $dataRows = [];
-        foreach (array_slice($payload, 1) as $row) {
+        foreach (array_slice($rows, 1) as $row) {
             if (! is_array($row)) {
                 continue;
             }
@@ -132,38 +105,19 @@ PY;
             throw new \RuntimeException('Unable to create a temporary Xlsx file.');
         }
 
-        $python = self::pythonExecutable();
-        $script = <<<'PY'
-import json
-import sys
-from openpyxl import Workbook
+        unlink($tempPath);
+        $tempPath .= '.xlsx';
 
-path = sys.argv[1]
-rows = json.loads(sys.argv[2])
+        $spreadsheet = new Spreadsheet;
+        $worksheet = $spreadsheet->getActiveSheet();
 
-workbook = Workbook()
-worksheet = workbook.active
+        $worksheet->fromArray(array_map(
+            fn ($row) => array_map(fn ($value) => $value === null ? '' : $value, $row),
+            $rows
+        ));
 
-for row in rows:
-    worksheet.append([value if value is not None else '' for value in row])
-
-workbook.save(path)
-PY;
-
-        $process = new Process([
-            $python,
-            '-c',
-            $script,
-            $tempPath,
-            json_encode($rows),
-        ]);
-        $process->run();
-
-        if (! $process->isSuccessful()) {
-            $tempPath = str_replace(['.xlsx', '.xls'], '', $tempPath).'.tmp';
-            @unlink($tempPath);
-            throw new \RuntimeException('Unable to generate the Excel export file.');
-        }
+        $writer = new Xlsx($spreadsheet);
+        $writer->save($tempPath);
 
         return response()
             ->download($tempPath, $filename, [
@@ -172,41 +126,40 @@ PY;
             ->deleteFileAfterSend(true);
     }
 
-    private static function pythonExecutable(): string
+    private static function copyUploadWithExtension(UploadedFile $file, string $path): string
     {
-        foreach (['PYTHON', 'PYTHON3'] as $envKey) {
-            $configured = getenv($envKey);
-            if (is_string($configured) && $configured !== '' && self::executableExists($configured)) {
-                return $configured;
-            }
+        $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: '');
+        if ($extension === '') {
+            return $path;
         }
 
-        $candidates = PHP_OS_FAMILY === 'Windows'
-            ? ['python', 'py']
-            : ['python3', 'python'];
-
-        foreach ($candidates as $candidate) {
-            if (self::executableExists($candidate)) {
-                return $candidate;
-            }
+        $tempPath = tempnam(sys_get_temp_dir(), 'budget_import_');
+        if ($tempPath === false) {
+            return $path;
         }
 
-        return 'python';
+        @unlink($tempPath);
+        $tempPath .= '.'.$extension;
+
+        if (! copy($path, $tempPath)) {
+            return $path;
+        }
+
+        return $tempPath;
     }
 
-    private static function executableExists(string $path): bool
+    private static function cellValue(Cell $cell): mixed
     {
-        if ($path === '') {
-            return false;
+        $value = $cell->getValue();
+
+        if ($value === null || $value === '') {
+            return '';
         }
 
-        if (str_contains($path, '/') || str_contains($path, '\\') || str_contains($path, '.exe')) {
-            return is_executable($path) || file_exists($path);
+        if (Date::isDateTime($cell) && is_numeric($value)) {
+            return Date::excelToDateTimeObject((float) $value)->format('Y-m-d');
         }
 
-        $process = new Process(PHP_OS_FAMILY === 'Windows' ? ['where', $path] : ['which', $path]);
-        $process->run();
-
-        return $process->isSuccessful();
+        return $value;
     }
 }

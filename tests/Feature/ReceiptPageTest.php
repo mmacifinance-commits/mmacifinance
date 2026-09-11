@@ -192,10 +192,21 @@ class ReceiptPageTest extends TestCase
             'date_encoded' => '2026-08-01',
         ]);
 
-        $export = $this->actingAs($user)->get('/receipts/export-csv')->streamedContent();
-        $this->assertStringContainsString('receipt_no', $export);
-        $this->assertStringContainsString('receipt_type', $export);
-        $this->assertStringContainsString('OR-EXPORT-001', $export);
+        $export = $this->actingAs($user)->get('/receipts/export-csv');
+        $export->assertDownload();
+        $this->assertStringContainsString('receipts-export-', $export->headers->get('content-disposition'));
+
+        [$headers, $exportRows] = \App\Support\SpreadsheetImportExport::readRows(new UploadedFile(
+            $export->baseResponse->getFile()->getPathname(),
+            'receipts-export.xlsx',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            null,
+            true
+        ));
+
+        $this->assertContains('receipt_no', $headers);
+        $this->assertContains('receipt_type', $headers);
+        $this->assertSame('OR-EXPORT-001', $exportRows[0][1]);
 
         $csv = implode("\n", [
             'income_no,receipt_no,receipt_type,source,description,amount,date_encoded,notes',

@@ -115,9 +115,19 @@ class EditableRecordsUpdateTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->where('incomeRecords.data.0.receipt_no', 'OR-SEARCH-001'));
 
-        $export = $this->actingAs($user)->get('/income/export-csv')->streamedContent();
-        $this->assertStringContainsString('receipt_no', $export);
-        $this->assertStringContainsString('OR-SEARCH-001', $export);
+        $export = $this->actingAs($user)->get('/income/export-csv');
+        $export->assertDownload();
+
+        [$headers, $exportRows] = \App\Support\SpreadsheetImportExport::readRows(new UploadedFile(
+            $export->baseResponse->getFile()->getPathname(),
+            'income-export.xlsx',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            null,
+            true
+        ));
+
+        $this->assertContains('receipt_no', $headers);
+        $this->assertSame('OR-SEARCH-001', $exportRows[0][1]);
 
         $csv = implode("\n", [
             'income_no,receipt_no,source,description,amount,date_encoded,notes',

@@ -8,6 +8,8 @@ use App\Models\Department;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Tests\TestCase;
 
 class BudgetParticularUpdateTest extends TestCase
@@ -82,7 +84,7 @@ class BudgetParticularUpdateTest extends TestCase
         ]);
 
         $response->assertSessionHasErrors([
-            'csv_file' => 'The CSV contains only the header row. Add at least one account title row before importing.',
+            'csv_file' => 'The CSV/Excel contains only the header row. Add at least one account title row before importing.',
         ]);
     }
 
@@ -112,6 +114,31 @@ class BudgetParticularUpdateTest extends TestCase
         ]);
     }
 
+    public function test_account_title_import_supports_excel_files(): void
+    {
+        [$user, $category, $department] = $this->accountTitleFixture();
+
+        $upload = $this->fakeXlsxUpload('account-titles.xlsx', [
+            ['budget_category', 'responsibility_center', 'account_code', 'account_name', 'account_title', 'description'],
+            [$category->name, $department->code, '1-1001', 'Petty Cash Fund', 'Petty Cash Fund', 'Imported from Excel'],
+        ]);
+
+        $response = $this->actingAs($user)->post('/budget-particulars/import-csv', [
+            'csv_file' => $upload,
+        ]);
+
+        $response->assertRedirect(route('budget-particulars.index'));
+        $response->assertSessionHas('success', 'Account titles imported successfully. Created: 1, Updated: 0.');
+        $this->assertDatabaseHas('budget_particulars', [
+            'category_id' => $category->id,
+            'department_id' => $department->id,
+            'account_code' => '1-1001',
+            'account_name' => 'Petty Cash Fund',
+            'particular' => 'Petty Cash Fund',
+            'description' => 'Imported from Excel',
+        ]);
+    }
+
     private function accountTitleFixture(): array
     {
         $user = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
@@ -126,5 +153,31 @@ class BudgetParticularUpdateTest extends TestCase
         ]);
 
         return [$user, $category, $department, $accountTitle];
+    }
+
+    private function fakeXlsxUpload(string $filename, array $rows): UploadedFile
+    {
+        $spreadsheet = new Spreadsheet;
+        $worksheet = $spreadsheet->getActiveSheet();
+
+        $worksheet->fromArray($rows);
+
+        $path = tempnam(sys_get_temp_dir(), 'test_xlsx_');
+        if ($path === false) {
+            $this->fail('Unable to create temporary spreadsheet file.');
+        }
+
+        @unlink($path);
+        $path .= '.xlsx';
+
+        (new Xlsx($spreadsheet))->save($path);
+
+        return new UploadedFile(
+            $path,
+            $filename,
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            null,
+            true
+        );
     }
 }
