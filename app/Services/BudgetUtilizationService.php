@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\AnnualBudget;
 use App\Models\BudgetItem;
 use App\Models\Disbursement;
 use App\Models\Expense;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -24,11 +26,38 @@ class BudgetUtilizationService
         ?int $categoryId = null,
         ?int $particularId = null
     ): Builder {
+        $budget = AnnualBudget::query()->where('year', $year)->first();
+        if (! $budget) {
+            return $this->postedDisbursements()->whereRaw('1 = 0');
+        }
+
+        $allocationMonth = $month ? $budget->allocationMonthForNumber($month)?->toDateString() : null;
+
+        return $this->queryForAnnualBudgetFilters(
+            $budget,
+            $allocationMonth,
+            $startDate,
+            $endDate,
+            $departmentId,
+            $categoryId,
+            $particularId
+        );
+    }
+
+    public function queryForAnnualBudgetFilters(
+        AnnualBudget $budget,
+        ?string $allocationMonth = null,
+        ?string $startDate = null,
+        ?string $endDate = null,
+        ?int $departmentId = null,
+        ?int $categoryId = null,
+        ?int $particularId = null
+    ): Builder {
         return $this->postedDisbursements()
-            ->whereHas('expense.budgetItem.budget', fn (Builder $query) => $query->where('year', $year))
-            ->when($month, fn (Builder $query) => $query->whereHas(
+            ->whereHas('expense.budgetItem', fn (Builder $query) => $query->where('budget_id', $budget->id))
+            ->when($allocationMonth, fn (Builder $query) => $query->whereHas(
                 'expense.budgetItem',
-                fn (Builder $itemQuery) => $itemQuery->where('month', $month)
+                fn (Builder $itemQuery) => $itemQuery->whereDate('allocation_month', $allocationMonth)
             ))
             ->when($startDate, fn (Builder $query) => $query->whereDate('disbursements.date_encoded', '>=', $startDate))
             ->when($endDate, fn (Builder $query) => $query->whereDate('disbursements.date_encoded', '<=', $endDate))
@@ -73,8 +102,7 @@ class BudgetUtilizationService
         ?int $departmentId = null,
         ?int $categoryId = null,
         ?int $particularId = null
-    ): Collection
-    {
+    ): Collection {
         $query = $this->postedDisbursements()
             ->join('expenses', 'disbursements.expense_id', '=', 'expenses.id')
             ->join('budget_items', 'expenses.budget_item_id', '=', 'budget_items.id')
@@ -89,13 +117,36 @@ class BudgetUtilizationService
             ->pluck('total', 'month');
     }
 
+    public function totalsByFiscalAllocationMonth(
+        AnnualBudget $budget,
+        ?string $startDate = null,
+        ?string $endDate = null,
+        ?int $departmentId = null,
+        ?int $categoryId = null,
+        ?int $particularId = null
+    ): Collection {
+        $query = $this->postedDisbursements()
+            ->join('expenses', 'disbursements.expense_id', '=', 'expenses.id')
+            ->join('budget_items', 'expenses.budget_item_id', '=', 'budget_items.id')
+            ->where('budget_items.budget_id', $budget->id);
+
+        $this->applyJoinedBudgetFilters($query, $startDate, $endDate, $departmentId, $categoryId, $particularId);
+
+        return $query
+            ->selectRaw('budget_items.allocation_month as allocation_month, SUM(disbursements.amount) as total')
+            ->groupBy('budget_items.allocation_month')
+            ->get()
+            ->mapWithKeys(fn ($row) => [
+                Carbon::parse($row->allocation_month)->toDateString() => (float) $row->total,
+            ]);
+    }
+
     public function totalsByBudgetYear(
         array $years,
         ?int $departmentId = null,
         ?int $categoryId = null,
         ?int $particularId = null
-    ): Collection
-    {
+    ): Collection {
         if ($years === []) {
             return collect();
         }
@@ -202,20 +253,35 @@ class BudgetUtilizationService
 
     public function resolveBudgetItem(int $categoryId, int $particularId, string $date): ?BudgetItem
     {
-        $year = (int) date('Y', strtotime($date));
-        $month = (int) date('n', strtotime($date));
+        $budget = $this->annualBudgetForDate($date);
+        if (! $budget) {
+            return null;
+        }
+
+        $allocationMonth = date('Y-m-01', strtotime($date));
 
         $candidates = BudgetItem::query()
             ->where('category_id', $categoryId)
             ->where('particular_id', $particularId)
-            ->whereHas('budget', fn (Builder $query) => $query->where('year', $year))
+            ->where('budget_id', $budget->id)
             ->get();
 
-        $sameMonth = $candidates->where('month', $month);
+        $sameMonth = $candidates->filter(
+            fn (BudgetItem $item) => $item->allocation_month?->format('Y-m-d') === $allocationMonth
+        );
         if ($sameMonth->count() === 1) {
             return $sameMonth->first();
         }
 
         return $candidates->count() === 1 ? $candidates->first() : null;
+    }
+
+    public function annualBudgetForDate(string $date): ?AnnualBudget
+    {
+        return AnnualBudget::query()
+            ->whereDate('start_date', '<=', $date)
+            ->whereDate('end_date', '>=', $date)
+            ->orderByDesc('start_date')
+            ->first();
     }
 }

@@ -2,48 +2,34 @@
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
 import { Head, useForm, router, usePage, Link } from '@inertiajs/vue3'
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 
 const props = defineProps({ budgets: Array, availableYears: Array })
 const perms = computed(() => usePage().props.permissions || {})
-const FULL_YEAR_SEMESTER = 'Full Year (Jan-Dec)'
-const CANONICAL_SEMESTERS = [FULL_YEAR_SEMESTER, '1st Semester', '2nd Semester', 'Summer']
 
 const showNewBudget = ref(false)
-const budgetForm = useForm({ year: new Date().getFullYear(), semester: FULL_YEAR_SEMESTER })
-
-function normalizeSemester(value) {
-    const semester = String(value || '').trim()
-    const lower = semester.toLowerCase()
-
-    if (!semester || lower === 'full year' || lower === 'full year (jan-dec)' || lower === 'full year (jan - dec)' || lower === 'full year (jan–dec)' || lower === 'full year (jan – dec)') {
-        return FULL_YEAR_SEMESTER
-    }
-
-    return semester
-}
-
-const semesterOptionsForYear = computed(() => {
-    const selectedYear = Number(budgetForm.year)
-    const yearSemesters = (props.budgets || [])
-        .filter((budget) => Number(budget.year) === selectedYear)
-        .map((budget) => normalizeSemester(budget.semester))
-        .filter(Boolean)
-
-    const uniqueSemesters = [...new Set(yearSemesters)]
-    return uniqueSemesters.length ? uniqueSemesters : CANONICAL_SEMESTERS
-})
-
-watch(semesterOptionsForYear, (options) => {
-    if (!options.includes(budgetForm.semester)) {
-        budgetForm.semester = options[0] || FULL_YEAR_SEMESTER
-    }
-}, { immediate: true })
+const editingBudget = ref(null)
+const currentYear = new Date().getFullYear()
+const budgetForm = useForm({ start_date: `${currentYear}-01-01`, end_date: `${currentYear}-12-31` })
+const periodForm = useForm({ start_date: '', end_date: '', confirm_cross_calendar_remap: false })
 
 function fmt(v) { return new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) }
 
 function createBudget() {
     budgetForm.post('/annual-budgets', { onSuccess: () => { showNewBudget.value = false } })
+}
+function openEditPeriod(budget) {
+    editingBudget.value = budget
+    periodForm.start_date = String(budget.start_date || '').slice(0, 10)
+    periodForm.end_date = String(budget.end_date || '').slice(0, 10)
+    periodForm.confirm_cross_calendar_remap = false
+    periodForm.clearErrors()
+}
+function updatePeriod() {
+    periodForm.put(`/annual-budgets/${editingBudget.value.id}/period`, {
+        preserveScroll: true,
+        onSuccess: () => { editingBudget.value = null },
+    })
 }
 function removeBudget(id) {
     if (confirm('Warning: this cannot be undone. Delete this entire budget year and all its items?')) router.delete(`/annual-budgets/${id}`)
@@ -91,7 +77,10 @@ function utilRate(items) {
                         <td class="px-5 py-4 font-mono font-semibold text-navy align-middle">
                             <span class="px-2 py-1 bg-slate-100 rounded text-xs border border-slate-200">{{ budget.ref_no || ('AB-' + budget.year + '-000' + budget.id) }}</span>
                         </td>
-                        <td class="px-5 py-4 font-bold text-gray-900 align-middle">{{ budget.year }}{{ budget.semester ? ' — ' + budget.semester : '' }}</td>
+                        <td class="px-5 py-4 align-middle">
+                            <div class="font-bold text-gray-900">{{ budget.fiscal_year_label }}</div>
+                            <div class="mt-0.5 text-xs font-normal text-gray-500">{{ budget.period_label }}</div>
+                        </td>
                         <td class="px-5 py-4 text-right text-gray-700 font-medium align-middle">₱{{ fmt(budgetTotal(budget.items, 'appropriation')) }}</td>
                         <td class="px-5 py-4 text-right text-gray-700 font-medium align-middle">₱{{ fmt(budgetTotal(budget.items, 'expenditure')) }}</td>
                         <td class="px-5 py-4 text-right text-gray-700 font-medium align-middle">₱{{ fmt(budgetTotal(budget.items, 'appropriation') - budgetTotal(budget.items, 'expenditure')) }}</td>
@@ -105,6 +94,9 @@ function utilRate(items) {
                                 <Link :href="`/annual-budgets/${budget.id}`" class="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-md text-xs font-semibold shadow-sm transition-all duration-150 border border-blue-200">
                                     Manage Items
                                 </Link>
+                                <button v-if="perms.canManageBudget" @click="openEditPeriod(budget)" class="px-3 py-1.5 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-md text-xs font-semibold shadow-sm transition-all duration-150 border border-amber-200">
+                                    Edit Period
+                                </button>
                                 <button v-if="perms.canManageBudget" @click="removeBudget(budget.id)" class="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-md text-xs font-semibold shadow-sm transition-all duration-150 border border-rose-200">
                                     Delete
                                 </button>
@@ -125,22 +117,49 @@ function utilRate(items) {
     <!-- New Budget Modal -->
     <Modal :show="showNewBudget" title="New Annual Budget" subtitle="Create a new annual budget record with an automatic annual reference number." @close="showNewBudget = false">
         <form @submit.prevent="createBudget">
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-1.5">Fiscal Year</label>
-                <input v-model.number="budgetForm.year" type="number" min="2000" max="2100" placeholder="e.g. 2026" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm" required />
-                <p v-if="budgetForm.errors.year" class="mt-1 text-xs text-red-500">{{ budgetForm.errors.year }}</p>
+            <div class="grid gap-4 sm:grid-cols-2 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Fiscal Start Date</label>
+                    <input v-model="budgetForm.start_date" type="date" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm" required />
+                    <p v-if="budgetForm.errors.start_date" class="mt-1 text-xs text-red-500">{{ budgetForm.errors.start_date }}</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Fiscal End Date</label>
+                    <input v-model="budgetForm.end_date" type="date" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm" required />
+                    <p v-if="budgetForm.errors.end_date" class="mt-1 text-xs text-red-500">{{ budgetForm.errors.end_date }}</p>
+                </div>
             </div>
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-1.5">Semester (optional)</label>
-                <select v-model="budgetForm.semester" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm">
-                    <option v-for="semester in semesterOptionsForYear" :key="semester" :value="semester">
-                        {{ semester }}
-                    </option>
-                </select>
-            </div>
+            <p class="mb-4 text-xs text-gray-500">The period must contain exactly 12 consecutive whole months, such as Aug 1, 2026 through Jul 31, 2027.</p>
             <div class="flex items-center justify-end gap-3 pt-4 border-t">
                 <button type="button" @click="showNewBudget = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
                 <button type="submit" :disabled="budgetForm.processing" data-onboarding-target="budget-create" data-onboarding-click="budget-create" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">Create Annual Budget</button>
+            </div>
+        </form>
+    </Modal>
+
+    <Modal :show="Boolean(editingBudget)" title="Edit Fiscal Period" subtitle="Update the authoritative start and end dates without changing existing reference numbers." @close="editingBudget = null">
+        <form @submit.prevent="updatePeriod">
+            <div class="grid gap-4 sm:grid-cols-2 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Fiscal Start Date</label>
+                    <input v-model="periodForm.start_date" type="date" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm" required />
+                    <p v-if="periodForm.errors.start_date" class="mt-1 text-xs text-red-500">{{ periodForm.errors.start_date }}</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Fiscal End Date</label>
+                    <input v-model="periodForm.end_date" type="date" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm" required />
+                    <p v-if="periodForm.errors.end_date" class="mt-1 text-xs text-red-500">{{ periodForm.errors.end_date }}</p>
+                </div>
+            </div>
+            <p class="mb-4 text-xs text-amber-800">Existing monthly allocations are remapped by month number. The update is rejected if linked transactions fall outside the new period.</p>
+            <label class="mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                <input v-model="periodForm.confirm_cross_calendar_remap" type="checkbox" class="mt-0.5 rounded border-amber-300" />
+                <span>I reviewed existing allocations and confirm that months before the new start month belong to the ending calendar year.</span>
+            </label>
+            <p v-if="periodForm.errors.confirm_cross_calendar_remap" class="mb-4 text-xs text-red-600">{{ periodForm.errors.confirm_cross_calendar_remap }}</p>
+            <div class="flex items-center justify-end gap-3 pt-4 border-t">
+                <button type="button" @click="editingBudget = null" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button type="submit" :disabled="periodForm.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">Update Fiscal Period</button>
             </div>
         </form>
     </Modal>

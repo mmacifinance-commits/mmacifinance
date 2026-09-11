@@ -5,36 +5,56 @@ namespace App\Http\Controllers;
 use App\Models\BudgetItem;
 use App\Models\Income;
 use App\Services\BudgetUtilizationService;
+use App\Services\FiscalPeriodService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
 use Inertia\Inertia;
 
 class IncomeController extends Controller
 {
-    public function index(Request $request, BudgetUtilizationService $utilization)
-    {
-        $yearExpression = DB::getDriverName() === 'sqlite'
-            ? "CAST(strftime('%Y', date_encoded) AS INTEGER)"
-            : 'YEAR(date_encoded)';
-
-        $availableYears = Income::query()
-            ->selectRaw("{$yearExpression} as year")
-            ->distinct()
-            ->pluck('year')
-            ->concat([(int) date('Y')])
-            ->unique()
-            ->sortDesc()
-            ->values()
-            ->toArray();
-
-        $selectedYear = (int) ($request->query('year') ?: ($availableYears[0] ?? date('Y')));
-        $selectedMonth = $request->query('month') ? (int) $request->query('month') : null;
+    public function index(
+        Request $request,
+        BudgetUtilizationService $utilization,
+        FiscalPeriodService $fiscalPeriods
+    ) {
+        $periods = $fiscalPeriods->all();
+        $selectedPeriod = $fiscalPeriods->resolve(
+            $request->integer('fiscal_period_id') ?: null,
+            $request->integer('year') ?: null
+        );
+        $allocationMonth = $selectedPeriod
+            ? $fiscalPeriods->allocationMonth(
+                $selectedPeriod,
+                $request->query('allocation_month'),
+                $request->integer('month') ?: null
+            )
+            : null;
         $startDate = $request->query('start_date');
         $endDate = $request->query('end_date');
         $search = trim((string) $request->query('search', ''));
 
-        $query = Income::query();
+        $incomeTotalQuery = Income::query();
+        if ($selectedPeriod) {
+            $incomeTotalQuery->whereBetween('date_encoded', [
+                $selectedPeriod->fiscalStart()->toDateString(),
+                $selectedPeriod->fiscalEnd()->toDateString(),
+            ]);
+        }
+        if ($startDate) {
+            $incomeTotalQuery->whereDate('date_encoded', '>=', $startDate);
+        }
+        if ($endDate) {
+            $incomeTotalQuery->whereDate('date_encoded', '<=', $endDate);
+        }
+        if (! $startDate && ! $endDate && $allocationMonth) {
+            $monthStart = \Carbon\Carbon::parse($allocationMonth);
+            $incomeTotalQuery->whereBetween('date_encoded', [
+                $monthStart->toDateString(),
+                $monthStart->copy()->endOfMonth()->toDateString(),
+            ]);
+        }
+
+        $query = clone $incomeTotalQuery;
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
                 $q->where('income_no', 'like', "%{$search}%")
@@ -43,46 +63,36 @@ class IncomeController extends Controller
             });
         }
 
-        if ($startDate && $endDate) {
-            $query->whereBetween('date_encoded', [$startDate, $endDate]);
-        } elseif ($selectedMonth) {
-            $query->whereYear('date_encoded', $selectedYear)->whereMonth('date_encoded', $selectedMonth);
-        } else {
-            $query->whereYear('date_encoded', $selectedYear);
-        }
-
         $recordCount = (clone $query)->count();
         $incomeRecords = $query->latest('date_encoded')->paginate(25)->withQueryString();
-        $incomeTotalQuery = Income::query()->whereYear('date_encoded', $selectedYear);
-        $expenseTotalQuery = $utilization->queryForBudgetFilters(
-            $selectedYear,
-            $selectedMonth,
-            $startDate,
-            $endDate
-        );
-        $appropriationTotalQuery = BudgetItem::query()
-            ->whereHas('budget', fn ($q) => $q->where('year', $selectedYear));
 
-        if ($startDate && $endDate) {
-            $incomeTotalQuery->whereBetween('date_encoded', [$startDate, $endDate]);
-            $appropriationTotalQuery->whereHas('budget', fn ($q) => $q->where('year', $selectedYear));
-        } elseif ($selectedMonth) {
-            $incomeTotalQuery->whereMonth('date_encoded', $selectedMonth);
-            $appropriationTotalQuery->where('month', $selectedMonth);
-        }
+        $expenseTotalQuery = $selectedPeriod
+            ? $utilization->queryForAnnualBudgetFilters(
+                $selectedPeriod,
+                $allocationMonth,
+                $startDate,
+                $endDate
+            )
+            : null;
+        $appropriationTotalQuery = BudgetItem::query()
+            ->when($selectedPeriod, fn ($q) => $q->where('budget_id', $selectedPeriod->id))
+            ->when($allocationMonth, fn ($q) => $q->whereDate('allocation_month', $allocationMonth));
 
         $totalRevenue = (float) $incomeTotalQuery->sum('amount');
         $totalAppropriation = (float) $appropriationTotalQuery->sum('appropriation');
-        $totalExpense = (float) $expenseTotalQuery->sum('amount');
+        $totalExpense = (float) ($expenseTotalQuery?->sum('amount') ?? 0);
         $remainingIncome = $totalRevenue - $totalAppropriation;
         $remainingIncomeAfterExpense = $totalRevenue - $totalExpense;
 
         return Inertia::render('Income/Index', [
             'incomeRecords' => $incomeRecords,
-            'availableYears' => $availableYears,
+            'availableYears' => $periods->pluck('year')->all(),
+            'fiscalPeriods' => $fiscalPeriods->options($periods),
             'filters' => [
-                'year' => $selectedYear,
-                'month' => $selectedMonth,
+                'year' => $selectedPeriod?->year,
+                'fiscal_period_id' => $selectedPeriod?->id,
+                'month' => $allocationMonth ? (int) date('n', strtotime($allocationMonth)) : null,
+                'allocation_month' => $allocationMonth,
                 'start_date' => $startDate,
                 'end_date' => $endDate,
                 'search' => $search,
@@ -148,10 +158,10 @@ class IncomeController extends Controller
 
     public function exportCsv()
     {
-        $fileName = 'income-export-' . now()->format('Y-m-d_His') . '.csv';
+        $fileName = 'income-export-'.now()->format('Y-m-d_His').'.csv';
         $headers = [
             'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+            'Content-Disposition' => 'attachment; filename="'.$fileName.'"',
         ];
 
         $callback = function () {
@@ -193,16 +203,18 @@ class IncomeController extends Controller
         }
 
         $header = fgetcsv($handle);
-        if (!$header) {
+        if (! $header) {
             fclose($handle);
+
             return back()->withErrors(['csv_file' => 'CSV file is empty.']);
         }
 
         $header = array_map(fn ($value) => trim((string) $value), $header);
         $required = ['source', 'description', 'amount', 'date_encoded', 'notes'];
         foreach ($required as $column) {
-            if (!in_array($column, $header, true)) {
+            if (! in_array($column, $header, true)) {
                 fclose($handle);
+
                 return back()->withErrors(['csv_file' => "Missing required column: {$column}"]);
             }
         }
@@ -232,7 +244,7 @@ class IncomeController extends Controller
                 'date_encoded' => $dateEncoded,
             ]);
 
-            $isNew = !$income->exists;
+            $isNew = ! $income->exists;
             $income->amount = $amount;
             $income->notes = $notes !== '' ? $notes : null;
             if ($isNew) {

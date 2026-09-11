@@ -3,14 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\AnnualBudget;
-use App\Models\BudgetItem;
 use App\Models\BudgetCategory;
 use App\Models\BudgetParticular;
 use App\Models\Department;
 use App\Models\Disbursement;
 use App\Models\Expense;
 use App\Models\User;
-use App\Models\AuditTrail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -19,10 +17,15 @@ class BudgetAndDisbursementEnhancementTest extends TestCase
     use RefreshDatabase;
 
     protected User $superAdmin;
+
     protected User $cashier;
+
     protected BudgetCategory $category;
+
     protected Department $department;
+
     protected BudgetParticular $accountTitle;
+
     protected Expense $expense;
 
     protected function setUp(): void
@@ -92,11 +95,17 @@ class BudgetAndDisbursementEnhancementTest extends TestCase
 
     public function test_cashier_can_create_disbursement_and_submit_for_approval()
     {
-        AnnualBudget::create([
+        $budget = AnnualBudget::create([
             'year' => 2026,
             'semester' => 'Full Year (Jan-Dec)',
         ]);
-        $this->expense->update(['status' => 'approved']);
+        $item = $budget->items()->create([
+            'category_id' => $this->category->id,
+            'particular_id' => $this->accountTitle->id,
+            'month' => 1,
+            'appropriation' => 10000,
+        ]);
+        $this->expense->update(['status' => 'approved', 'budget_item_id' => $item->id]);
 
         $response = $this->actingAs($this->cashier)->post('/disbursements', [
             'expense_id' => $this->expense->id,

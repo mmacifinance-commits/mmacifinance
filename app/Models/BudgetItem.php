@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Services\BudgetUtilizationService;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Collection;
-use App\Services\BudgetUtilizationService;
+use Illuminate\Validation\ValidationException;
 
 class BudgetItem extends Model
 {
@@ -17,11 +18,13 @@ class BudgetItem extends Model
         'category_id',
         'particular_id',
         'month',
+        'allocation_month',
         'appropriation',
     ];
 
     protected $casts = [
         'month' => 'integer',
+        'allocation_month' => 'date',
         'appropriation' => 'decimal:2',
     ];
 
@@ -29,6 +32,7 @@ class BudgetItem extends Model
         'expenditure',
         'balance',
         'utilization_rate',
+        'allocation_month_label',
     ];
 
     protected static function boot()
@@ -40,29 +44,39 @@ class BudgetItem extends Model
             // The displayed expenditure is always derived from posted disbursements.
             $model->expenditure = 0;
 
-            if (!$model->budget_id || !$model->particular_id) {
+            if (! $model->budget_id || ! $model->particular_id) {
                 return;
             }
 
             $budget = AnnualBudget::find($model->budget_id);
             $particular = BudgetParticular::with('category', 'department')->find($model->particular_id);
 
-            if (!$budget || !$particular) {
+            if (! $budget || ! $particular) {
                 return;
             }
 
-            $month = (int) ($model->month ?: 1);
-            if ($model->month !== null) {
-                $model->month = $month;
+            $allocationMonth = $model->allocation_month
+                ? Carbon::parse($model->allocation_month)->startOfMonth()
+                : $budget->allocationMonthForNumber((int) ($model->month ?: 1));
+
+            if (! $allocationMonth || ! $budget->containsDate($allocationMonth)) {
+                throw ValidationException::withMessages([
+                    'allocation_month' => "The allocation month must fall within {$budget->fiscal_year_label} ({$budget->period_label}).",
+                ]);
             }
 
-            if (!empty($model->ref_no) && preg_match('/^MB-(\d{4})-(\d{2})-(\d{4})$/', (string) $model->ref_no, $matches)) {
+            $model->allocation_month = $allocationMonth->toDateString();
+            $model->month = $allocationMonth->month;
+            $month = $allocationMonth->month;
+
+            $mustValidateReference = ! $model->exists || $model->isDirty('ref_no');
+            if ($mustValidateReference && ! empty($model->ref_no) && preg_match('/^MB-(\d{4})-(\d{2})-(\d{4})$/', (string) $model->ref_no, $matches)) {
                 $refYear = (int) $matches[1];
                 $refMonth = (int) $matches[2];
 
-                if ($refYear !== (int) $budget->year || $refMonth !== $month) {
+                if (! in_array($refYear, [(int) $budget->year, $allocationMonth->year], true) || $refMonth !== $month) {
                     throw ValidationException::withMessages([
-                        'ref_no' => "The monthly reference number {$model->ref_no} must match fiscal year {$budget->year} and month {$month}.",
+                        'ref_no' => "The monthly reference number {$model->ref_no} must match allocation month {$allocationMonth->format('F Y')}.",
                     ]);
                 }
             }
@@ -70,13 +84,13 @@ class BudgetItem extends Model
             $duplicateExists = self::query()
                 ->where('budget_id', $model->budget_id)
                 ->where('particular_id', $model->particular_id)
-                ->where('month', $month)
+                ->whereDate('allocation_month', $allocationMonth->toDateString())
                 ->when($model->exists, fn ($query) => $query->whereKeyNot($model->getKey()))
                 ->exists();
 
             if ($duplicateExists) {
                 throw ValidationException::withMessages([
-                    'particular_id' => "A budget record already exists for {$particular->particular} in {$budget->year}, month {$month}.",
+                    'particular_id' => "A budget record already exists for {$particular->particular} in {$allocationMonth->format('F Y')}.",
                 ]);
             }
         });
@@ -90,9 +104,13 @@ class BudgetItem extends Model
                         $year = $b->year;
                     }
                 }
-                $m = $model->month ?: 1;
-                $count = self::where('budget_id', $model->budget_id)->where('month', $m)->count() + 1;
-                $model->ref_no = sprintf('MB-%d-%02d-%04d', $year, $m, $count);
+                $allocationMonth = $model->allocation_month
+                    ? Carbon::parse($model->allocation_month)
+                    : Carbon::create($year, (int) ($model->month ?: 1), 1);
+                $count = self::where('budget_id', $model->budget_id)
+                    ->whereDate('allocation_month', $allocationMonth->toDateString())
+                    ->count() + 1;
+                $model->ref_no = sprintf('MB-%d-%02d-%04d', $allocationMonth->year, $allocationMonth->month, $count);
             }
         });
     }
@@ -155,6 +173,13 @@ class BudgetItem extends Model
 
         return round(($this->postedExpenditureTotal() / $appropriation) * 100, 2);
     }
+
+    public function getAllocationMonthLabelAttribute(): string
+    {
+        if ($this->allocation_month) {
+            return Carbon::parse($this->allocation_month)->format('F Y');
+        }
+
+        return date('F', mktime(0, 0, 0, (int) ($this->month ?: 1), 1)).' '.$this->budget?->year;
+    }
 }
-
-

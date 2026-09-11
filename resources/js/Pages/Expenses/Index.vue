@@ -15,8 +15,10 @@ const props = defineProps({
     particulars: Array,
     accountTitles: Array,
     budgetYears: Array,
+    fiscalPeriods: Array,
     availableYears: Array,
-    defaultYear: [Number, String]
+    defaultYear: [Number, String],
+    defaultFiscalPeriodId: [Number, String],
 })
 
 const showModal = ref(false)
@@ -41,22 +43,19 @@ const offlineRows = ref([])
 const filterSearch = ref('')
 const filterCategory = ref('')
 const filterStatus = ref('')
-const filterYear = ref(props.defaultYear ? String(props.defaultYear) : 'all')
-const selectedYear = computed(() => {
-    if (form.date_encoded) {
-        const year = new Date(form.date_encoded).getFullYear()
-        return String(year)
-    }
-    return props.defaultYear ? String(props.defaultYear) : String(new Date().getFullYear())
+const filterYear = ref(props.defaultFiscalPeriodId ? String(props.defaultFiscalPeriodId) : 'all')
+const selectedFiscalPeriod = computed(() => {
+    const date = String(form.date_encoded || '').slice(0, 10)
+    return (props.fiscalPeriods || []).find(period => date && date >= String(period.start_date).slice(0, 10) && date <= String(period.end_date).slice(0, 10)) || null
 })
 
-function hasBudgetForYear(category, year) {
+function hasBudgetForPeriod(category, periodId) {
     const items = category.budget_items || category.budgetItems || []
-    return items.some((item) => String(item?.budget?.year) === String(year))
+    return items.some((item) => String(item?.budget?.id) === String(periodId))
 }
 
 const categoryOptions = computed(() => {
-    return (props.budgetedCategories || []).filter((category) => hasBudgetForYear(category, selectedYear.value))
+    return (props.budgetedCategories || []).filter((category) => hasBudgetForPeriod(category, selectedFiscalPeriod.value?.id))
 })
 const allBudgetAllocations = computed(() => (props.budgetedCategories || [])
     .flatMap(category => category.budget_items || category.budgetItems || []))
@@ -71,9 +70,9 @@ const accountTitleOptions = computed(() => {
 function matchingAllocations(particularId) {
     const category = categoryOptions.value.find(c => String(c.id) === selectedCategoryId.value)
     const allocations = (category?.budget_items || category?.budgetItems || []).filter(item =>
-        String(item.particular_id) === String(particularId) && String(item.budget?.year) === selectedYear.value
+        String(item.particular_id) === String(particularId) && String(item.budget?.id) === String(selectedFiscalPeriod.value?.id)
     )
-    return allocations.sort((a, b) => Number(a.month) - Number(b.month))
+    return allocations.sort((a, b) => String(a.allocation_month || '').localeCompare(String(b.allocation_month || '')))
 }
 
 function accountOptionLabel(account) {
@@ -97,8 +96,16 @@ const maximumExpenseAmount = computed(() => {
 })
 
 function allocationOptionLabel(item) {
-    const month = monthNames[Number(item.month) - 1] || `Month ${item.month}`
+    const month = allocationMonthLabel(item)
     return `${item.ref_no} | ${month} | Available: ₱${fmt(item.balance)}`
+}
+
+function allocationMonthLabel(item) {
+    if (item?.allocation_month_label) return item.allocation_month_label
+    if (item?.allocation_month) {
+        return new Date(`${String(item.allocation_month).slice(0, 10)}T00:00:00`).toLocaleDateString('en-PH', { month: 'long', year: 'numeric' })
+    }
+    return monthNames[Number(item?.month) - 1] || `Month ${item?.month}`
 }
 
 function expenseAllocation(expense) {
@@ -108,8 +115,8 @@ function expenseAllocation(expense) {
 function expenseAllocationLabel(expense) {
     const allocation = expenseAllocation(expense)
     if (!allocation) return 'Allocation not linked'
-    const month = monthNames[Number(allocation.month) - 1] || `Month ${allocation.month}`
-    return `${allocation.ref_no} · ${month} FY ${allocation.budget?.year || ''}`
+    const month = allocation.allocation_month_label || monthNames[Number(allocation.month) - 1] || `Month ${allocation.month}`
+    return `${allocation.ref_no} · ${month} · ${allocation.budget?.fiscal_year_label || ''}`
 }
 
 const filteredExpenses = computed(() => {
@@ -123,8 +130,7 @@ const filteredExpenses = computed(() => {
 
         let matchYear = true
         if (filterYear.value && filterYear.value !== 'all') {
-            const expYear = e.date_encoded ? String(e.date_encoded).slice(0, 4) : (e.created_at ? String(e.created_at).slice(0, 4) : null)
-            matchYear = expYear ? String(expYear) === String(filterYear.value) : false
+            matchYear = String(expenseAllocation(e)?.budget?.id || '') === String(filterYear.value)
         }
 
         return matchSearch && matchCategory && matchStatus && matchYear
@@ -135,10 +141,10 @@ function clearFilters() {
     filterSearch.value = ''
     filterCategory.value = ''
     filterStatus.value = ''
-    filterYear.value = props.defaultYear ? String(props.defaultYear) : 'all'
+    filterYear.value = props.defaultFiscalPeriodId ? String(props.defaultFiscalPeriodId) : 'all'
 }
 
-watch([selectedYear, categoryOptions], ([year, options]) => {
+watch([selectedFiscalPeriod, categoryOptions], ([period, options]) => {
     if (form.category_id && !options.some(c => String(c.id) === String(form.category_id))) {
         form.category_id = ''
         form.particular_id = ''
@@ -395,7 +401,7 @@ function splitDate(d) {
         <input v-model="filterSearch" type="text" placeholder="Search by ref no or description..." class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm w-full max-w-sm shadow-sm" />
         <select v-model="filterYear" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 min-w-[150px] shadow-sm">
             <option value="all">All Years</option>
-            <option v-for="y in (availableYears || [])" :key="y" :value="String(y)">Year {{ y }}</option>
+            <option v-for="period in (fiscalPeriods || [])" :key="period.id" :value="String(period.id)">{{ period.fiscal_year_label }}</option>
         </select>
         <select v-model="filterCategory" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 min-w-[180px] shadow-sm">
             <option value="">All Categories</option>
@@ -531,7 +537,7 @@ function splitDate(d) {
                 <div><label class="block text-sm font-medium mb-1.5">Category</label><select v-model="form.category_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.category_id }" :disabled="editing && editingHasDisbursements" required><option value="">Select Category</option><option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.name }}</option></select><p v-if="form.errors.category_id" class="mt-1 text-xs text-rose-600">{{ form.errors.category_id }}</p></div>
                 <div><label class="block text-sm font-medium mb-1.5">Account Title</label><select v-model="form.particular_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.particular_id }" :disabled="!form.category_id || (editing && editingHasDisbursements)" required><option value="">Select Account Title</option><option v-for="p in accountTitleOptions" :key="p.id" :value="p.id">{{ accountOptionLabel(p) }}</option></select><p v-if="form.errors.particular_id" class="mt-1 text-xs text-rose-600">{{ form.errors.particular_id }}</p></div>
                 <p v-if="form.category_id" class="sm:col-span-2 text-xs text-gray-600">
-                    Account choices show the responsibility center for funded accounts in FY {{ selectedYear }}.
+                    Account choices show funded responsibility centers for {{ selectedFiscalPeriod?.fiscal_year_label || 'the fiscal period containing the expense date' }}.
                     <span v-if="!accountTitleOptions.length">No funded account is available. Check Annual Budget &gt; Manage Items.</span>
                 </p>
                 <div class="sm:col-span-2">
@@ -542,7 +548,7 @@ function splitDate(d) {
                     </select>
                     <p v-if="form.errors.budget_item_id" class="mt-1 text-xs text-rose-600">{{ form.errors.budget_item_id }}</p>
                     <div v-if="selectedAllocation" class="mt-2 border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-                        <span class="font-semibold">{{ monthNames[Number(selectedAllocation.month) - 1] }} FY {{ selectedAllocation.budget?.year }}</span>
+                        <span class="font-semibold">{{ allocationMonthLabel(selectedAllocation) }} · {{ selectedAllocation.budget?.fiscal_year_label }}</span>
                         <span class="block break-words">{{ accountOptionLabel((props.accountTitles || props.particulars || []).find(p => String(p.id) === String(selectedAllocation.particular_id)) || {}) }}</span>
                         <span class="block">Appropriation: ₱{{ fmt(selectedAllocation.appropriation) }} · Available: ₱{{ fmt(selectedAllocation.balance) }}</span>
                     </div>

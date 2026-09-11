@@ -10,6 +10,7 @@ const perms = computed(() => page.props.permissions || {})
 const props = defineProps({
     incomeRecords: Array,
     availableYears: Array,
+    fiscalPeriods: Array,
     filters: Object,
     stats: Object,
 })
@@ -24,18 +25,20 @@ const importForm = useForm({ csv_file: null })
 const formErrorMessages = computed(() => Object.values(form.errors || {}).flat().filter(Boolean))
 const PESO = '\u20b1'
 
-const selectedYear = ref(props.filters?.year || new Date().getFullYear())
-const selectedMonth = ref(props.filters?.month || '')
+const selectedFiscalPeriod = ref(props.filters?.fiscal_period_id || '')
+const selectedMonth = ref(props.filters?.allocation_month || '')
 const startDate = ref(props.filters?.start_date || '')
 const endDate = ref(props.filters?.end_date || '')
 const searchQuery = ref(props.filters?.search || '')
+const activeFiscalPeriod = computed(() => (props.fiscalPeriods || []).find(period => Number(period.id) === Number(selectedFiscalPeriod.value)))
+const fiscalMonths = computed(() => activeFiscalPeriod.value?.months || [])
 
 function fmt(v) { return new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(v || 0) }
 
 function applyFilters() {
     router.get('/income', {
-        year: selectedYear.value,
-        month: selectedMonth.value,
+        fiscal_period_id: selectedFiscalPeriod.value,
+        allocation_month: selectedMonth.value,
         start_date: startDate.value,
         end_date: endDate.value,
         search: searchQuery.value,
@@ -43,7 +46,7 @@ function applyFilters() {
 }
 
 function resetFilters() {
-    selectedYear.value = (props.availableYears && props.availableYears[0]) || new Date().getFullYear()
+    selectedFiscalPeriod.value = props.fiscalPeriods?.[0]?.id || ''
     selectedMonth.value = ''
     startDate.value = ''
     endDate.value = ''
@@ -122,15 +125,15 @@ function importCsv() {
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div class="space-y-1">
                 <label class="block text-[11px] font-bold uppercase tracking-wide text-gray-700">Fiscal Year</label>
-                <select v-model="selectedYear" @change="applyFilters" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm">
-                    <option v-for="yr in availableYears" :key="yr" :value="yr">FY {{ yr }}</option>
+                <select v-model="selectedFiscalPeriod" @change="selectedMonth = ''; applyFilters()" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm">
+                    <option v-for="period in fiscalPeriods" :key="period.id" :value="period.id">{{ period.label }}</option>
                 </select>
             </div>
             <div class="space-y-1">
                 <label class="block text-[11px] font-bold uppercase tracking-wide text-gray-700">Month</label>
                 <select v-model="selectedMonth" @change="applyFilters" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm">
-                    <option value="">All Months</option>
-                    <option v-for="(m, idx) in ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']" :key="idx" :value="idx + 1">{{ m }}</option>
+                    <option value="">All Fiscal Months</option>
+                    <option v-for="month in fiscalMonths" :key="month.value" :value="month.value">{{ month.label }}</option>
                 </select>
             </div>
             <div class="space-y-1">

@@ -8,10 +8,10 @@ use App\Models\BudgetCategory;
 use App\Models\BudgetItem;
 use App\Models\BudgetParticular;
 use App\Models\Department;
-use App\Models\IncomeAllocation;
-use App\Models\Income;
 use App\Models\Disbursement;
 use App\Models\Expense;
+use App\Models\Income;
+use App\Models\IncomeAllocation;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -200,7 +200,10 @@ class DatabaseSeeder extends Seeder
             IncomeAllocation::where('annual_budget_id', $annualBudget->id)->delete();
 
             $incomes = Income::query()
-                ->whereYear('date_encoded', $annualBudget->year)
+                ->whereBetween('date_encoded', [
+                    $annualBudget->fiscalStart()->toDateString(),
+                    $annualBudget->fiscalEnd()->toDateString(),
+                ])
                 ->orderBy('date_encoded')
                 ->orderBy('id')
                 ->get();
@@ -288,7 +291,9 @@ class DatabaseSeeder extends Seeder
                     'ref_no' => $year === 2024
                         ? 'AB-2024-0001'
                         : sprintf('AB-%d-%04d', $year, $year - 2020),
-                    'semester' => 'Full Year (Jan-Dec)',
+                    'start_date' => "{$year}-01-01",
+                    'end_date' => "{$year}-12-31",
+                    'semester' => 'Fiscal Year',
                 ]
             );
 
@@ -305,6 +310,7 @@ class DatabaseSeeder extends Seeder
                         [
                             'ref_no' => sprintf('MB-2024-%02d-0001', $month),
                             'category_id' => $categories[$line['cat']]->id,
+                            'allocation_month' => sprintf('2024-%02d-01', $month),
                             'appropriation' => $line['appropriation'],
                             'expenditure' => 0,
                         ]
@@ -352,6 +358,7 @@ class DatabaseSeeder extends Seeder
                 }
 
                 $syncIncomeAllocations($annualBudget);
+
                 continue;
             }
 
@@ -382,6 +389,7 @@ class DatabaseSeeder extends Seeder
                         [
                             'ref_no' => $itemRefNo,
                             'category_id' => $catId,
+                            'allocation_month' => sprintf('%d-%02d-01', $year, $month),
                             'appropriation' => $monthlyAppr,
                             'expenditure' => 0,
                         ]

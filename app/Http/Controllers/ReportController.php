@@ -7,15 +7,22 @@ use App\Models\BudgetCategory;
 use App\Models\BudgetItem;
 use App\Models\Department;
 use App\Services\BudgetUtilizationService;
+use App\Services\FiscalPeriodService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class ReportController extends Controller
 {
-    public function index(Request $request, BudgetUtilizationService $utilization)
-    {
+    public function index(
+        Request $request,
+        BudgetUtilizationService $utilization,
+        FiscalPeriodService $fiscalPeriods
+    ) {
         $validated = $request->validate([
+            'fiscal_period_id' => ['nullable', 'integer', 'exists:annual_budgets,id'],
             'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
+            'allocation_month' => ['nullable', 'date_format:Y-m-d'],
             'month' => ['nullable', 'integer', 'between:1,12'],
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date'],
@@ -24,142 +31,154 @@ class ReportController extends Controller
             'account_title_id' => ['nullable', 'integer', 'exists:budget_particulars,id'],
         ]);
 
-        $selectedYear = (int) ($validated['year'] ?? date('Y'));
-        $selectedMonth = isset($validated['month']) ? (int) $validated['month'] : null;
+        $periods = $fiscalPeriods->all();
+        $selectedPeriod = $fiscalPeriods->resolve(
+            isset($validated['fiscal_period_id']) ? (int) $validated['fiscal_period_id'] : null,
+            isset($validated['year']) ? (int) $validated['year'] : null
+        );
+        $allocationMonth = $selectedPeriod
+            ? $fiscalPeriods->allocationMonth(
+                $selectedPeriod,
+                $validated['allocation_month'] ?? null,
+                isset($validated['month']) ? (int) $validated['month'] : null
+            )
+            : null;
         $startDate = $validated['start_date'] ?? null;
         $endDate = $validated['end_date'] ?? null;
         $departmentId = isset($validated['department_id']) ? (int) $validated['department_id'] : null;
         $categoryId = isset($validated['category_id']) ? (int) $validated['category_id'] : null;
         $accountTitleId = isset($validated['account_title_id']) ? (int) $validated['account_title_id'] : null;
 
-        $availableYears = AnnualBudget::pluck('year')
-            ->concat([2024, 2025, 2026, (int) date('Y')])
-            ->unique()
-            ->sortDesc()
-            ->values()
-            ->toArray();
-
-        if ($startDate && $endDate && strtotime($endDate) < strtotime($startDate)) {
+        if ($startDate && $endDate && $endDate < $startDate) {
             [$startDate, $endDate] = [$endDate, $startDate];
         }
 
-        $dsbQuery = $utilization->queryForBudgetFilters(
-            $selectedYear,
-            $selectedMonth,
-            $startDate,
-            $endDate,
+        $itemsQuery = BudgetItem::query()
+            ->with(['budget', 'category', 'particular.department'])
+            ->when($selectedPeriod, fn ($query) => $query->where('budget_id', $selectedPeriod->id))
+            ->when($allocationMonth, fn ($query) => $query->whereDate('allocation_month', $allocationMonth));
+        $this->applyItemDimensions($itemsQuery, $departmentId, $categoryId, $accountTitleId);
+        $selectedItems = $itemsQuery->get();
+        BudgetItem::hydrateDerivedTotals($selectedItems);
+
+        $postedDisbursements = $selectedPeriod
+            ? $utilization->queryForAnnualBudgetFilters(
+                $selectedPeriod,
+                $allocationMonth,
+                $startDate,
+                $endDate,
+                $departmentId,
+                $categoryId,
+                $accountTitleId
+            )->with([
+                'expense.category',
+                'expense.particular.department',
+                'expense.budgetItem',
+                'approvedBy',
+                'postedBy',
+            ])->get()
+            : collect();
+
+        $appropriation = (float) $selectedItems->sum('appropriation');
+        $expenditure = (float) $postedDisbursements->sum('amount');
+        $selectedMonthLabel = $allocationMonth
+            ? Carbon::parse($allocationMonth)->format(
+                $selectedPeriod?->fiscalStart()->year === $selectedPeriod?->fiscalEnd()->year ? 'F' : 'F Y'
+            )
+            : 'All Fiscal Months';
+        $selectedMonthPerformance = [
+            'month_label' => $selectedMonthLabel,
+            'appropriation' => $appropriation,
+            'expenditure' => $expenditure,
+            'utilizationRate' => $appropriation > 0 ? round(($expenditure / $appropriation) * 100, 2) : 0,
+        ];
+
+        $budgetPerformanceByYear = $periods->map(function (AnnualBudget $period) use (
+            $utilization,
+            $allocationMonth,
             $departmentId,
             $categoryId,
             $accountTitleId
-        )->with(['expense.category', 'expense.particular.department', 'expense.budgetItem', 'approvedBy', 'postedBy']);
-
-        $annualBudgetItemsQuery = BudgetItem::query()
-            ->with(['budget', 'category', 'particular.department'])
-            ->whereHas('budget', fn ($q) => $q->where('year', $selectedYear));
-        if ($categoryId) {
-            $annualBudgetItemsQuery->where('category_id', $categoryId);
-        }
-        if ($accountTitleId) {
-            $annualBudgetItemsQuery->where('particular_id', $accountTitleId);
-        }
-        if ($departmentId) {
-            $annualBudgetItemsQuery->whereHas('particular', fn ($q) => $q->where('department_id', $departmentId));
-        }
-
-        $annualBudgetItems = $annualBudgetItemsQuery->get();
-        BudgetItem::hydrateDerivedTotals($annualBudgetItems);
-
-        $postedDisbursements = (clone $dsbQuery)->get();
-
-        $selectedMonthLabel = 'All Months';
-        if ($selectedMonth) {
-            $selectedBudgetItems = $annualBudgetItems->where('month', $selectedMonth)->values();
-            $selectedMonthLabel = date('F', mktime(0, 0, 0, $selectedMonth, 1));
-        } else {
-            $selectedBudgetItems = $annualBudgetItems;
-        }
-        $monthAppropriation = (float) $selectedBudgetItems->sum('appropriation');
-        $selectedBudgetItemIds = $selectedBudgetItems->pluck('id')->map(fn ($id) => (int) $id)->all();
-        $monthExpenditure = (float) $postedDisbursements
-            ->filter(fn ($disbursement) => in_array((int) ($disbursement->expense?->budget_item_id ?? 0), $selectedBudgetItemIds, true))
-            ->sum('amount');
-
-        $selectedMonthPerformance = [
-            'month_label' => $selectedMonthLabel,
-            'appropriation' => $monthAppropriation,
-            'expenditure' => $monthExpenditure,
-            'utilizationRate' => $monthAppropriation > 0
-                ? round(($monthExpenditure / $monthAppropriation) * 100, 2)
-                : 0,
-        ];
-
-        $performanceItemsQuery = BudgetItem::query()
-            ->with(['budget', 'category', 'particular.department'])
-            ->whereHas('budget', fn ($q) => $q->whereIn('year', $availableYears));
-        if ($selectedMonth) { $performanceItemsQuery->where('month', $selectedMonth); }
-        if ($categoryId) { $performanceItemsQuery->where('category_id', $categoryId); }
-        if ($accountTitleId) { $performanceItemsQuery->where('particular_id', $accountTitleId); }
-        if ($departmentId) { $performanceItemsQuery->whereHas('particular', fn ($q) => $q->where('department_id', $departmentId)); }
-        $performanceItems = $performanceItemsQuery->get();
-        BudgetItem::hydrateDerivedTotals($performanceItems);
-
-        $budgetPerformanceByYear = collect($availableYears)->map(function ($year) use ($selectedMonth, $performanceItems) {
-            $items = $performanceItems->filter(fn ($item) => (int) $item->budget?->year === (int) $year);
-            $appropriation = (float) $items->sum('appropriation');
-            $expenditure = (float) $items->sum(fn ($item) => $item->postedExpenditureTotal());
+        ) {
+            $periodMonth = $allocationMonth && $period->containsDate($allocationMonth) ? $allocationMonth : null;
+            $itemsQuery = BudgetItem::query()
+                ->where('budget_id', $period->id)
+                ->when($periodMonth, fn ($query) => $query->whereDate('allocation_month', $periodMonth));
+            $this->applyItemDimensions($itemsQuery, $departmentId, $categoryId, $accountTitleId);
+            $periodAppropriation = (float) $itemsQuery->sum('appropriation');
+            $periodExpenditure = (float) $utilization->queryForAnnualBudgetFilters(
+                $period,
+                $periodMonth,
+                null,
+                null,
+                $departmentId,
+                $categoryId,
+                $accountTitleId
+            )->sum('amount');
 
             return [
-                'year' => (int) $year,
-                'selectedMonth' => $selectedMonth,
-                'appropriation' => $appropriation,
-                'expenditure' => $expenditure,
-                'utilizationRate' => $appropriation > 0 ? round(($expenditure / $appropriation) * 100, 2) : 0,
+                'id' => $period->id,
+                'year' => $period->year,
+                'label' => $period->fiscal_year_label,
+                'selectedMonth' => $periodMonth,
+                'appropriation' => $periodAppropriation,
+                'expenditure' => $periodExpenditure,
+                'utilizationRate' => $periodAppropriation > 0
+                    ? round(($periodExpenditure / $periodAppropriation) * 100, 2)
+                    : 0,
             ];
         })->values();
 
-        // Summarize the exact filtered report dataset into one row per month.
-        // Fully utilized months remain included so the totals always reconcile.
         $postedByBudgetItem = $postedDisbursements
             ->groupBy(fn ($item) => (int) ($item->expense?->budget_item_id ?? 0))
-            ->map(fn ($group) => (float) $group->sum('amount'));
-
-        $yearEndUnusedBalances = $selectedBudgetItems
-            ->groupBy(fn ($item) => (int) $item->month)
+            ->map(fn ($rows) => (float) $rows->sum('amount'));
+        $yearEndUnusedBalances = $selectedItems
+            ->groupBy(fn (BudgetItem $item) => $item->allocation_month?->format('Y-m-d'))
             ->map(function ($items, $month) use ($postedByBudgetItem) {
-                $appropriation = (float) $items->sum('appropriation');
-                $expenditure = (float) $items->sum(fn ($item) => (float) ($postedByBudgetItem[$item->id] ?? 0));
+                $monthAppropriation = (float) $items->sum('appropriation');
+                $monthExpenditure = (float) $items->sum(
+                    fn ($item) => (float) ($postedByBudgetItem[$item->id] ?? 0)
+                );
 
                 return [
-                    'month' => (int) $month,
-                    'month_label' => date('F', mktime(0, 0, 0, max(1, (int) $month), 1)),
-                    'appropriation' => round($appropriation, 2),
-                    'expenditure' => round($expenditure, 2),
-                    'balance' => round($appropriation - $expenditure, 2),
-                    'utilization_rate' => $appropriation > 0 ? round(($expenditure / $appropriation) * 100, 2) : 0,
+                    'month' => $month,
+                    'allocation_month' => $month,
+                    'month_label' => $items->first()?->allocation_month?->format('F Y') ?? 'Unknown',
+                    'appropriation' => round($monthAppropriation, 2),
+                    'expenditure' => round($monthExpenditure, 2),
+                    'balance' => round($monthAppropriation - $monthExpenditure, 2),
+                    'utilization_rate' => $monthAppropriation > 0
+                        ? round(($monthExpenditure / $monthAppropriation) * 100, 2)
+                        : 0,
                 ];
             })
-            ->sortBy('month')
+            ->sortBy('allocation_month')
             ->values();
 
-        $selectedMonthLabel = $selectedMonthPerformance['month_label'] ?? ($selectedMonth ? date('F', mktime(0, 0, 0, $selectedMonth, 1)) : 'All Months');
+        $reportBudgets = AnnualBudget::query()
+            ->with(['items' => function ($query) use ($departmentId, $categoryId, $accountTitleId) {
+                $this->applyItemDimensions($query, $departmentId, $categoryId, $accountTitleId);
+                $query->with(['category', 'particular.department']);
+            }])
+            ->orderByDesc('start_date')
+            ->get();
+        BudgetItem::hydrateDerivedTotals($reportBudgets->flatMap->items);
 
         return Inertia::render('Reports/Index', [
-            'budgets' => AnnualBudget::query()
-                ->where('year', $selectedYear)
-                ->get()
-                ->each(function ($budget) use ($annualBudgetItems) {
-                    $budget->setRelation('items', $annualBudgetItems->where('budget_id', $budget->id)->values());
-                }),
+            'budgets' => $reportBudgets,
             'categories' => BudgetCategory::all(),
             'departments' => Department::all(),
             'selectedMonthPerformance' => $selectedMonthPerformance,
             'budgetPerformanceByYear' => $budgetPerformanceByYear,
             'yearEndUnusedBalances' => $yearEndUnusedBalances,
             'selectedMonthLabel' => $selectedMonthLabel,
-            'availableYears' => $availableYears,
+            'availableYears' => $periods->pluck('year')->all(),
+            'fiscalPeriods' => $fiscalPeriods->options($periods),
             'filters' => [
-                'year' => $selectedYear,
-                'month' => $selectedMonth,
+                'year' => $selectedPeriod?->year,
+                'fiscal_period_id' => $selectedPeriod?->id,
+                'month' => $allocationMonth ? (int) date('n', strtotime($allocationMonth)) : null,
+                'allocation_month' => $allocationMonth,
                 'start_date' => $startDate,
                 'end_date' => $endDate,
                 'department_id' => $departmentId,
@@ -167,5 +186,16 @@ class ReportController extends Controller
                 'account_title_id' => $accountTitleId,
             ],
         ]);
+    }
+
+    private function applyItemDimensions($query, ?int $departmentId, ?int $categoryId, ?int $accountTitleId): void
+    {
+        $query
+            ->when($categoryId, fn ($itemQuery) => $itemQuery->where('category_id', $categoryId))
+            ->when($accountTitleId, fn ($itemQuery) => $itemQuery->where('particular_id', $accountTitleId))
+            ->when($departmentId, fn ($itemQuery) => $itemQuery->whereHas(
+                'particular',
+                fn ($particularQuery) => $particularQuery->where('department_id', $departmentId)
+            ));
     }
 }

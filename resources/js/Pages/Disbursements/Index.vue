@@ -19,8 +19,10 @@ const props = defineProps({
     disbursements: Array,
     expenses: Array,
     budgetYears: Array,
+    fiscalPeriods: Array,
     availableYears: Array,
     defaultYear: [Number, String],
+    defaultFiscalPeriodId: [Number, String],
     userRole: String,
     userPermissions: Object,
 })
@@ -57,7 +59,7 @@ const formErrorMessages = computed(() => Object.values(form.errors || {}).flat()
 const offlineRows = ref([])
 
 const filterSearch = ref('')
-const filterYear = ref(props.defaultYear ? String(props.defaultYear) : 'all')
+const filterYear = ref(props.defaultFiscalPeriodId ? String(props.defaultFiscalPeriodId) : 'all')
 const filterMethod = ref('')
 const filterStatus = ref('')
 const linkedExpenseFilter = ref('all')
@@ -102,8 +104,7 @@ const filteredDisbursements = computed(() => {
 
         let matchYear = true
         if (filterYear.value && filterYear.value !== 'all') {
-            const dsbYear = d.date_encoded ? String(d.date_encoded).slice(0, 4) : (d.created_at ? String(d.created_at).slice(0, 4) : null)
-            matchYear = dsbYear ? String(dsbYear) === String(filterYear.value) : false
+            matchYear = String(d.expense?.budget_item?.budget?.id || '') === String(filterYear.value)
         }
 
         return matchSearch && matchMethod && matchStatus && matchYear
@@ -124,8 +125,7 @@ const filteredExpensesForModal = computed(() => {
 
     if (filterYear.value && filterYear.value !== 'all') {
         rows = rows.filter(e => {
-            const expYear = e.date_encoded ? String(e.date_encoded).slice(0, 4) : (e.created_at ? String(e.created_at).slice(0, 4) : null)
-            return String(expYear) === String(filterYear.value)
+            return String(e.budget_item?.budget?.id || '') === String(filterYear.value)
         })
     }
 
@@ -142,7 +142,7 @@ const filteredExpensesForModal = computed(() => {
 
 function clearFilters() {
     filterSearch.value = ''
-    filterYear.value = props.defaultYear ? String(props.defaultYear) : 'all'
+    filterYear.value = props.defaultFiscalPeriodId ? String(props.defaultFiscalPeriodId) : 'all'
     filterMethod.value = ''
     filterStatus.value = ''
 }
@@ -158,6 +158,16 @@ function clearLinkedExpenseSearch() {
 const selectedExpense = computed(() => {
     return props.expenses?.find(e => String(e.id) === String(form.expense_id)) || null
 })
+
+function expenseFiscalAttribution(expense) {
+    const item = expense?.budget_item
+    const budget = item?.budget
+    const allocationMonth = item?.allocation_month
+        ? new Date(`${String(item.allocation_month).slice(0, 10)}T00:00:00`).toLocaleDateString('en-PH', { month: 'long', year: 'numeric' })
+        : `Month ${item?.month || '?'}`
+
+    return item ? `${allocationMonth} · ${budget?.fiscal_year_label || 'Fiscal period unavailable'}` : 'Monthly allocation not linked'
+}
 
 function fmt(v) { return new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(v || 0) }
 function fmtDate(d) { return d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—' }
@@ -360,7 +370,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
         <input v-model="filterSearch" type="text" placeholder="Search DSB no, pay to, description, expense ref..." class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm w-full max-w-sm shadow-sm" />
         <select v-model="filterYear" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 min-w-[140px] shadow-sm">
             <option value="all">All Years</option>
-            <option v-for="y in (availableYears || [])" :key="y" :value="String(y)">Year {{ y }}</option>
+            <option v-for="period in (fiscalPeriods || [])" :key="period.id" :value="String(period.id)">{{ period.fiscal_year_label }}</option>
         </select>
         <select v-model="filterMethod" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 min-w-[150px] shadow-sm">
             <option value="">All Methods</option>
@@ -566,6 +576,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                                 <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Selected</p>
                                 <p class="mt-1 text-sm font-semibold text-slate-900">{{ selectedExpense.ref_no }} - {{ selectedExpense.description }}</p>
                                 <p class="text-xs text-slate-500">{{ selectedExpense.pay_to || 'No payee yet' }}</p>
+                                <p class="mt-1 text-xs font-medium text-amber-800">Charged to {{ expenseFiscalAttribution(selectedExpense) }}</p>
                             </div>
                             <span :class="['rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider', expensePaymentBadgeClass(selectedExpense)]">
                                 {{ expensePaymentLabel(selectedExpense) }}

@@ -5,24 +5,6 @@ import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3'
 import { ref, computed, watch } from 'vue'
 
 const perms = computed(() => usePage().props.permissions || {})
-const FULL_YEAR_SEMESTER = 'Full Year (Jan-Dec)'
-const SEMESTER_ORDER = {
-    [FULL_YEAR_SEMESTER]: 0,
-    '1st Semester': 1,
-    '2nd Semester': 2,
-    Summer: 3,
-}
-
-function normalizeSemester(value) {
-    const semester = String(value || '').trim()
-    const lower = semester.toLowerCase()
-
-    if (!semester || lower === 'full year' || lower === 'full year (jan-dec)' || lower === 'full year (jan - dec)' || lower === 'full year (jan–dec)' || lower === 'full year (jan – dec)') {
-        return FULL_YEAR_SEMESTER
-    }
-
-    return semester
-}
 
 const props = defineProps({
     budget: Object,
@@ -37,6 +19,7 @@ const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
 ]
+const fiscalMonths = computed(() => props.budget.fiscal_months || [])
 
 const showItemModal = ref(false)
 const showImportModal = ref(false)
@@ -51,7 +34,7 @@ const itemForm = useForm({
     category_id: '',
     department_id: '',
     particular_id: '',
-    month: 1,
+    allocation_month: '',
     appropriation: 0,
 })
 
@@ -99,42 +82,17 @@ watch(() => itemForm.department_id, () => {
 })
 
 // Filters
-const selectedYear = ref(props.budget.year)
-const selectedSemester = ref(normalizeSemester(props.budget.semester))
+const selectedBudgetId = ref(props.budget.id)
 
 watch(() => props.budget, (newBudget) => {
     if (newBudget) {
-        selectedYear.value = newBudget.year
-        selectedSemester.value = normalizeSemester(newBudget.semester)
+        selectedBudgetId.value = newBudget.id
     }
 }, { immediate: true })
 
-const semestersForYear = computed(() => {
-    if (!props.allBudgets) return []
-    return props.allBudgets
-        .filter(b => Number(b.year) === Number(selectedYear.value))
-        .map(b => normalizeSemester(b.semester))
-        .filter(Boolean)
-        .filter((semester, idx, arr) => arr.indexOf(semester) === idx)
-        .sort((a, b) => (SEMESTER_ORDER[a] ?? 99) - (SEMESTER_ORDER[b] ?? 99))
-})
-
 function applyFilter() {
-    const matchingBudgets = (props.allBudgets || []).filter(b =>
-        Number(b.year) === Number(selectedYear.value)
-    )
-    if (matchingBudgets.length === 0) return
-
-    let match = matchingBudgets.find(b => normalizeSemester(b.semester) === normalizeSemester(selectedSemester.value))
-    if (!match) {
-        match = matchingBudgets[0]
-        if (match) {
-            selectedSemester.value = normalizeSemester(match.semester)
-        }
-    }
-
-    if (match && match.id !== props.budget.id) {
-        router.get(`/annual-budgets/${match.id}`)
+    if (Number(selectedBudgetId.value) !== Number(props.budget.id)) {
+        router.get(`/annual-budgets/${selectedBudgetId.value}`)
     }
 }
 
@@ -143,7 +101,7 @@ function fmt(v) { return new Intl.NumberFormat('en-PH', { minimumFractionDigits:
 const filteredItems = computed(() => {
     const items = props.budget.items || []
     return items.filter((item) => {
-        const matchesMonth = !selectedMonthFilter.value || (item.month || 1) === parseInt(selectedMonthFilter.value)
+        const matchesMonth = !selectedMonthFilter.value || String(item.allocation_month || '').slice(0, 10) === selectedMonthFilter.value
         const term = searchTerm.value.trim().toLowerCase()
         const matchesSearch = !term || [
             item.ref_no,
@@ -185,7 +143,7 @@ const utilRate = computed(() => grandTotals.value.appropriation > 0 ? ((grandTot
 function openAddItem() {
     itemForm.reset()
     itemForm.clearErrors()
-    itemForm.month = 1
+    itemForm.allocation_month = fiscalMonths.value[0]?.value || ''
     editingItem.value = null
     showItemModal.value = true
 }
@@ -195,7 +153,7 @@ function openEditItem(item) {
     itemForm.category_id = item.category_id
     itemForm.department_id = Number(item.particular?.department_id || item.particular?.department?.id || 0) || ''
     itemForm.particular_id = item.particular_id
-    itemForm.month = item.month || 1
+    itemForm.allocation_month = String(item.allocation_month || '').slice(0, 10)
     itemForm.appropriation = item.appropriation
     editingItem.value = item.id
     showItemModal.value = true
@@ -249,7 +207,7 @@ function catBalancePercent(group) {
 </script>
 
 <template>
-<Head :title="`FY ${budget.year} Budget Allocations`" />
+<Head :title="`${budget.fiscal_year_label} Budget Allocations`" />
 <AppLayout>
     <!-- Back + Title -->
     <div class="flex items-center justify-between mb-4">
@@ -264,7 +222,7 @@ function catBalancePercent(group) {
                         {{ budget.ref_no || ('AB-' + budget.year + '-000' + budget.id) }}
                     </span>
                 </div>
-                <p class="text-sm text-gray-500">Fiscal Year {{ budget.year }}{{ normalizeSemester(budget.semester) ? ' — ' + normalizeSemester(budget.semester) : '' }}</p>
+                <p class="text-sm text-gray-500">{{ budget.fiscal_year_label }} — {{ budget.period_label }}</p>
             </div>
         </div>
         <div class="flex items-center gap-2">
@@ -277,20 +235,20 @@ function catBalancePercent(group) {
         </div>
     </div>
 
-    <!-- Filters: Year, Month, Semester -->
+    <!-- Filters: Fiscal period and allocation month -->
     <div class="flex flex-wrap items-end gap-3 mb-6 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
         <div class="flex items-center gap-2">
             <label class="text-xs font-bold uppercase text-gray-500">Fiscal Year:</label>
-            <select v-model.number="selectedYear" @change="selectedSemester = ''; applyFilter()" class="rounded-md border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-[100px]">
-                <option v-for="y in availableYears" :key="y" :value="y">{{ y }}</option>
+            <select v-model.number="selectedBudgetId" @change="applyFilter" class="rounded-md border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-[170px]">
+                <option v-for="period in allBudgets" :key="period.id" :value="period.id">{{ period.fiscal_year_label }}</option>
             </select>
         </div>
 
         <div class="flex items-center gap-2">
             <label class="text-xs font-bold uppercase text-gray-500">Budget Month:</label>
             <select v-model="selectedMonthFilter" class="rounded-md border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-[140px]">
-                <option value="">All Months (Jan-Dec)</option>
-                <option v-for="(mName, idx) in monthNames" :key="idx+1" :value="idx+1">{{ mName }}</option>
+                <option value="">All Fiscal Months</option>
+                <option v-for="month in fiscalMonths" :key="month.value" :value="month.value">{{ month.label }}</option>
             </select>
         </div>
 
@@ -302,14 +260,6 @@ function catBalancePercent(group) {
                 class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm bg-white"
                 placeholder="Search account title, responsibility center, or ref no..."
             />
-        </div>
-
-        <div v-if="semestersForYear.length" class="flex items-center gap-2">
-            <label class="text-xs font-bold uppercase text-gray-500">Semester:</label>
-            <select v-model="selectedSemester" @change="applyFilter()" class="rounded-md border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-[120px]">
-                <option value="">All</option>
-                <option v-for="s in semestersForYear" :key="s" :value="s">{{ s }}</option>
-            </select>
         </div>
 
         <button v-if="perms.canManageBudget" @click="openAddItem" class="ml-auto rounded-lg bg-navy-dark px-4 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
@@ -348,7 +298,7 @@ function catBalancePercent(group) {
                             </span>
                         </td>
                         <td class="px-4 py-3 font-semibold text-gray-700 text-xs align-middle">
-                            {{ monthNames[(item.month || 1) - 1] }}
+                            {{ item.allocation_month_label || monthNames[(item.month || 1) - 1] }}
                         </td>
                         <td class="px-4 py-3 text-gray-700 text-xs align-middle">
                             {{ item.particular?.department?.name || '—' }}
@@ -422,10 +372,10 @@ function catBalancePercent(group) {
             <div class="grid gap-4 sm:grid-cols-2">
                 <div class="sm:col-span-2">
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Budget Month</label>
-                    <select v-model.number="itemForm.month" :class="itemForm.errors.month ? 'border-red-400' : 'border-gray-300'" class="w-full rounded-lg border px-3 py-2.5 text-sm" required>
-                        <option v-for="(mName, idx) in monthNames" :key="idx+1" :value="idx+1">{{ mName }} (Month {{ idx+1 }})</option>
+                    <select v-model="itemForm.allocation_month" :class="itemForm.errors.allocation_month ? 'border-red-400' : 'border-gray-300'" class="w-full rounded-lg border px-3 py-2.5 text-sm" required>
+                        <option v-for="month in fiscalMonths" :key="month.value" :value="month.value">{{ month.label }}</option>
                     </select>
-                    <p v-if="itemForm.errors.month" class="mt-1 text-xs text-red-600">{{ itemForm.errors.month }}</p>
+                    <p v-if="itemForm.errors.allocation_month" class="mt-1 text-xs text-red-600">{{ itemForm.errors.allocation_month }}</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Budget Category</label>
@@ -473,10 +423,10 @@ function catBalancePercent(group) {
                 <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
                     <p class="font-semibold text-slate-900 mb-2">Required columns</p>
                     <p class="text-xs leading-6">
-                        <span class="font-semibold">month</span>, <span class="font-semibold">budget_category</span>, <span class="font-semibold">responsibility_center</span>, <span class="font-semibold">account_title</span>, <span class="font-semibold">appropriation</span>
+                        <span class="font-semibold">allocation_month</span> (YYYY-MM), <span class="font-semibold">budget_category</span>, <span class="font-semibold">responsibility_center</span>, <span class="font-semibold">account_title</span>, <span class="font-semibold">appropriation</span>
                     </p>
                     <p class="mt-2 text-xs leading-6">
-                    Optional columns: <span class="font-semibold">fiscal_year</span>, <span class="font-semibold">semester</span>, <span class="font-semibold">account_code</span>, <span class="font-semibold">description</span>. Expenditure is recalculated automatically and ignored on import.
+                    Optional columns: <span class="font-semibold">month</span> (legacy), <span class="font-semibold">fiscal_year_label</span>, <span class="font-semibold">fiscal_start_date</span>, <span class="font-semibold">fiscal_end_date</span>, <span class="font-semibold">account_code</span>, <span class="font-semibold">description</span>. Expenditure is recalculated automatically and ignored on import.
                 </p>
             </div>
                 <div>

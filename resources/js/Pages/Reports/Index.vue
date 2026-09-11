@@ -13,11 +13,12 @@ const props = defineProps({
     yearEndUnusedBalances: Array,
     selectedMonthLabel: String,
     availableYears: Array,
+    fiscalPeriods: Array,
     filters: Object,
 })
 
-const filterYear = ref(props.filters.year || new Date().getFullYear())
-const filterMonth = ref(props.filters.month || '')
+const filterYear = ref(props.filters.fiscal_period_id || '')
+const filterMonth = ref(props.filters.allocation_month || '')
 const startDate = ref(props.filters.start_date || '')
 const endDate = ref(props.filters.end_date || '')
 const filterDepartment = ref(props.filters.department_id || '')
@@ -27,29 +28,10 @@ const breakdownOpen = ref(false)
 const breakdownYear = ref(null)
 const breakdownSearch = ref('')
 const breakdownMonthFilter = ref('')
-const breakdownSemesterFilter = ref('')
+const activeFiscalPeriod = computed(() => asArray(props.fiscalPeriods).find(period => Number(period.id) === Number(filterYear.value)))
+const fiscalMonths = computed(() => activeFiscalPeriod.value?.months || [])
 
-const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const PESO = '₱'
-const FULL_YEAR_SEMESTER = 'Full Year (Jan-Dec)'
-const SEMESTER_ORDER = {
-    [FULL_YEAR_SEMESTER]: 0,
-    '1st Semester': 1,
-    '2nd Semester': 2,
-    Summer: 3,
-}
-
-function normalizeSemester(value) {
-    const semester = String(value || '').trim()
-    const lower = semester.toLowerCase()
-
-    if (!semester || lower === 'full year' || lower === 'full year (jan-dec)' || lower === 'full year (jan - dec)' || lower === 'full year (jan – dec)' || lower === 'full year (jan – dec)') {
-        return FULL_YEAR_SEMESTER
-    }
-
-    return semester
-}
-
 function fmt(v) { return new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(v || 0) }
 
 function asArray(value) {
@@ -62,28 +44,24 @@ const yearlyBudgetPerformance = computed(() => {
     return asArray(props.budgetPerformanceByYear)
         .map((row) => ({
             ...row,
-            records: (asArray(props.budgets).filter((budget) => Number(budget.year) === Number(row.year)).map((budget) => ({
+            records: (asArray(props.budgets).filter((budget) => Number(budget.id) === Number(row.id)).map((budget) => ({
                 id: budget.id,
                 ref_no: budget.ref_no || `AB-${budget.year}-${String(budget.id).padStart(4, '0')}`,
-                semester: normalizeSemester(budget.semester),
+                semester: budget.fiscal_year_label,
                 appropriation: Number((budget.items || []).reduce((sum, item) => sum + Number(item.appropriation || 0), 0)),
                 expenditure: Number((budget.items || []).reduce((sum, item) => sum + Number(item.expenditure || 0), 0)),
             }))),
-        }))
-        .map((row) => ({
-            ...row,
-            records: row.records.sort((a, b) => (SEMESTER_ORDER[a.semester] ?? 99) - (SEMESTER_ORDER[b.semester] ?? 99)),
         }))
         .sort((a, b) => b.year - a.year)
 })
 
 const selectedYearBreakdown = computed(() => {
-    const year = Number(breakdownYear.value)
-    if (!year) return []
+    const periodId = Number(breakdownYear.value)
+    if (!periodId) return []
 
     const search = breakdownSearch.value.trim().toLowerCase()
     return asArray(props.budgets)
-        .filter((budget) => Number(budget.year) === year)
+        .filter((budget) => Number(budget.id) === periodId)
         .map((budget) => {
             const appropriation = Number((budget.items || []).reduce((sum, item) => sum + Number(item.appropriation || 0), 0))
             const expenditure = Number((budget.items || []).reduce((sum, item) => sum + Number(item.expenditure || 0), 0))
@@ -92,7 +70,7 @@ const selectedYearBreakdown = computed(() => {
             return {
                 id: budget.id,
                 ref_no: budget.ref_no || `AB-${budget.year}-${String(budget.id).padStart(4, '0')}`,
-                semester: normalizeSemester(budget.semester),
+                semester: budget.fiscal_year_label,
                 appropriation,
                 expenditure,
                 balance: appropriation - expenditure,
@@ -125,24 +103,22 @@ const selectedYearBreakdown = computed(() => {
 })
 
 const selectedYearItems = computed(() => {
-    const year = Number(breakdownYear.value)
-    if (!year) return []
+    const periodId = Number(breakdownYear.value)
+    if (!periodId) return []
 
     const search = breakdownSearch.value.trim().toLowerCase()
-    const monthFilter = breakdownMonthFilter.value ? Number(breakdownMonthFilter.value) : null
-    const semesterFilter = normalizeSemester(breakdownSemesterFilter.value)
+    const monthFilter = breakdownMonthFilter.value || null
 
     return asArray(props.budgets)
-        .filter((budget) => Number(budget.year) === year)
-        .filter((budget) => !semesterFilter || normalizeSemester(budget.semester) === semesterFilter)
+        .filter((budget) => Number(budget.id) === periodId)
         .flatMap((budget) => {
             const refNo = budget.ref_no || `AB-${budget.year}-${String(budget.id).padStart(4, '0')}`
-            const semester = normalizeSemester(budget.semester)
+            const semester = budget.fiscal_year_label
 
             return asArray(budget.items)
                 .map((item) => {
-                    const monthNumber = Number(item.month || 0)
-                    const monthLabel = monthNumber >= 1 && monthNumber <= monthNames.length ? monthNames[monthNumber - 1] : 'N/A'
+                    const monthNumber = String(item.allocation_month || '').slice(0, 10)
+                    const monthLabel = item.allocation_month_label || monthNumber
                     const category = item.category.name || 'Uncategorized'
                     const department = item.particular.department.name || 'No RC'
                     const account = item.particular.particular || 'Untitled'
@@ -172,9 +148,7 @@ const selectedYearItems = computed(() => {
                 })
         })
         .sort((a, b) => {
-            const semesterDiff = (SEMESTER_ORDER[a.semester] ?? 99) - (SEMESTER_ORDER[b.semester] ?? 99)
-            if (semesterDiff !== 0) return semesterDiff
-            if (a.monthNumber !== b.monthNumber) return a.monthNumber - b.monthNumber
+            if (a.monthNumber !== b.monthNumber) return String(a.monthNumber).localeCompare(String(b.monthNumber))
             return a.account.localeCompare(b.account)
         })
 })
@@ -197,14 +171,13 @@ function openBreakdown(year) {
     breakdownYear.value = year
     breakdownSearch.value = ''
     breakdownMonthFilter.value = ''
-    breakdownSemesterFilter.value = ''
     breakdownOpen.value = true
 }
 
 function applyFilters() {
     router.get('/reports', {
-        year: filterYear.value,
-        month: filterMonth.value,
+        fiscal_period_id: filterYear.value,
+        allocation_month: filterMonth.value,
         start_date: startDate.value,
         end_date: endDate.value,
         department_id: filterDepartment.value,
@@ -225,7 +198,7 @@ function applyDateFilter() {
 }
 
 function clearFilters() {
-    filterYear.value = new Date().getFullYear()
+    filterYear.value = props.fiscalPeriods?.[0]?.id || ''
     filterMonth.value = ''
     startDate.value = ''
     endDate.value = ''
@@ -237,7 +210,7 @@ function clearFilters() {
 
 const yearEndSummary = computed(() => {
     return asArray(props.yearEndUnusedBalances)
-        .sort((a, b) => Number(a.month || 0) - Number(b.month || 0))
+        .sort((a, b) => String(a.allocation_month || '').localeCompare(String(b.allocation_month || '')))
 })
 
 const yearEndSummaryTotals = computed(() => {
@@ -266,15 +239,15 @@ const yearEndSummaryTotals = computed(() => {
         <div class="grid gap-3 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6">
             <div>
                 <label class="block text-[11px] font-semibold text-gray-600 mb-1">Fiscal Year</label>
-                <select v-model="filterYear" @change="applyFilters" class="w-full rounded-md border-gray-300 text-xs py-1.5 bg-white">
-                    <option v-for="y in (asArray(availableYears).length ? asArray(availableYears) : [2026, 2025, 2024])" :key="y" :value="y">{{ y }}</option>
+                <select v-model="filterYear" @change="filterMonth = ''; applyFilters()" class="w-full rounded-md border-gray-300 text-xs py-1.5 bg-white">
+                    <option v-for="period in asArray(fiscalPeriods)" :key="period.id" :value="period.id">{{ period.label }}</option>
                 </select>
             </div>
             <div>
                 <label class="block text-[11px] font-semibold text-gray-600 mb-1">Month</label>
                 <select v-model="filterMonth" @change="applyMonthFilter" class="w-full rounded-md border-gray-300 text-xs py-1.5 bg-white">
-                    <option value="">All Months</option>
-                    <option v-for="(mName, idx) in monthNames" :key="idx+1" :value="idx+1">{{ mName }}</option>
+                    <option value="">All Fiscal Months</option>
+                    <option v-for="month in fiscalMonths" :key="month.value" :value="month.value">{{ month.label }}</option>
                 </select>
             </div>
             <div>
@@ -309,7 +282,7 @@ const yearEndSummaryTotals = computed(() => {
         <div class="px-5 py-3 border-b bg-gray-50 flex flex-wrap items-center justify-between gap-2">
             <div>
                 <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wider">Appropriation and Expenditure for Selected Month</h3>
-                <p class="text-xs text-gray-500 mt-1">FY {{ filterYear }} - {{ selectedMonthPerformance.month_label }} - {{ selectedDateRangeLabel }}</p>
+                <p class="text-xs text-gray-500 mt-1">{{ activeFiscalPeriod?.label }} - {{ selectedMonthPerformance.month_label }} - {{ selectedDateRangeLabel }}</p>
             </div>
         </div>
         <div class="grid gap-4 p-5 md:grid-cols-3">
@@ -378,9 +351,7 @@ const yearEndSummaryTotals = computed(() => {
         <div class="px-5 py-3 border-b bg-gray-50 flex flex-wrap items-center justify-between gap-2">
             <div>
                 <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wider">Budget Performance by Fiscal Year</h3>
-                <p class="text-xs text-gray-500 mt-1">
-                    Totals are grouped by year. Semester, summer, and full-year records remain separate on the Annual Budget page.
-                </p>
+                <p class="text-xs text-gray-500 mt-1">Totals are grouped by complete configured fiscal periods.</p>
             </div>
         </div>
         <div class="overflow-x-auto">
@@ -395,14 +366,14 @@ const yearEndSummaryTotals = computed(() => {
                 </tr>
             </thead>
             <tbody>
-                <tr v-for="row in yearlyBudgetPerformance" :key="row.year" class="border-b hover:bg-gray-50/50 transition-colors">
+                <tr v-for="row in yearlyBudgetPerformance" :key="row.id" class="border-b hover:bg-gray-50/50 transition-colors">
                     <td class="px-5 py-3 font-bold text-gray-900">
                         <button
                             type="button"
-                            @click="openBreakdown(row.year)"
+                            @click="openBreakdown(row.id)"
                             class="text-navy hover:text-mustard underline decoration-dotted underline-offset-2"
                         >
-                            {{ row.year }}
+                            {{ row.label || `FY ${row.year}` }}
                         </button>
                     </td>
                     <td class="px-5 py-3 text-sm text-gray-700">
@@ -440,7 +411,7 @@ const yearEndSummaryTotals = computed(() => {
     <Modal
         :show="breakdownOpen"
         title="Fiscal Year Breakdown"
-        :subtitle="breakdownYear ? `Click a year to inspect every allocation row for FY ${breakdownYear}.` : ''"
+        :subtitle="breakdownYear ? `Inspect every allocation row in the selected fiscal period.` : ''"
         maxWidth="full"
         @close="breakdownOpen = false"
     >
@@ -458,23 +429,13 @@ const yearEndSummaryTotals = computed(() => {
                 <div class="min-w-[170px]">
                     <label class="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Month</label>
                     <select v-model="breakdownMonthFilter" class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white">
-                        <option value="">All Months</option>
-                        <option v-for="(month, idx) in monthNames" :key="idx + 1" :value="idx + 1">{{ month }}</option>
-                    </select>
-                </div>
-                <div class="min-w-[180px]">
-                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Semester</label>
-                    <select v-model="breakdownSemesterFilter" class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white">
-                        <option value="">All Semesters</option>
-                        <option value="Full Year (Jan-Dec)">Full Year (Jan-Dec)</option>
-                        <option value="1st Semester">1st Semester</option>
-                        <option value="2nd Semester">2nd Semester</option>
-                        <option value="Summer">Summer</option>
+                        <option value="">All Fiscal Months</option>
+                        <option v-for="month in (asArray(props.budgets).find(budget => Number(budget.id) === Number(breakdownYear))?.fiscal_months || [])" :key="month.value" :value="month.value">{{ month.label }}</option>
                     </select>
                 </div>
                 <div class="rounded-lg border border-gray-200 bg-slate-50 px-4 py-2">
-                    <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Year</p>
-                    <p class="text-lg font-extrabold text-navy-dark">{{ breakdownYear }}</p>
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Fiscal Period</p>
+                    <p class="text-lg font-extrabold text-navy-dark">{{ asArray(props.budgets).find(budget => Number(budget.id) === Number(breakdownYear))?.fiscal_year_label }}</p>
                 </div>
             </div>
 

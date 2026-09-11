@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\AuditTrail;
 use App\Models\AnnualBudget;
+use App\Models\AuditTrail;
 use App\Models\Disbursement;
 use App\Models\Expense;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
-use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -23,6 +23,7 @@ class DisbursementController extends Controller
         $disbursementQuery = Disbursement::with([
             'expense.category',
             'expense.particular',
+            'expense.budgetItem.budget',
             'preparedBy',
             'releasedBy',
             'submittedBy',
@@ -45,7 +46,7 @@ class DisbursementController extends Controller
         $pageItems = collect($disbursements->items());
         $yearsFromDsb = $yearsFromDsb->concat($pageItems->pluck('date_encoded')
             ->filter()
-            ->map(fn($d) => (int) date('Y', strtotime($d)))
+            ->map(fn ($d) => (int) date('Y', strtotime($d)))
             ->unique()
             ->values())->unique()->sortDesc()->values();
 
@@ -63,17 +64,24 @@ class DisbursementController extends Controller
 
         return Inertia::render('Disbursements/Index', [
             'disbursements' => $disbursements,
-            'expenses' => Expense::select(
-                'id',
-                'ref_no',
-                'description',
-                'amount',
-                'paid',
-                'date_encoded',
-                'created_at',
-                'status'
-            )->latest('date_encoded')->get(),
+            'expenses' => Expense::with('budgetItem.budget:id,year,start_date,end_date')
+                ->select(
+                    'id',
+                    'ref_no',
+                    'description',
+                    'budget_item_id',
+                    'amount',
+                    'paid',
+                    'date_encoded',
+                    'created_at',
+                    'status'
+                )->latest('date_encoded')->get(),
             'budgetYears' => AnnualBudget::pluck('year')->values()->toArray(),
+            'fiscalPeriods' => AnnualBudget::query()->orderByDesc('start_date')->get(['id', 'year', 'start_date', 'end_date', 'ref_no']),
+            'defaultFiscalPeriodId' => AnnualBudget::query()
+                ->whereDate('start_date', '<=', now())
+                ->whereDate('end_date', '>=', now())
+                ->value('id') ?? AnnualBudget::query()->orderByDesc('start_date')->value('id'),
             'availableYears' => $availableYears,
             'defaultYear' => $defaultYear,
             'userRole' => auth()->user()?->role,
@@ -107,6 +115,29 @@ class DisbursementController extends Controller
         }
     }
 
+    protected function ensureDatesWithinLinkedFiscalPeriod(Expense $expense, string $disbursementDate): void
+    {
+        $budget = $expense->loadMissing('budgetItem.budget')->budgetItem?->budget;
+
+        if (! $budget) {
+            throw ValidationException::withMessages([
+                'expense_id' => 'The selected expense is not linked to a monthly budget allocation.',
+            ]);
+        }
+
+        if (! $budget->containsDate($expense->date_encoded)) {
+            throw ValidationException::withMessages([
+                'expense_id' => "The expense date falls outside {$budget->fiscal_year_label} ({$budget->period_label}).",
+            ]);
+        }
+
+        if (! $budget->containsDate($disbursementDate)) {
+            throw ValidationException::withMessages([
+                'date_encoded' => "The disbursement date must fall within {$budget->fiscal_year_label} ({$budget->period_label}).",
+            ]);
+        }
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -117,7 +148,7 @@ class DisbursementController extends Controller
             'amount' => 'required|numeric|min:0',
             'method' => 'required|in:check,cash,bank_transfer',
             'date_encoded' => 'required|date',
-            'status' => 'required|in:' . implode(',', $this->allowedStatuses()),
+            'status' => 'required|in:'.implode(',', $this->allowedStatuses()),
             'notes' => 'nullable|string',
             'remarks' => 'nullable|string',
         ], [
@@ -127,24 +158,11 @@ class DisbursementController extends Controller
 
         $selectedExpense = Expense::findOrFail($validated['expense_id']);
         $this->ensureApprovedLinkedExpense($selectedExpense);
-        $expenseYear = (int) date('Y', strtotime($selectedExpense->date_encoded));
-        $releaseYear = (int) date('Y', strtotime($validated['date_encoded']));
-
-        if (!AnnualBudget::where('year', $expenseYear)->exists()) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'expense_id' => "No annual budget exists for FY {$expenseYear}. Please create the annual budget first.",
-            ]);
-        }
-
-        if (!AnnualBudget::where('year', $releaseYear)->exists()) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'date_encoded' => "No annual budget exists for FY {$releaseYear}. Please create the annual budget first.",
-            ]);
-        }
+        $this->ensureDatesWithinLinkedFiscalPeriod($selectedExpense, $validated['date_encoded']);
 
         $lastDsb = Disbursement::latest('id')->first();
         $nextNum = $lastDsb ? intval(substr($lastDsb->disbursement_no, 3)) + 1 : 1;
-        $validated['disbursement_no'] = 'DSB' . str_pad($nextNum, 8, '0', STR_PAD_LEFT);
+        $validated['disbursement_no'] = 'DSB'.str_pad($nextNum, 8, '0', STR_PAD_LEFT);
         $validated['prepared_by_id'] = auth()->id();
 
         if ($request->header('X-Offline-Sync')) {
@@ -182,7 +200,7 @@ class DisbursementController extends Controller
     {
         // Once approved or posted, only the Head of Finance may modify the record —
         // otherwise a Cashier could revert a finalized disbursement back to draft.
-        if (in_array($disbursement->status, ['approved', 'posted']) && !auth()->user()?->canApproveDisbursements()) {
+        if (in_array($disbursement->status, ['approved', 'posted']) && ! auth()->user()?->canApproveDisbursements()) {
             abort(403, 'Only the Head of Finance can modify an approved or posted disbursement.');
         }
 
@@ -196,7 +214,7 @@ class DisbursementController extends Controller
             'amount' => 'required|numeric|min:0',
             'method' => 'required|in:check,cash,bank_transfer',
             'date_encoded' => 'required|date',
-            'status' => 'required|in:' . implode(',', $this->allowedStatuses()),
+            'status' => 'required|in:'.implode(',', $this->allowedStatuses()),
             'notes' => 'nullable|string',
             'remarks' => 'nullable|string',
         ], [
@@ -215,20 +233,7 @@ class DisbursementController extends Controller
 
         $selectedExpense = Expense::findOrFail($validated['expense_id']);
         $this->ensureApprovedLinkedExpense($selectedExpense);
-        $expenseYear = (int) date('Y', strtotime($selectedExpense->date_encoded));
-        $releaseYear = (int) date('Y', strtotime($validated['date_encoded']));
-
-        if (!AnnualBudget::where('year', $expenseYear)->exists()) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'expense_id' => "No annual budget exists for FY {$expenseYear}. Please create the annual budget first.",
-            ]);
-        }
-
-        if (!AnnualBudget::where('year', $releaseYear)->exists()) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'date_encoded' => "No annual budget exists for FY {$releaseYear}. Please create the annual budget first.",
-            ]);
-        }
+        $this->ensureDatesWithinLinkedFiscalPeriod($selectedExpense, $validated['date_encoded']);
 
         // Same escalation as store(): a Cashier saving release details goes straight to for_approval
         if (auth()->user()?->isCashier() && in_array($validated['status'], ['for_release', 'for_approval'])) {
@@ -263,7 +268,7 @@ class DisbursementController extends Controller
             'remarks' => 'nullable|string',
         ]);
 
-        if (!auth()->user()?->canManageDisbursements()) {
+        if (! auth()->user()?->canManageDisbursements()) {
             abort(403, 'You are not allowed to submit disbursements for approval.');
         }
 
@@ -285,7 +290,7 @@ class DisbursementController extends Controller
             'remarks' => 'nullable|string',
         ]);
 
-        if (!auth()->user()?->canApproveDisbursements()) {
+        if (! auth()->user()?->canApproveDisbursements()) {
             abort(403, 'Only the Head of Finance can approve disbursements.');
         }
 
@@ -303,7 +308,7 @@ class DisbursementController extends Controller
 
     public function postDisbursement(Request $request, Disbursement $disbursement)
     {
-        if (!auth()->user()?->canPostDisbursements()) {
+        if (! auth()->user()?->canPostDisbursements()) {
             abort(403, 'Only the Head of Finance can post disbursements.');
         }
 
@@ -334,7 +339,7 @@ class DisbursementController extends Controller
             'remarks' => 'required|string|max:500',
         ]);
 
-        if (!auth()->user()?->canApproveDisbursements()) {
+        if (! auth()->user()?->canApproveDisbursements()) {
             abort(403, 'Only the Head of Finance can reject disbursements.');
         }
 
@@ -357,7 +362,7 @@ class DisbursementController extends Controller
             'remarks' => 'required|string|max:500',
         ]);
 
-        if (!auth()->user()?->canApproveDisbursements()) {
+        if (! auth()->user()?->canApproveDisbursements()) {
             abort(403, 'Only the Head of Finance can return disbursements for revision.');
         }
 
@@ -374,7 +379,7 @@ class DisbursementController extends Controller
     public function destroy(Disbursement $disbursement)
     {
         // Deleting a finalized disbursement reverses official expenditure — Head of Finance only.
-        if (in_array($disbursement->status, ['approved', 'posted']) && !auth()->user()?->canApproveDisbursements()) {
+        if (in_array($disbursement->status, ['approved', 'posted']) && ! auth()->user()?->canApproveDisbursements()) {
             abort(403, 'Only the Head of Finance can delete an approved or posted disbursement.');
         }
 
@@ -392,10 +397,10 @@ class DisbursementController extends Controller
 
     public function exportCsv()
     {
-        $fileName = 'disbursements-export-' . now()->format('Y-m-d_His') . '.csv';
+        $fileName = 'disbursements-export-'.now()->format('Y-m-d_His').'.csv';
         $headers = [
             'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+            'Content-Disposition' => 'attachment; filename="'.$fileName.'"',
         ];
 
         $callback = function () {
@@ -439,16 +444,18 @@ class DisbursementController extends Controller
         }
 
         $header = fgetcsv($handle);
-        if (!$header) {
+        if (! $header) {
             fclose($handle);
+
             return back()->withErrors(['csv_file' => 'CSV file is empty.']);
         }
 
         $header = array_map(fn ($value) => trim((string) $value), $header);
         $required = ['disbursement_no', 'expense_ref_no', 'description', 'source', 'pay_to', 'amount', 'method', 'date_encoded', 'status', 'notes', 'remarks'];
         foreach ($required as $column) {
-            if (!in_array($column, $header, true)) {
+            if (! in_array($column, $header, true)) {
                 fclose($handle);
+
                 return back()->withErrors(['csv_file' => "Missing required column: {$column}"]);
             }
         }
@@ -480,21 +487,24 @@ class DisbursementController extends Controller
 
         foreach ($rows as $i => $row) {
             if ($row['disbursement_no'] === '' || $row['expense_ref_no'] === '' || $row['description'] === '' || $row['source'] === '' || $row['pay_to'] === '' || $row['date_encoded'] === '') {
-                return back()->withErrors(['csv_file' => 'Row ' . ($i + 2) . ' is missing required data.']);
+                return back()->withErrors(['csv_file' => 'Row '.($i + 2).' is missing required data.']);
             }
 
-            if (!in_array($row['status'], $allowedStatuses, true)) {
-                return back()->withErrors(['csv_file' => 'Row ' . ($i + 2) . ' has an invalid status.']);
+            if (! in_array($row['status'], $allowedStatuses, true)) {
+                return back()->withErrors(['csv_file' => 'Row '.($i + 2).' has an invalid status.']);
             }
 
             $expense = Expense::where('ref_no', $row['expense_ref_no'])->where('status', 'approved')->first();
             if (! $expense) {
-                return back()->withErrors(['csv_file' => "Row " . ($i + 2) . " requires an approved expense with ref_no {$row['expense_ref_no']} before importing disbursements."]);
+                return back()->withErrors(['csv_file' => 'Row '.($i + 2)." requires an approved expense with ref_no {$row['expense_ref_no']} before importing disbursements."]);
             }
 
-            $year = (int) date('Y', strtotime($expense->date_encoded ?: $row['date_encoded']));
-            if (!AnnualBudget::where('year', $year)->exists()) {
-                return back()->withErrors(['csv_file' => "Annual budget for FY {$year} is required before importing disbursements."]);
+            try {
+                $this->ensureDatesWithinLinkedFiscalPeriod($expense, $row['date_encoded']);
+            } catch (ValidationException $exception) {
+                return back()->withErrors([
+                    'csv_file' => 'Row '.($i + 2).' is outside the linked fiscal period: '.$exception->validator->errors()->first(),
+                ]);
             }
         }
 
@@ -509,7 +519,7 @@ class DisbursementController extends Controller
                 }
 
                 $disbursement = Disbursement::firstOrNew(['disbursement_no' => $row['disbursement_no']]);
-                $isNew = !$disbursement->exists;
+                $isNew = ! $disbursement->exists;
                 $disbursement->disbursement_no = $row['disbursement_no'];
                 $disbursement->expense_id = $expense->id;
                 $disbursement->description = $row['description'];
@@ -538,7 +548,9 @@ class DisbursementController extends Controller
 
     protected function syncExpensePaidAmount(?int $expenseId)
     {
-        if (!$expenseId) return;
+        if (! $expenseId) {
+            return;
+        }
 
         $expense = Expense::find($expenseId);
         if ($expense) {

@@ -7,6 +7,7 @@ import YearlyCombinedChart from '@/Components/YearlyCombinedChart.vue'
 
 const props = defineProps({
     budgets: Array,
+    fiscalPeriods: Array,
     availableYears: Array,
     departments: Array,
     categories: Array,
@@ -23,25 +24,24 @@ const viewMode = ref('monthly') // 'monthly' or 'annual'
 const hoveredAnnualPoint = ref(null)
 
 // Active Filter States
-const selectedYear = ref(props.filters?.year || 2026)
-const selectedMonth = ref(props.filters?.month || '')
+const selectedFiscalPeriod = ref(props.filters?.fiscal_period_id || '')
+const selectedMonth = ref(props.filters?.allocation_month || '')
 const startDate = ref(props.filters?.start_date || '')
 const endDate = ref(props.filters?.end_date || '')
 const selectedDepartment = ref(props.filters?.department_id || '')
 const selectedCategory = ref(props.filters?.category_id || '')
 const selectedAccountTitle = ref(props.filters?.account_title_id || '')
 
-const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-]
+const activeFiscalPeriod = computed(() => (props.fiscalPeriods || props.budgets || [])
+    .find(period => Number(period.id) === Number(selectedFiscalPeriod.value)))
+const fiscalMonths = computed(() => activeFiscalPeriod.value?.fiscal_months || [])
 
 function fmt(v) { return new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0) }
 
 function applyFilters() {
     router.get('/', {
-        year: selectedYear.value,
-        month: selectedMonth.value,
+        fiscal_period_id: selectedFiscalPeriod.value,
+        allocation_month: selectedMonth.value,
         start_date: startDate.value,
         end_date: endDate.value,
         department_id: selectedDepartment.value,
@@ -51,7 +51,7 @@ function applyFilters() {
 }
 
 function resetFilters() {
-    selectedYear.value = 2026
+    selectedFiscalPeriod.value = props.fiscalPeriods?.[0]?.id || ''
     selectedMonth.value = ''
     startDate.value = ''
     endDate.value = ''
@@ -135,7 +135,7 @@ const monthlyCombinedItems = computed(() => {
     return (props.monthlyBreakdown || []).map(m => ({
         ...m,
         label: m.month,
-        tooltipTitle: `${m.month} ${selectedYear.value}`,
+        tooltipTitle: m.month,
         appropriation: Number(m.appropriation || 0),
         expenditure: Number(m.expenditure || 0),
         expense: Number(m.expenditure || 0),
@@ -231,15 +231,15 @@ const barColors = ['#1e293b', '#d4a843', '#2563eb', '#059669', '#7c3aed', '#db27
         <div class="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
             <div>
                 <label class="block text-[11px] font-bold text-gray-700 mb-1">Fiscal Year</label>
-                <select v-model="selectedYear" @change="applyFilters" class="w-full rounded-lg border-gray-300 text-xs py-2 bg-white focus:ring-navy focus:border-navy">
-                    <option v-for="yr in (availableYears || [2026, 2025, 2024])" :key="yr" :value="yr">FY {{ yr }}</option>
+                <select v-model="selectedFiscalPeriod" @change="selectedMonth = ''; applyFilters()" class="w-full rounded-lg border-gray-300 text-xs py-2 bg-white focus:ring-navy focus:border-navy">
+                    <option v-for="period in (fiscalPeriods || budgets || [])" :key="period.id" :value="period.id">{{ period.fiscal_year_label }}</option>
                 </select>
             </div>
             <div>
                 <label class="block text-[11px] font-bold text-gray-700 mb-1">Budget Month</label>
                 <select v-model="selectedMonth" @change="applyFilters" class="w-full rounded-lg border-gray-300 text-xs py-2 bg-white focus:ring-navy focus:border-navy">
-                    <option value="">All Months (Jan-Dec)</option>
-                    <option v-for="(mName, idx) in monthNames" :key="idx+1" :value="idx+1">{{ mName }}</option>
+                    <option value="">All Fiscal Months</option>
+                    <option v-for="month in fiscalMonths" :key="month.value" :value="month.value">{{ month.label }}</option>
                 </select>
             </div>
             <div>
@@ -284,7 +284,7 @@ const barColors = ['#1e293b', '#d4a843', '#2563eb', '#059669', '#7c3aed', '#db27
             <div class="p-3.5">
                 <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Annual Budget</p>
                 <p class="text-lg font-extrabold text-navy-dark mt-0.5">₱{{ fmt(stats?.annualBudget) }}</p>
-                <p class="text-[10px] text-gray-400 mt-1">FY {{ selectedYear }} Allocated</p>
+                <p class="text-[10px] text-gray-400 mt-1">{{ activeFiscalPeriod?.fiscal_year_label || 'No fiscal period' }} Allocated</p>
             </div>
         </div>
 
@@ -293,7 +293,7 @@ const barColors = ['#1e293b', '#d4a843', '#2563eb', '#059669', '#7c3aed', '#db27
             <div class="p-3.5">
                 <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Filtered Budget</p>
                 <p class="text-lg font-extrabold text-indigo-900 mt-0.5">₱{{ fmt(stats?.totalAppropriation) }}</p>
-                <p class="text-[10px] text-indigo-600 mt-1">{{ selectedMonth ? monthNames[selectedMonth - 1] : 'Jan - Dec Total' }}</p>
+                <p class="text-[10px] text-indigo-600 mt-1">{{ selectedMonth ? fiscalMonths.find(month => month.value === selectedMonth)?.label : 'Full Fiscal Period' }}</p>
             </div>
         </div>
 
@@ -341,7 +341,7 @@ const barColors = ['#1e293b', '#d4a843', '#2563eb', '#059669', '#7c3aed', '#db27
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-gray-100 mb-4">
             <div>
                 <h3 class="text-base font-bold text-navy-dark">
-                    {{ viewMode === 'monthly' ? `Monthly Performance Breakdown (Jan – Dec ${selectedYear})` : 'Multi-Year Comparative Performance Trends' }}
+                    {{ viewMode === 'monthly' ? `Monthly Performance Breakdown (${activeFiscalPeriod?.fiscal_year_label || 'Fiscal Period'})` : 'Multi-Year Comparative Performance Trends' }}
                 </h3>
                 <p class="text-xs text-gray-500">Comparing budget allocations vs actual posted expenditures</p>
             </div>

@@ -4,17 +4,16 @@ namespace App\Http\Controllers;
 
 use App\Models\AnnualBudget;
 use App\Models\AuditTrail;
-use App\Models\Disbursement;
-use App\Models\Expense;
 use App\Models\BudgetCategory;
 use App\Models\BudgetItem;
 use App\Models\BudgetParticular;
-use Illuminate\Validation\ValidationException;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Response;
-use Illuminate\Support\Facades\DB;
-use Inertia\Inertia;
+use App\Models\Expense;
 use App\Services\BudgetUtilizationService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Response;
+use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
 
 class ExpenseController extends Controller
 {
@@ -23,13 +22,14 @@ class ExpenseController extends Controller
         $expenses = Expense::with([
             'category',
             'particular.department',
+            'budgetItem.budget',
             'auditTrails',
             'disbursements',
         ])->latest()->get();
 
         $yearsFromExpenses = $expenses->pluck('date_encoded')
             ->filter()
-            ->map(fn($d) => (int) date('Y', strtotime($d)))
+            ->map(fn ($d) => (int) date('Y', strtotime($d)))
             ->unique()
             ->sortDesc()
             ->values();
@@ -52,9 +52,9 @@ class ExpenseController extends Controller
             })
             ->with(['budgetItems' => function ($query) use ($availableYears) {
                 $query
-                    ->select(['id', 'budget_id', 'category_id', 'particular_id', 'month', 'ref_no', 'appropriation'])
+                    ->select(['id', 'budget_id', 'category_id', 'particular_id', 'month', 'allocation_month', 'ref_no', 'appropriation'])
                     ->whereHas('budget', fn ($budgetQuery) => $budgetQuery->whereIn('year', $availableYears))
-                    ->with('budget:id,year');
+                    ->with('budget:id,year,start_date,end_date');
             }])
             ->orderBy('name')
             ->get();
@@ -76,6 +76,11 @@ class ExpenseController extends Controller
             'budgetedCategories' => $budgetedCategories,
             'particulars' => BudgetParticular::with('category', 'department')->get(),
             'budgetYears' => AnnualBudget::pluck('year')->values()->toArray(),
+            'fiscalPeriods' => AnnualBudget::query()->orderByDesc('start_date')->get(['id', 'year', 'start_date', 'end_date', 'ref_no']),
+            'defaultFiscalPeriodId' => AnnualBudget::query()
+                ->whereDate('start_date', '<=', now())
+                ->whereDate('end_date', '>=', now())
+                ->value('id') ?? AnnualBudget::query()->orderByDesc('start_date')->value('id'),
             'availableYears' => $availableYears,
             'defaultYear' => $defaultYear,
         ]);
@@ -95,31 +100,12 @@ class ExpenseController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        $year = (int) date('Y', strtotime($validated['date_encoded']));
-        if (!AnnualBudget::where('year', $year)->exists()) {
-            throw ValidationException::withMessages([
-                'date_encoded' => "No annual budget exists for FY {$year}. Please create the annual budget first.",
-            ]);
-        }
-
-        $categoryHasAppropriation = BudgetCategory::whereKey($validated['category_id'])
-            ->whereHas('budgetItems.budget', function ($query) use ($year) {
-                $query->where('year', $year);
-            })
-            ->exists();
-
-        if (! $categoryHasAppropriation) {
-            throw ValidationException::withMessages([
-                'category_id' => "Selected category has no appropriation for FY {$year}. Please choose a category with an approved budget allocation.",
-            ]);
-        }
-
         $validated['status'] = strtolower(trim((string) ($validated['status'] ?? 'pending')));
         if ($request->header('X-Offline-Sync')) {
             $validated['status'] = 'pending';
             $validated['date_approved'] = null;
         }
-        if (!in_array($validated['status'], ['pending', 'cancelled'], true)) {
+        if (! in_array($validated['status'], ['pending', 'cancelled'], true)) {
             throw ValidationException::withMessages([
                 'status' => 'New expenditures must start as Pending or Cancelled. Use the workflow actions to submit and approve them.',
             ]);
@@ -127,7 +113,7 @@ class ExpenseController extends Controller
 
         $lastExpense = Expense::latest('id')->first();
         $nextNum = $lastExpense ? intval(substr($lastExpense->ref_no, 3)) + 1 : 1;
-        $validated['ref_no'] = 'EXP' . str_pad($nextNum, 8, '0', STR_PAD_LEFT);
+        $validated['ref_no'] = 'EXP'.str_pad($nextNum, 8, '0', STR_PAD_LEFT);
         $budgetItem = $this->validateSelectedBudgetItem($validated);
         $this->ensureAmountWithinAllocation($budgetItem, (float) $validated['amount']);
         $validated['budget_item_id'] = $budgetItem->id;
@@ -162,25 +148,6 @@ class ExpenseController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        $year = (int) date('Y', strtotime($validated['date_encoded']));
-        if (!AnnualBudget::where('year', $year)->exists()) {
-            throw ValidationException::withMessages([
-                'date_encoded' => "No annual budget exists for FY {$year}. Please create the annual budget first.",
-            ]);
-        }
-
-        $categoryHasAppropriation = BudgetCategory::whereKey($validated['category_id'])
-            ->whereHas('budgetItems.budget', function ($query) use ($year) {
-                $query->where('year', $year);
-            })
-            ->exists();
-
-        if (! $categoryHasAppropriation) {
-            throw ValidationException::withMessages([
-                'category_id' => "Selected category has no appropriation for FY {$year}. Please choose a category with an approved budget allocation.",
-            ]);
-        }
-
         $validated['status'] = strtolower(trim((string) ($validated['status'] ?? $expense->status ?? 'pending')));
         $protectedWorkflowStatuses = ['for_approval', 'approved', 'rejected', 'returned_for_revision', 'posted'];
         $directStatuses = ['pending', 'cancelled'];
@@ -192,7 +159,7 @@ class ExpenseController extends Controller
                 ]);
             }
             $validated['status'] = $expense->status;
-        } elseif (!in_array($validated['status'], $directStatuses, true)) {
+        } elseif (! in_array($validated['status'], $directStatuses, true)) {
             throw ValidationException::withMessages([
                 'status' => 'Expenditures can only be edited as Pending or Cancelled. Submit/approve/post them through the workflow actions.',
             ]);
@@ -226,11 +193,11 @@ class ExpenseController extends Controller
             'remarks' => 'nullable|string|max:500',
         ]);
 
-        if (!auth()->user()?->canSubmitExpenses()) {
+        if (! auth()->user()?->canSubmitExpenses()) {
             abort(403, 'You are not allowed to submit expenses for approval.');
         }
 
-        if (!in_array($expense->status, ['pending', 'returned_for_revision'], true)) {
+        if (! in_array($expense->status, ['pending', 'returned_for_revision'], true)) {
             return redirect()->back()->with('error', 'Only pending or returned expenses can be submitted for approval.');
         }
 
@@ -256,7 +223,7 @@ class ExpenseController extends Controller
             'remarks' => 'nullable|string|max:500',
         ]);
 
-        if (!auth()->user()?->isSuperAdmin()) {
+        if (! auth()->user()?->isSuperAdmin()) {
             abort(403, 'Only the Head of Finance can approve expenditures.');
         }
 
@@ -286,7 +253,7 @@ class ExpenseController extends Controller
             'remarks' => 'required|string|max:500',
         ]);
 
-        if (!auth()->user()?->isSuperAdmin()) {
+        if (! auth()->user()?->isSuperAdmin()) {
             abort(403, 'Only the Head of Finance can return expenditures for revision.');
         }
 
@@ -315,12 +282,12 @@ class ExpenseController extends Controller
             'remarks' => 'required|string|max:500',
         ]);
 
-        if (!auth()->user()?->isSuperAdmin()) {
+        if (! auth()->user()?->isSuperAdmin()) {
             abort(403, 'Only the Head of Finance can reject expenditures.');
         }
 
         if ($expense->status !== 'for_approval') {
-            return redirect()->back()->with('error', 'Expense must be in For Approval status before it can be rejected.'); 
+            return redirect()->back()->with('error', 'Expense must be in For Approval status before it can be rejected.');
         }
 
         $expense->update([
@@ -348,10 +315,10 @@ class ExpenseController extends Controller
 
     public function exportCsv()
     {
-        $fileName = 'expenses-export-' . now()->format('Y-m-d_His') . '.csv';
+        $fileName = 'expenses-export-'.now()->format('Y-m-d_His').'.csv';
         $headers = [
             'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+            'Content-Disposition' => 'attachment; filename="'.$fileName.'"',
         ];
 
         $callback = function () {
@@ -394,16 +361,18 @@ class ExpenseController extends Controller
         }
 
         $header = fgetcsv($handle);
-        if (!$header) {
+        if (! $header) {
             fclose($handle);
+
             return back()->withErrors(['csv_file' => 'CSV file is empty.']);
         }
 
         $header = array_map(fn ($value) => trim((string) $value), $header);
         $required = ['ref_no', 'description', 'category', 'account_title', 'amount', 'date_encoded', 'date_approved', 'status', 'notes'];
         foreach ($required as $column) {
-            if (!in_array($column, $header, true)) {
+            if (! in_array($column, $header, true)) {
                 fclose($handle);
+
                 return back()->withErrors(['csv_file' => "Missing required column: {$column}"]);
             }
         }
@@ -439,28 +408,23 @@ class ExpenseController extends Controller
 
         foreach ($rows as $i => $row) {
             if ($row['ref_no'] === '' || $row['description'] === '' || $row['category_raw'] === '' || $row['particular_raw'] === '' || $row['date_encoded'] === '') {
-                return back()->withErrors(['csv_file' => 'Row ' . ($i + 2) . ' is missing required data.']);
+                return back()->withErrors(['csv_file' => 'Row '.($i + 2).' is missing required data.']);
             }
 
-            if (!in_array($row['status'], $allowedStatuses, true)) {
-                return back()->withErrors(['csv_file' => 'Row ' . ($i + 2) . ' has an invalid status.']);
+            if (! in_array($row['status'], $allowedStatuses, true)) {
+                return back()->withErrors(['csv_file' => 'Row '.($i + 2).' has an invalid status.']);
             }
 
-            $year = (int) date('Y', strtotime($row['date_encoded']));
-            $years[] = $year;
-
-            if (!AnnualBudget::where('year', $year)->exists()) {
-                return back()->withErrors(['csv_file' => "Annual budget for FY {$year} is required before importing expenditures."]);
-            }
+            $years[] = (int) date('Y', strtotime($row['date_encoded']));
 
             $category = $this->resolveExpenseCategory($row['category_raw']);
             if (! $category) {
-                return back()->withErrors(['csv_file' => "Row " . ($i + 2) . " references an unknown category: {$row['category_raw']}"]);
+                return back()->withErrors(['csv_file' => 'Row '.($i + 2)." references an unknown category: {$row['category_raw']}"]);
             }
 
             $particular = $this->resolveExpenseParticular($row['particular_raw'], $category->id);
             if (! $particular) {
-                return back()->withErrors(['csv_file' => "Row " . ($i + 2) . " references an unknown account title: {$row['particular_raw']}"]);
+                return back()->withErrors(['csv_file' => 'Row '.($i + 2)." references an unknown account title: {$row['particular_raw']}"]);
             }
 
             $rows[$i]['category_id'] = $category->id;
@@ -468,7 +432,7 @@ class ExpenseController extends Controller
             if ($row['allocation_ref'] !== '') {
                 $budgetItem = BudgetItem::where('ref_no', $row['allocation_ref'])->first();
                 if (! $budgetItem) {
-                    return back()->withErrors(['csv_file' => 'Row ' . ($i + 2) . " references an unknown monthly allocation: {$row['allocation_ref']}"]);
+                    return back()->withErrors(['csv_file' => 'Row '.($i + 2)." references an unknown monthly allocation: {$row['allocation_ref']}"]);
                 }
                 $rows[$i]['budget_item_id'] = $this->validateSelectedBudgetItem([
                     'category_id' => $category->id,
@@ -486,18 +450,8 @@ class ExpenseController extends Controller
                 ]);
             }
 
-            $categoryHasAppropriation = BudgetCategory::whereKey($category->id)
-                ->whereHas('budgetItems.budget', function ($query) use ($year) {
-                    $query->where('year', $year);
-                })
-                ->exists();
-
-            if (! $categoryHasAppropriation) {
-                return back()->withErrors(['csv_file' => "Category {$category->name} has no appropriation for FY {$year}."]);
-            }
-
             if ($row['amount'] <= 0) {
-                return back()->withErrors(['csv_file' => 'Row ' . ($i + 2) . ' must have an amount greater than zero.']);
+                return back()->withErrors(['csv_file' => 'Row '.($i + 2).' must have an amount greater than zero.']);
             }
 
             $budgetItem = BudgetItem::findOrFail($rows[$i]['budget_item_id']);
@@ -505,8 +459,8 @@ class ExpenseController extends Controller
             $available = app(BudgetUtilizationService::class)->availableForExpense($budgetItem, $existingExpense);
             if ($row['amount'] > $available) {
                 return back()->withErrors([
-                    'csv_file' => 'Row ' . ($i + 2) . ' exceeds the available amount for '
-                        . $budgetItem->ref_no . '. Available: PHP ' . number_format($available, 2) . '.',
+                    'csv_file' => 'Row '.($i + 2).' exceeds the available amount for '
+                        .$budgetItem->ref_no.'. Available: PHP '.number_format($available, 2).'.',
                 ]);
             }
         }
@@ -518,7 +472,7 @@ class ExpenseController extends Controller
             foreach ($rows as $row) {
                 $expense = Expense::firstOrNew(['ref_no' => $row['ref_no']]);
 
-                $isNew = !$expense->exists;
+                $isNew = ! $expense->exists;
                 $expense->ref_no = $row['ref_no'];
                 $expense->description = $row['description'];
                 $expense->category_id = $row['category_id'];
@@ -576,10 +530,9 @@ class ExpenseController extends Controller
             );
 
         if (! $budgetItem) {
-            $year = (int) date('Y', strtotime((string) $expenseData['date_encoded']));
             $month = date('F', strtotime((string) $expenseData['date_encoded']));
             throw ValidationException::withMessages([
-                'particular_id' => "The selected account title and responsibility center have no single matching allocation for {$month} FY {$year}. Check Annual Budget > Manage Items and select the account belonging to the funded responsibility center.",
+                'particular_id' => "The selected account title and responsibility center have no single matching allocation for {$month}. Check Annual Budget > Manage Items and select the account belonging to the funded responsibility center.",
             ]);
         }
 
@@ -590,7 +543,6 @@ class ExpenseController extends Controller
     {
         $budgetItem = BudgetItem::with(['budget', 'particular.department'])
             ->find($expenseData['budget_item_id'] ?? null);
-        $expenseYear = (int) date('Y', strtotime((string) $expenseData['date_encoded']));
 
         if (! $budgetItem
             || (int) $budgetItem->category_id !== (int) $expenseData['category_id']
@@ -600,9 +552,9 @@ class ExpenseController extends Controller
             ]);
         }
 
-        if ((int) $budgetItem->budget?->year !== $expenseYear) {
+        if (! $budgetItem->budget?->containsDate((string) $expenseData['date_encoded'])) {
             throw ValidationException::withMessages([
-                'budget_item_id' => "The selected allocation belongs to FY {$budgetItem->budget?->year}, but the expense date belongs to FY {$expenseYear}.",
+                'budget_item_id' => "The expense date must fall within {$budgetItem->budget?->fiscal_year_label} ({$budgetItem->budget?->period_label}).",
             ]);
         }
 
@@ -633,14 +585,13 @@ class ExpenseController extends Controller
         BudgetItem $budgetItem,
         float $amount,
         ?Expense $expense = null
-    ): void
-    {
+    ): void {
         $available = app(BudgetUtilizationService::class)->availableForExpense($budgetItem, $expense);
 
         if ($amount > $available) {
             throw ValidationException::withMessages([
                 'amount' => 'The expense amount cannot exceed the available amount for '
-                    . $budgetItem->ref_no . '. Available: PHP ' . number_format($available, 2) . '.',
+                    .$budgetItem->ref_no.'. Available: PHP '.number_format($available, 2).'.',
             ]);
         }
     }

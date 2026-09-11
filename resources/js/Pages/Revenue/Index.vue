@@ -6,6 +6,7 @@ import { computed, ref, watch } from 'vue'
 
 const props = defineProps({
     availableYears: Array,
+    fiscalPeriods: Array,
     filters: Object,
     stats: Object,
     monthlyIncome: Array,
@@ -16,16 +17,17 @@ const props = defineProps({
     incomeRecords: Array,
 })
 
-const selectedYear = ref(props.filters?.year || new Date().getFullYear())
-const selectedMonth = ref(props.filters?.month || '')
+const selectedFiscalPeriod = ref(props.filters?.fiscal_period_id || '')
+const selectedMonth = ref(props.filters?.allocation_month || '')
 const startDate = ref(props.filters?.start_date || '')
 const endDate = ref(props.filters?.end_date || '')
 const selectedPoint = ref(0)
 const selectedAnnualPoint = ref(0)
 const hoveredAnnualPoint = ref(null)
 const viewMode = ref('monthly')
+const activeFiscalPeriod = computed(() => (props.fiscalPeriods || []).find(period => Number(period.id) === Number(selectedFiscalPeriod.value)))
+const fiscalMonths = computed(() => activeFiscalPeriod.value?.months || [])
 
-const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const chartWidth = 1000
 const chartHeight = 240
 const chartPaddingX = 48
@@ -45,9 +47,8 @@ const maxMultiYear = computed(() => Math.max(...(props.multiYearComparison || []
 const activeMonthlyPoint = computed(() => {
     if (!props.monthlyRevenue?.length) return 0
 
-    const monthNum = Number(selectedMonth.value)
-    if (monthNum >= 1 && monthNum <= 12) {
-        const idx = props.monthlyRevenue.findIndex((item) => Number(item.month_num) === monthNum)
+    if (selectedMonth.value) {
+        const idx = props.monthlyRevenue.findIndex((item) => item.allocation_month === selectedMonth.value)
         if (idx >= 0) return idx
     }
 
@@ -58,8 +59,8 @@ const monthlyComboItems = computed(() => {
     return (props.monthlyRevenue || []).map((item, idx) => ({
         ...item,
         label: item.month,
-        tooltipTitle: `${item.month} ${selectedYear.value}`,
-        income: monthlyIncomeAmount(item.month_num),
+        tooltipTitle: item.month_label || item.month,
+        income: monthlyIncomeAmount(idx),
         appropriation: Number(item.amount || 0),
         expense: monthlyExpenseAmount(idx),
         balance: Number(item.amount || 0) - Number(monthlyExpenseAmount(idx) || 0),
@@ -70,8 +71,8 @@ const monthlyComboItems = computed(() => {
 const annualComboItems = computed(() => {
     return (props.multiYearComparison || []).map((item) => ({
         ...item,
-        label: String(item.year),
-        tooltipTitle: `FY ${item.year}`,
+        label: item.label || String(item.year),
+        tooltipTitle: item.label || `FY ${item.year}`,
         income: Number(item.income || 0),
         appropriation: Number(item.appropriation || 0),
         expense: Number(item.expense || 0),
@@ -89,14 +90,13 @@ function fmt(value) {
 }
 
 function applyFilters() {
-    const monthNum = Number(selectedMonth.value)
-    if (monthNum >= 1 && monthNum <= 12) {
-        const idx = props.monthlyRevenue?.findIndex((item) => Number(item.month_num) === monthNum)
+    if (selectedMonth.value) {
+        const idx = props.monthlyRevenue?.findIndex((item) => item.allocation_month === selectedMonth.value)
         if (idx >= 0) selectedPoint.value = idx
     }
     router.get('/iaeo', {
-        year: selectedYear.value,
-        month: selectedMonth.value,
+        fiscal_period_id: selectedFiscalPeriod.value,
+        allocation_month: selectedMonth.value,
         start_date: startDate.value,
         end_date: endDate.value,
     }, {
@@ -111,9 +111,8 @@ function syncSelectedPointToMonth() {
         return
     }
 
-    const monthNum = Number(selectedMonth.value)
-    if (monthNum >= 1 && monthNum <= 12) {
-        const idx = props.monthlyRevenue.findIndex((item) => Number(item.month_num) === monthNum)
+    if (selectedMonth.value) {
+        const idx = props.monthlyRevenue.findIndex((item) => item.allocation_month === selectedMonth.value)
         selectedPoint.value = idx >= 0 ? idx : 0
         return
     }
@@ -139,8 +138,8 @@ function clearAnnualHover() {
     hoveredAnnualPoint.value = null
 }
 
-function monthlyIncomeAmount(monthNum) {
-    return (props.monthlyIncome || []).find((item) => Number(item.month_num) === Number(monthNum))?.amount || 0
+function monthlyIncomeAmount(index) {
+    return props.monthlyIncome?.[index]?.amount || 0
 }
 
 function monthlyExpenseAmount(index) {
@@ -235,15 +234,15 @@ watch(
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
             <div class="space-y-1">
                 <label class="block text-[11px] font-bold uppercase tracking-wide text-gray-700">Fiscal Year</label>
-                <select v-model="selectedYear" @change="applyFilters" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm">
-                    <option v-for="yr in availableYears" :key="yr" :value="yr">FY {{ yr }}</option>
+                <select v-model="selectedFiscalPeriod" @change="selectedMonth = ''; applyFilters()" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm">
+                    <option v-for="period in fiscalPeriods" :key="period.id" :value="period.id">{{ period.label }}</option>
                 </select>
             </div>
             <div class="space-y-1">
                 <label class="block text-[11px] font-bold uppercase tracking-wide text-gray-700">Month</label>
                 <select v-model="selectedMonth" @change="applyFilters" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm">
-                    <option value="">All Months</option>
-                    <option v-for="(m, idx) in monthLabels" :key="idx" :value="idx + 1">{{ m }}</option>
+                    <option value="">All Fiscal Months</option>
+                    <option v-for="month in fiscalMonths" :key="month.value" :value="month.value">{{ month.label }}</option>
                 </select>
             </div>
             <div class="space-y-1">
@@ -349,7 +348,7 @@ watch(
                         <div>
                             <p class="text-sm font-bold text-gray-900">{{ item.category?.name || 'Uncategorized' }}</p>
                             <p class="text-xs text-gray-500">{{ item.particular?.name || 'No particular' }} <span v-if="item.particular?.department">- {{ item.particular.department.name }}</span></p>
-                            <p class="mt-1 text-[11px] text-gray-400">Month {{ item.month }} · {{ item.budget?.year || selectedYear }}</p>
+                            <p class="mt-1 text-[11px] text-gray-400">{{ item.allocation_month_label || `Month ${item.month}` }} · {{ item.budget?.fiscal_year_label || activeFiscalPeriod?.label }}</p>
                         </div>
                         <div class="text-right">
                             <p class="text-sm font-bold text-gray-900">{{ fmt(item.appropriation) }}</p>

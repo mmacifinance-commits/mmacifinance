@@ -40,7 +40,7 @@ class AnnualBudgetItemUpdateTest extends TestCase
         $this->assertSame(8, $augustItem->fresh()->month);
     }
 
-    public function test_moving_an_allocation_to_an_available_month_updates_its_reference(): void
+    public function test_moving_an_allocation_to_an_available_month_preserves_its_reference(): void
     {
         [$user, $budget, $accountTitle] = $this->budgetFixtures();
         $item = $this->createItem($budget, $accountTitle, 9);
@@ -68,7 +68,7 @@ class AnnualBudgetItemUpdateTest extends TestCase
         $response->assertRedirect(route('annual-budgets.show', $budget));
         $response->assertSessionHasNoErrors();
         $this->assertSame(10, $item->fresh()->month);
-        $this->assertStringStartsWith('MB-2026-10-', $item->fresh()->ref_no);
+        $this->assertSame('MB-2026-09-0001', $item->fresh()->ref_no);
     }
 
     private function budgetFixtures(): array

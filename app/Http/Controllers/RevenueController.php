@@ -2,154 +2,139 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\AnnualBudget;
 use App\Models\BudgetItem;
-use App\Models\Disbursement;
-use App\Models\Expense;
 use App\Models\Income;
 use App\Services\BudgetUtilizationService;
-use Illuminate\Support\Facades\DB;
+use App\Services\FiscalPeriodService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class RevenueController extends Controller
 {
-    public function index(Request $request, BudgetUtilizationService $utilization)
-    {
-        $yearExpression = DB::getDriverName() === 'sqlite'
-            ? "CAST(strftime('%Y', date_encoded) AS INTEGER)"
-            : 'YEAR(date_encoded)';
-        $monthExpression = DB::getDriverName() === 'sqlite'
-            ? "CAST(strftime('%m', date_encoded) AS INTEGER)"
-            : 'MONTH(date_encoded)';
-
-        $availableYears = collect()
-            ->merge(AnnualBudget::query()->distinct()->pluck('year'))
-            ->merge(Income::query()->selectRaw("{$yearExpression} as year")->distinct()->pluck('year'))
-            ->merge(Expense::query()->selectRaw("{$yearExpression} as year")->distinct()->pluck('year'))
-            ->merge(Disbursement::query()->selectRaw("{$yearExpression} as year")->distinct()->pluck('year'))
-            ->merge([date('Y')])
-            ->filter(fn ($year) => !is_null($year) && (int) $year > 0)
-            ->map(fn ($year) => (int) $year)
-            ->unique()
-            ->sortDesc()
-            ->values()
-            ->toArray();
-
-        $selectedYear = (int) ($request->query('year') ?: ($availableYears[0] ?? date('Y')));
-        $selectedMonth = $request->query('month') ? (int) $request->query('month') : null;
+    public function index(
+        Request $request,
+        BudgetUtilizationService $utilization,
+        FiscalPeriodService $fiscalPeriods
+    ) {
+        $periods = $fiscalPeriods->all();
+        $selectedPeriod = $fiscalPeriods->resolve(
+            $request->integer('fiscal_period_id') ?: null,
+            $request->integer('year') ?: null
+        );
+        $allocationMonth = $selectedPeriod
+            ? $fiscalPeriods->allocationMonth(
+                $selectedPeriod,
+                $request->query('allocation_month'),
+                $request->integer('month') ?: null
+            )
+            : null;
         $startDate = $request->query('start_date');
         $endDate = $request->query('end_date');
 
-        if (!in_array($selectedYear, $availableYears, true)) {
-            $selectedYear = (int) ($availableYears[0] ?? date('Y'));
-        }
-
-        $budgetItemsQuery = BudgetItem::query()
-            ->whereHas('budget', fn ($q) => $q->where('year', $selectedYear));
-        if ($selectedMonth) {
-            $budgetItemsQuery->where('month', $selectedMonth);
-        }
-        $budgetItems = $budgetItemsQuery->with(['budget', 'category', 'particular.department'])->get();
+        $budgetItems = BudgetItem::query()
+            ->when($selectedPeriod, fn ($query) => $query->where('budget_id', $selectedPeriod->id))
+            ->when($allocationMonth, fn ($query) => $query->whereDate('allocation_month', $allocationMonth))
+            ->with(['budget', 'category', 'particular.department'])
+            ->get();
         BudgetItem::hydrateDerivedTotals($budgetItems);
 
-        $incomeQuery = Income::query()->whereYear('date_encoded', $selectedYear);
-        if ($startDate && $endDate) {
-            $incomeQuery->whereBetween('date_encoded', [$startDate, $endDate]);
-        } elseif ($selectedMonth) {
-            $incomeQuery->whereMonth('date_encoded', $selectedMonth);
+        $incomeQuery = Income::query()
+            ->when($selectedPeriod, fn ($query) => $query->whereBetween('date_encoded', [
+                $selectedPeriod->fiscalStart()->toDateString(),
+                $selectedPeriod->fiscalEnd()->toDateString(),
+            ]));
+        if ($startDate) {
+            $incomeQuery->whereDate('date_encoded', '>=', $startDate);
         }
-        $incomeRecords = $incomeQuery->get();
-
-        $expenseQuery = Expense::query()->whereYear('date_encoded', $selectedYear);
-        if ($startDate && $endDate) {
-            $expenseQuery->whereBetween('date_encoded', [$startDate, $endDate]);
-        } elseif ($selectedMonth) {
-            $expenseQuery->whereMonth('date_encoded', $selectedMonth);
+        if ($endDate) {
+            $incomeQuery->whereDate('date_encoded', '<=', $endDate);
         }
-        $expenseRecords = $expenseQuery->get();
+        if (! $startDate && ! $endDate && $allocationMonth) {
+            $monthStart = Carbon::parse($allocationMonth);
+            $incomeQuery->whereBetween('date_encoded', [
+                $monthStart->toDateString(),
+                $monthStart->copy()->endOfMonth()->toDateString(),
+            ]);
+        }
+        $incomeRecords = (clone $incomeQuery)->get();
 
-        $totalIncome = (float) Income::query()
-            ->whereYear('date_encoded', $selectedYear)
-            ->sum('amount');
-        $totalAppropriation = (float) BudgetItem::query()
-            ->whereHas('budget', fn ($q) => $q->where('year', $selectedYear))
-            ->sum('appropriation');
-        // IAEO should reflect actual paid-out money, so use posted disbursements
-        // as the source of truth instead of workflow states like pending/approved.
-        $totalExpense = $utilization->totalForBudgetFilters(
-            $selectedYear,
-            $selectedMonth,
-            $startDate,
-            $endDate
-        );
-        $remainingAppropriation = $totalAppropriation - $totalExpense;
-        $remainingIncome = $totalIncome - $totalAppropriation;
-        $remainingIncomeAfterExpense = $totalIncome - $totalExpense;
+        $postedQuery = $selectedPeriod
+            ? $utilization->queryForAnnualBudgetFilters(
+                $selectedPeriod,
+                $allocationMonth,
+                $startDate,
+                $endDate
+            )
+            : null;
+        $totalIncome = (float) $incomeQuery->sum('amount');
+        $totalAppropriation = (float) $budgetItems->sum('appropriation');
+        $totalExpense = (float) ($postedQuery?->sum('amount') ?? 0);
 
-        $monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        $monthlyIncomeTotals = Income::query()
-            ->whereYear('date_encoded', $selectedYear)
-            ->selectRaw("{$monthExpression} as month, SUM(amount) as total")
-            ->groupByRaw($monthExpression)
-            ->pluck('total', 'month');
-        $monthlyAppropriationTotals = BudgetItem::query()
-            ->whereHas('budget', fn ($q) => $q->where('year', $selectedYear))
-            ->selectRaw('month, SUM(appropriation) as total')
-            ->groupBy('month')
-            ->pluck('total', 'month');
-        $monthlyExpenseTotals = $utilization->totalsByAllocationMonth($selectedYear);
+        $monthRows = collect($selectedPeriod?->orderedFiscalMonths() ?? []);
+        $incomeByMonth = $incomeRecords
+            ->groupBy(fn (Income $income) => $income->date_encoded->format('Y-m'))
+            ->map(fn ($rows) => (float) $rows->sum('amount'));
+        $appropriationByMonth = $budgetItems
+            ->groupBy(fn (BudgetItem $item) => $item->allocation_month?->format('Y-m'))
+            ->map(fn ($rows) => (float) $rows->sum('appropriation'));
+        $expenseByMonth = $selectedPeriod
+            ? $utilization->totalsByFiscalAllocationMonth($selectedPeriod)
+            : collect();
+        if ($allocationMonth) {
+            $expenseByMonth = $expenseByMonth->only($allocationMonth);
+        }
 
-        $monthlyIncome = collect(range(1, 12))->map(fn ($m) => [
-                'month' => $monthNames[$m - 1],
-                'month_num' => $m,
-                'amount' => (float) ($monthlyIncomeTotals[$m] ?? 0),
-            ])->all();
-        $monthlyAppropriation = collect(range(1, 12))->map(fn ($m) => [
-                'month' => $monthNames[$m - 1],
-                'month_num' => $m,
-                'amount' => (float) ($monthlyAppropriationTotals[$m] ?? 0),
-            ])->all();
-        $monthlyExpense = collect(range(1, 12))->map(fn ($m) => [
-                'month' => $monthNames[$m - 1],
-                'month_num' => $m,
-                'amount' => (float) ($monthlyExpenseTotals[$m] ?? 0),
-            ])->all();
+        $monthlyIncome = $monthRows->map(fn ($month) => [
+            'month' => $month['short_label'],
+            'month_label' => $month['label'],
+            'allocation_month' => $month['value'],
+            'amount' => (float) ($incomeByMonth[substr($month['value'], 0, 7)] ?? 0),
+        ])->all();
+        $monthlyAppropriation = $monthRows->map(fn ($month) => [
+            'month' => $month['short_label'],
+            'month_label' => $month['label'],
+            'allocation_month' => $month['value'],
+            'amount' => (float) ($appropriationByMonth[substr($month['value'], 0, 7)] ?? 0),
+        ])->all();
+        $monthlyExpense = $monthRows->map(fn ($month) => [
+            'month' => $month['short_label'],
+            'month_label' => $month['label'],
+            'allocation_month' => $month['value'],
+            'amount' => (float) ($expenseByMonth[$month['value']] ?? 0),
+        ])->all();
 
-        $compareYears = collect($availableYears)->take(4)->sort()->values()->all();
-        $yearIncomeTotals = Income::query()
-            ->whereIn(DB::raw($yearExpression), $compareYears)
-            ->selectRaw("{$yearExpression} as year, SUM(amount) as total")
-            ->groupByRaw($yearExpression)
-            ->pluck('total', 'year');
-        $yearAppropriationTotals = BudgetItem::query()
-            ->join('annual_budgets', 'budget_items.budget_id', '=', 'annual_budgets.id')
-            ->whereIn('annual_budgets.year', $compareYears)
-            ->selectRaw('annual_budgets.year, SUM(budget_items.appropriation) as total')
-            ->groupBy('annual_budgets.year')
-            ->pluck('total', 'year');
-        $yearExpenseTotals = $utilization->totalsByBudgetYear($compareYears);
-
-        $multiYearComparison = collect($compareYears)->map(function ($year) use ($yearIncomeTotals, $yearAppropriationTotals, $yearExpenseTotals) {
-            $yearIncome = (float) ($yearIncomeTotals[$year] ?? 0);
-            $yearAppropriation = (float) ($yearAppropriationTotals[$year] ?? 0);
-            $yearExpense = (float) ($yearExpenseTotals[$year] ?? 0);
+        $comparisonPeriods = $periods->take(4)->sortBy('start_date')->values();
+        $multiYearComparison = $comparisonPeriods->map(function ($period) use ($utilization) {
+            $income = (float) Income::query()->whereBetween('date_encoded', [
+                $period->fiscalStart()->toDateString(),
+                $period->fiscalEnd()->toDateString(),
+            ])->sum('amount');
+            $appropriation = (float) BudgetItem::query()
+                ->where('budget_id', $period->id)
+                ->sum('appropriation');
+            $expense = (float) $utilization->queryForAnnualBudgetFilters($period)->sum('amount');
 
             return [
-                'year' => (int) $year,
-                'income' => $yearIncome,
-                'appropriation' => $yearAppropriation,
-                'expense' => $yearExpense,
-                'remainingIncome' => $yearIncome - $yearAppropriation,
-                'remainingAppropriation' => $yearAppropriation - $yearExpense,
+                'id' => $period->id,
+                'year' => $period->year,
+                'label' => $period->fiscal_year_label,
+                'income' => $income,
+                'appropriation' => $appropriation,
+                'expense' => $expense,
+                'remainingIncome' => $income - $appropriation,
+                'remainingAppropriation' => $appropriation - $expense,
             ];
         })->all();
 
         return Inertia::render('Revenue/Index', [
-            'availableYears' => $availableYears,
+            'availableYears' => $periods->pluck('year')->all(),
+            'fiscalPeriods' => $fiscalPeriods->options($periods),
             'filters' => [
-                'year' => $selectedYear,
-                'month' => $selectedMonth,
+                'year' => $selectedPeriod?->year,
+                'fiscal_period_id' => $selectedPeriod?->id,
+                'month' => $allocationMonth ? (int) date('n', strtotime($allocationMonth)) : null,
+                'allocation_month' => $allocationMonth,
                 'start_date' => $startDate,
                 'end_date' => $endDate,
             ],
@@ -157,10 +142,12 @@ class RevenueController extends Controller
                 'totalIncome' => $totalIncome,
                 'totalRevenue' => $totalAppropriation,
                 'totalExpense' => $totalExpense,
-                'balance' => $remainingAppropriation,
-                'remainingIncome' => $remainingIncome,
-                'remainingIncomeAfterExpense' => $remainingIncomeAfterExpense,
-                'utilizationRate' => $totalAppropriation > 0 ? round(($totalExpense / $totalAppropriation) * 100, 2) : 0,
+                'balance' => $totalAppropriation - $totalExpense,
+                'remainingIncome' => $totalIncome - $totalAppropriation,
+                'remainingIncomeAfterExpense' => $totalIncome - $totalExpense,
+                'utilizationRate' => $totalAppropriation > 0
+                    ? round(($totalExpense / $totalAppropriation) * 100, 2)
+                    : 0,
             ],
             'monthlyIncome' => $monthlyIncome,
             'monthlyRevenue' => $monthlyAppropriation,

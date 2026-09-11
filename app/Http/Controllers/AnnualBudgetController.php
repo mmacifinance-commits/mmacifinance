@@ -3,44 +3,46 @@
 namespace App\Http\Controllers;
 
 use App\Models\AnnualBudget;
-use App\Models\BudgetItem;
+use App\Models\AuditTrail;
 use App\Models\BudgetCategory;
+use App\Models\BudgetItem;
 use App\Models\BudgetParticular;
 use App\Models\Disbursement;
 use App\Models\Expense;
 use App\Models\Income;
 use App\Models\IncomeAllocation;
-use App\Models\AuditTrail;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class AnnualBudgetController extends Controller
 {
-    protected const FULL_YEAR_SEMESTER = 'Full Year (Jan-Dec)';
-
-    protected function ensureIncomeExistsForYear(int $year): void
+    protected function ensureIncomeExistsForPeriod(string $startDate, string $endDate, string $errorField = 'start_date'): void
     {
-        if (!Income::whereYear('date_encoded', $year)->exists()) {
+        if (! Income::whereBetween('date_encoded', [$startDate, $endDate])->exists()) {
             throw ValidationException::withMessages([
-                'year' => "You must create at least one income record for {$year} before creating appropriation.",
+                $errorField => "You must create at least one income record between {$startDate} and {$endDate} before creating appropriation.",
             ]);
         }
     }
 
-    protected function allocatedIncomeTotalForYear(int $year): float
+    protected function allocatedIncomeTotalForBudget(AnnualBudget $annualBudget): float
     {
         return (float) IncomeAllocation::query()
-            ->whereHas('annualBudget', fn ($q) => $q->where('year', $year))
+            ->where('annual_budget_id', $annualBudget->id)
             ->sum('amount');
     }
 
-    protected function incomePoolForYear(int $year): array
+    protected function incomePoolForBudget(AnnualBudget $annualBudget): array
     {
         return Income::query()
-            ->whereYear('date_encoded', $year)
+            ->whereBetween('date_encoded', [
+                $annualBudget->fiscalStart()->toDateString(),
+                $annualBudget->fiscalEnd()->toDateString(),
+            ])
             ->orderBy('date_encoded')
             ->orderBy('id')
             ->get()
@@ -54,15 +56,17 @@ class AnnualBudgetController extends Controller
             return;
         }
 
-        $year = (int) $annualBudget->year;
-        $availableIncome = $this->incomePoolForYear($year);
-        $allocatedForYear = $this->allocatedIncomeTotalForYear($year);
-        $yearlyIncomeTotal = (float) Income::whereYear('date_encoded', $year)->sum('amount');
-        $availableBalance = round($yearlyIncomeTotal - $allocatedForYear, 2);
+        $availableIncome = $this->incomePoolForBudget($annualBudget);
+        $allocatedForBudget = $this->allocatedIncomeTotalForBudget($annualBudget);
+        $periodIncomeTotal = (float) Income::whereBetween('date_encoded', [
+            $annualBudget->fiscalStart()->toDateString(),
+            $annualBudget->fiscalEnd()->toDateString(),
+        ])->sum('amount');
+        $availableBalance = round($periodIncomeTotal - $allocatedForBudget, 2);
 
         if ($availableBalance < $remainingToAllocate) {
             throw ValidationException::withMessages([
-                'appropriation' => "Not enough remaining income for {$year}. Available income balance is " . number_format($availableBalance, 2),
+                'appropriation' => "Not enough remaining income for {$annualBudget->fiscal_year_label}. Available income balance is ".number_format($availableBalance, 2),
             ]);
         }
 
@@ -95,6 +99,49 @@ class AnnualBudgetController extends Controller
         if ($newAmount > 0) {
             $this->allocateIncomeToBudget($item->budget, $item, $newAmount);
         }
+    }
+
+    protected function validateFiscalPeriod(array $validated, ?AnnualBudget $except = null): array
+    {
+        $start = Carbon::parse($validated['start_date'])->startOfDay();
+        $end = Carbon::parse($validated['end_date'])->startOfDay();
+
+        if ($start->day !== 1) {
+            throw ValidationException::withMessages([
+                'start_date' => 'The fiscal year must start on the first day of a month.',
+            ]);
+        }
+
+        if (! $end->isSameDay($end->copy()->endOfMonth())) {
+            throw ValidationException::withMessages([
+                'end_date' => 'The fiscal year must end on the last day of a month.',
+            ]);
+        }
+
+        $expectedEnd = $start->copy()->addMonthsNoOverflow(11)->endOfMonth()->startOfDay();
+        if (! $end->isSameDay($expectedEnd)) {
+            throw ValidationException::withMessages([
+                'end_date' => 'A fiscal year must contain exactly 12 consecutive months.',
+            ]);
+        }
+
+        $overlap = AnnualBudget::query()
+            ->overlapping($start->toDateString(), $end->toDateString())
+            ->when($except, fn ($query) => $query->whereKeyNot($except->id))
+            ->first();
+
+        if ($overlap) {
+            throw ValidationException::withMessages([
+                'start_date' => "This period overlaps {$overlap->fiscal_year_label} ({$overlap->period_label}).",
+            ]);
+        }
+
+        return [
+            'year' => $start->year,
+            'start_date' => $start->toDateString(),
+            'end_date' => $end->toDateString(),
+            'semester' => 'Fiscal Year',
+        ];
     }
 
     protected function normalizeHeader(string $header): string
@@ -146,12 +193,12 @@ class AnnualBudgetController extends Controller
         $clean = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $base));
         $clean = $clean !== '' ? $clean : $prefix;
         $clean = substr($clean, 0, max(1, $maxLength - strlen($prefix) - 4));
-        $candidate = $prefix . $clean;
+        $candidate = $prefix.$clean;
         $i = 1;
 
         while (\App\Models\Department::where('code', $candidate)->exists() || \App\Models\BudgetParticular::where('account_code', $candidate)->exists()) {
             $suffix = str_pad((string) $i, 2, '0', STR_PAD_LEFT);
-            $candidate = substr($prefix . $clean, 0, max(1, $maxLength - strlen($suffix))) . $suffix;
+            $candidate = substr($prefix.$clean, 0, max(1, $maxLength - strlen($suffix))).$suffix;
             $i++;
         }
 
@@ -171,6 +218,7 @@ class AnnualBudgetController extends Controller
         }
 
         $code = $this->uniqueCode($name, 'D', 12);
+
         return \App\Models\Department::create([
             'name' => $name,
             'code' => $code,
@@ -205,7 +253,7 @@ class AnnualBudgetController extends Controller
                 ->first();
         }
 
-        if (!$lookup && $accountName !== '') {
+        if (! $lookup && $accountName !== '') {
             $lookup = \App\Models\BudgetParticular::whereRaw('LOWER(particular) = ?', [Str::lower($particular ?: $accountName)])
                 ->when($department, fn ($query) => $query->where('department_id', $department->id))
                 ->when($category, fn ($query) => $query->where('category_id', $category->id))
@@ -244,7 +292,10 @@ class AnnualBudgetController extends Controller
             fputcsv($out, [
                 'annual_ref_no',
                 'fiscal_year',
-                'semester',
+                'fiscal_year_label',
+                'fiscal_start_date',
+                'fiscal_end_date',
+                'allocation_month',
                 'month',
                 'budget_category',
                 'responsibility_center',
@@ -258,7 +309,10 @@ class AnnualBudgetController extends Controller
                 fputcsv($out, [
                     $budget->ref_no,
                     $budget->year,
-                    $budget->semester,
+                    $budget->fiscal_year_label,
+                    $budget->fiscalStart()->toDateString(),
+                    $budget->fiscalEnd()->toDateString(),
+                    $item->allocation_month?->format('Y-m'),
                     $item->month,
                     $item->category?->name,
                     $item->particular?->department?->name,
@@ -282,33 +336,44 @@ class AnnualBudgetController extends Controller
         ]);
 
         try {
-            $this->ensureIncomeExistsForYear((int) $annualBudget->year);
+            $this->ensureIncomeExistsForPeriod(
+                $annualBudget->fiscalStart()->toDateString(),
+                $annualBudget->fiscalEnd()->toDateString(),
+                'csv_file'
+            );
         } catch (ValidationException $e) {
             throw ValidationException::withMessages([
-                'csv_file' => $e->validator->errors()->first('year')
-                    ?: "You must create at least one income record for {$annualBudget->year} before importing budget rows.",
+                'csv_file' => $e->validator->errors()->first('csv_file')
+                    ?: "You must create at least one income record for {$annualBudget->fiscal_year_label} before importing budget rows.",
             ]);
         }
 
         $file = $request->file('csv_file');
         $handle = fopen($file->getRealPath(), 'r');
-        if (!$handle) {
+        if (! $handle) {
             return back()->with('error', 'Unable to read CSV file.');
         }
 
         $headers = fgetcsv($handle);
-        if (!$headers) {
+        if (! $headers) {
             fclose($handle);
+
             return back()->with('error', 'CSV file is empty.');
         }
 
         $headers = array_map(fn ($header) => $this->normalizeHeader((string) $header), $headers);
-        $required = ['month', 'budget_category', 'responsibility_center', 'account_title', 'appropriation'];
+        $required = ['budget_category', 'responsibility_center', 'account_title', 'appropriation'];
         foreach ($required as $column) {
-            if (!in_array($column, $headers, true)) {
+            if (! in_array($column, $headers, true)) {
                 fclose($handle);
-                return back()->with('error', 'CSV is missing required column: ' . $column);
+
+                return back()->with('error', 'CSV is missing required column: '.$column);
             }
+        }
+        if (! in_array('allocation_month', $headers, true) && ! in_array('month', $headers, true)) {
+            fclose($handle);
+
+            return back()->with('error', 'CSV is missing required column: allocation_month (or legacy month).');
         }
 
         $rows = [];
@@ -332,17 +397,19 @@ class AnnualBudgetController extends Controller
         rewind($handle);
         fgetcsv($handle); // skip header row
 
-        $year = (int) $annualBudget->year;
-        $availableIncome = (float) Income::whereYear('date_encoded', $year)->sum('amount');
+        $availableIncome = (float) Income::whereBetween('date_encoded', [
+            $annualBudget->fiscalStart()->toDateString(),
+            $annualBudget->fiscalEnd()->toDateString(),
+        ])->sum('amount');
         $allocatedIncome = (float) IncomeAllocation::query()
-            ->whereHas('annualBudget', fn ($q) => $q->where('year', $year))
+            ->where('annual_budget_id', $annualBudget->id)
             ->sum('amount');
         $remainingIncome = round($availableIncome - $allocatedIncome, 2);
 
         if ($csvTotalAppropriation > $remainingIncome) {
             fclose($handle);
             throw ValidationException::withMessages([
-                'csv_file' => 'Appropriation must not be more than the income. Available income balance is ' . number_format($remainingIncome, 2) . '.',
+                'csv_file' => 'Appropriation must not be more than the income. Available income balance is '.number_format($remainingIncome, 2).'.',
             ]);
         }
 
@@ -352,16 +419,33 @@ class AnnualBudgetController extends Controller
         DB::transaction(function () use ($rows, $annualBudget, &$rowsCreated, &$rowsUpdated) {
             foreach ($rows as $data) {
                 $csvYear = isset($data['fiscal_year']) && $data['fiscal_year'] !== '' ? (int) $data['fiscal_year'] : (int) $annualBudget->year;
-                if ($csvYear !== (int) $annualBudget->year) {
+                if ($csvYear !== (int) $annualBudget->fiscalStart()->year) {
                     throw ValidationException::withMessages([
-                        'csv_file' => "CSV fiscal year {$csvYear} does not match Annual Budget year {$annualBudget->year}.",
+                        'csv_file' => "CSV fiscal year {$csvYear} does not match {$annualBudget->fiscal_year_label}.",
+                    ]);
+                }
+                if (! empty($data['fiscal_year_label']) && trim((string) $data['fiscal_year_label']) !== $annualBudget->fiscal_year_label) {
+                    throw ValidationException::withMessages([
+                        'csv_file' => "CSV fiscal year label must be {$annualBudget->fiscal_year_label}.",
+                    ]);
+                }
+                if (! empty($data['fiscal_start_date']) && Carbon::parse($data['fiscal_start_date'])->toDateString() !== $annualBudget->fiscalStart()->toDateString()) {
+                    throw ValidationException::withMessages([
+                        'csv_file' => "CSV fiscal start date must be {$annualBudget->fiscalStart()->toDateString()}.",
+                    ]);
+                }
+                if (! empty($data['fiscal_end_date']) && Carbon::parse($data['fiscal_end_date'])->toDateString() !== $annualBudget->fiscalEnd()->toDateString()) {
+                    throw ValidationException::withMessages([
+                        'csv_file' => "CSV fiscal end date must be {$annualBudget->fiscalEnd()->toDateString()}.",
                     ]);
                 }
 
-                $month = $this->parseMonthValue($data['month'] ?? 1);
-                if ($month < 1 || $month > 12) {
+                $allocationMonth = isset($data['allocation_month']) && trim((string) $data['allocation_month']) !== ''
+                    ? Carbon::parse($data['allocation_month'])->startOfMonth()
+                    : $annualBudget->allocationMonthForNumber($this->parseMonthValue($data['month'] ?? 1));
+                if (! $allocationMonth || ! $annualBudget->containsDate($allocationMonth)) {
                     throw ValidationException::withMessages([
-                        'csv_file' => 'Each row must have a valid month number or month name (example: 1, Jan, January).',
+                        'csv_file' => "Each allocation month must fall within {$annualBudget->fiscal_year_label}.",
                     ]);
                 }
 
@@ -373,18 +457,19 @@ class AnnualBudgetController extends Controller
                     'budget_id' => $annualBudget->id,
                     'category_id' => $category->id,
                     'particular_id' => $account->id,
-                    'month' => $month,
+                    'month' => $allocationMonth->month,
+                    'allocation_month' => $allocationMonth->toDateString(),
                     'appropriation' => $this->parseMoney($data['appropriation'] ?? 0),
                 ];
 
                 $existing = $annualBudget->items()
                     ->where('particular_id', $account->id)
-                    ->where('month', $month)
+                    ->whereDate('allocation_month', $allocationMonth->toDateString())
                     ->first();
 
                 if ($existing) {
                     throw ValidationException::withMessages([
-                        'csv_file' => "Duplicate budget row rejected for {$annualBudget->year}, month {$month}, {$category->name}, {$department->name}, {$account->particular}.",
+                        'csv_file' => "Duplicate budget row rejected for {$allocationMonth->format('F Y')}, {$category->name}, {$department->name}, {$account->particular}.",
                     ]);
                 }
 
@@ -411,17 +496,17 @@ class AnnualBudgetController extends Controller
 
     public function index()
     {
-        $budgets = AnnualBudget::with(['items.budget:id,year', 'items.category', 'items.particular.department'])
-            ->latest('year')
+        $budgets = AnnualBudget::with(['items.budget:id,year,start_date,end_date', 'items.category', 'items.particular.department'])
+            ->latest('start_date')
             ->get();
 
         // Ensure ref_no is generated for existing annual budgets if null
         foreach ($budgets as $b) {
-            if (!$b->ref_no) {
+            if (! $b->ref_no) {
                 $b->update(['ref_no' => sprintf('AB-%d-%04d', $b->year, $b->id)]);
             }
             foreach ($b->items as $item) {
-                if (!$item->ref_no) {
+                if (! $item->ref_no) {
                     $item->update(['ref_no' => sprintf('MB-%d-%02d-%04d', $b->year, $item->month ?: 1, $item->id)]);
                 }
             }
@@ -430,19 +515,19 @@ class AnnualBudgetController extends Controller
 
         return Inertia::render('AnnualBudgets/Index', [
             'budgets' => $budgets,
-            'availableYears' => AnnualBudget::distinct()->orderByDesc('year')->pluck('year'),
+            'availableYears' => AnnualBudget::distinct()->orderByDesc('start_date')->pluck('year'),
         ]);
     }
 
     public function show(AnnualBudget $annualBudget)
     {
-        if (!$annualBudget->ref_no) {
+        if (! $annualBudget->ref_no) {
             $annualBudget->update(['ref_no' => sprintf('AB-%d-%04d', $annualBudget->year, $annualBudget->id)]);
         }
 
-        $budget = $annualBudget->load(['items.budget:id,year', 'items.category', 'items.particular.department']);
+        $budget = $annualBudget->load(['items.budget:id,year,start_date,end_date', 'items.category', 'items.particular.department']);
         foreach ($budget->items as $item) {
-            if (!$item->ref_no) {
+            if (! $item->ref_no) {
                 $item->update(['ref_no' => sprintf('MB-%d-%02d-%04d', $annualBudget->year, $item->month ?: 1, $item->id)]);
             }
         }
@@ -453,29 +538,100 @@ class AnnualBudgetController extends Controller
             'categories' => BudgetCategory::all(),
             'particulars' => BudgetParticular::with('category', 'department')->get(),
             'accountTitles' => BudgetParticular::with('category', 'department')->get(),
-            'availableYears' => AnnualBudget::distinct()->orderByDesc('year')->pluck('year'),
-            'allBudgets' => AnnualBudget::select('id', 'year', 'ref_no', 'semester')->orderByDesc('year')->get(),
+            'availableYears' => AnnualBudget::distinct()->orderByDesc('start_date')->pluck('year'),
+            'allBudgets' => AnnualBudget::select('id', 'year', 'start_date', 'end_date', 'ref_no', 'semester')->orderByDesc('start_date')->get(),
         ]);
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'year' => 'required|integer|min:2000|max:2100',
-            'semester' => 'nullable|string|max:20',
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after:start_date',
         ]);
 
-        $this->ensureIncomeExistsForYear((int) $validated['year']);
-        $validated['semester'] = $this->normalizeSemester($validated['semester'] ?? null);
+        $validated = $this->validateFiscalPeriod($validated);
+        $this->ensureIncomeExistsForPeriod($validated['start_date'], $validated['end_date']);
 
         $annualBudget = AnnualBudget::create($validated);
-        AuditTrail::log($annualBudget, 'created', auth()->user(), "Created Annual Budget for year {$annualBudget->year}");
+        AuditTrail::log($annualBudget, 'created', auth()->user(), "Created {$annualBudget->fiscal_year_label} ({$annualBudget->period_label})");
 
         if ($request->header('X-Offline-Sync')) {
             return response()->json(['id' => $annualBudget->id, 'resource' => 'budget', 'record' => $annualBudget->fresh()], 201);
         }
 
-        return redirect()->route('annual-budgets.index')->with('success', 'Annual Budget created with reference number ' . $annualBudget->ref_no);
+        return redirect()->route('annual-budgets.index')->with('success', 'Annual Budget created with reference number '.$annualBudget->ref_no);
+    }
+
+    public function updatePeriod(Request $request, AnnualBudget $annualBudget)
+    {
+        $validated = $request->validate([
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after:start_date',
+            'confirm_cross_calendar_remap' => 'nullable|boolean',
+        ]);
+        $confirmedRemap = (bool) ($validated['confirm_cross_calendar_remap'] ?? false);
+        unset($validated['confirm_cross_calendar_remap']);
+        $validated = $this->validateFiscalPeriod($validated, $annualBudget);
+        $this->ensureIncomeExistsForPeriod($validated['start_date'], $validated['end_date']);
+
+        $newStart = Carbon::parse($validated['start_date']);
+        $newEnd = Carbon::parse($validated['end_date']);
+        $isCrossCalendarConversion = $annualBudget->fiscalStart()->year === $annualBudget->fiscalEnd()->year
+            && $newStart->year !== $newEnd->year;
+        $ambiguousItemCount = $isCrossCalendarConversion
+            ? $annualBudget->items()->where('month', '<', $newStart->month)->count()
+            : 0;
+        if ($ambiguousItemCount > 0 && ! $confirmedRemap) {
+            throw ValidationException::withMessages([
+                'confirm_cross_calendar_remap' => "{$ambiguousItemCount} existing January-July allocation(s) will move to the ending calendar year. Review and confirm this controlled remap.",
+            ]);
+        }
+
+        $outsideExpenses = Expense::query()
+            ->whereHas('budgetItem', fn ($query) => $query->where('budget_id', $annualBudget->id))
+            ->whereNotBetween('date_encoded', [$validated['start_date'], $validated['end_date']])
+            ->exists();
+
+        if ($outsideExpenses) {
+            throw ValidationException::withMessages([
+                'start_date' => 'The period cannot be changed because a linked expense would fall outside the new fiscal year.',
+            ]);
+        }
+
+        $outsideDisbursements = Disbursement::query()
+            ->whereHas('expense.budgetItem', fn ($query) => $query->where('budget_id', $annualBudget->id))
+            ->whereNotBetween('date_encoded', [$validated['start_date'], $validated['end_date']])
+            ->exists();
+
+        if ($outsideDisbursements) {
+            throw ValidationException::withMessages([
+                'end_date' => 'The period cannot be changed because a linked disbursement would fall outside the new fiscal year.',
+            ]);
+        }
+
+        DB::transaction(function () use ($annualBudget, $validated) {
+            $annualBudget->update($validated);
+
+            foreach ($annualBudget->items()->get() as $item) {
+                $allocationMonth = $annualBudget->allocationMonthForNumber((int) $item->month);
+                if (! $allocationMonth) {
+                    throw ValidationException::withMessages([
+                        'start_date' => "Existing allocation {$item->ref_no} cannot be mapped into the selected period.",
+                    ]);
+                }
+                $item->update(['allocation_month' => $allocationMonth->toDateString()]);
+            }
+
+            IncomeAllocation::where('annual_budget_id', $annualBudget->id)->delete();
+            foreach ($annualBudget->items()->get() as $item) {
+                $this->allocateIncomeToBudget($annualBudget, $item, (float) $item->appropriation);
+            }
+        });
+
+        AuditTrail::log($annualBudget, 'modified', auth()->user(), "Updated fiscal period to {$annualBudget->fresh()->period_label}");
+
+        return back()->with('success', 'Fiscal period updated successfully.');
     }
 
     public function storeItem(Request $request, AnnualBudget $annualBudget)
@@ -484,20 +640,35 @@ class AnnualBudgetController extends Controller
             'category_id' => 'required|exists:budget_categories,id',
             'department_id' => 'required|exists:departments,id',
             'particular_id' => 'required|exists:budget_particulars,id',
-            'month' => 'nullable|integer|min:1|max:12',
+            'allocation_month' => 'nullable|date|required_without:month',
+            'month' => 'nullable|integer|between:1,12|required_without:allocation_month',
             'appropriation' => 'required|numeric|min:0',
         ]);
 
         $particular = BudgetParticular::find($validated['particular_id']);
-        if (!$particular || (int) $particular->category_id !== (int) $validated['category_id'] || (int) $particular->department_id !== (int) $validated['department_id']) {
+        if (! $particular || (int) $particular->category_id !== (int) $validated['category_id'] || (int) $particular->department_id !== (int) $validated['department_id']) {
             throw ValidationException::withMessages([
                 'particular_id' => 'Selected account title must belong to the chosen category and responsibility center.',
             ]);
         }
 
-        $this->ensureIncomeExistsForYear((int) $annualBudget->year);
+        $allocationMonth = ! empty($validated['allocation_month'])
+            ? Carbon::parse($validated['allocation_month'])->startOfMonth()
+            : $annualBudget->allocationMonthForNumber((int) $validated['month']);
+        $errorField = ! empty($validated['allocation_month']) ? 'allocation_month' : 'month';
+        if (! $annualBudget->containsDate($allocationMonth)) {
+            throw ValidationException::withMessages([
+                $errorField => "Choose a month within {$annualBudget->fiscal_year_label}.",
+            ]);
+        }
 
-        $validated['month'] = $validated['month'] ?: 1;
+        $this->ensureIncomeExistsForPeriod(
+            $annualBudget->fiscalStart()->toDateString(),
+            $annualBudget->fiscalEnd()->toDateString()
+        );
+
+        $validated['allocation_month'] = $allocationMonth->toDateString();
+        $validated['month'] = $allocationMonth->month;
         unset($validated['department_id']);
 
         $item = DB::transaction(function () use ($annualBudget, $validated) {
@@ -505,6 +676,7 @@ class AnnualBudgetController extends Controller
                 'expenditure' => 0,
             ]));
             $this->allocateIncomeToBudget($annualBudget, $item, (float) $validated['appropriation']);
+
             return $item;
         });
 
@@ -517,18 +689,6 @@ class AnnualBudgetController extends Controller
         return redirect()->route('annual-budgets.show', $annualBudget)->with('success', 'Monthly Budget Allocation added.');
     }
 
-    protected function normalizeSemester(?string $semester): string
-    {
-        $semester = trim((string) $semester);
-        $lower = strtolower($semester);
-
-        if ($semester === '' || $lower === 'full year' || $lower === 'full year (jan-dec)' || $lower === 'full year (jan - dec)' || $lower === 'full year (jan–dec)' || $lower === 'full year (jan – dec)') {
-            return self::FULL_YEAR_SEMESTER;
-        }
-
-        return $semester;
-    }
-
     public function updateItem(Request $request, AnnualBudget $annualBudget, BudgetItem $item)
     {
         abort_unless((int) $item->budget_id === (int) $annualBudget->id, 404);
@@ -537,42 +697,52 @@ class AnnualBudgetController extends Controller
             'category_id' => 'required|exists:budget_categories,id',
             'department_id' => 'required|exists:departments,id',
             'particular_id' => 'required|exists:budget_particulars,id',
-            'month' => 'nullable|integer|min:1|max:12',
+            'allocation_month' => 'nullable|date|required_without:month',
+            'month' => 'nullable|integer|between:1,12|required_without:allocation_month',
             'appropriation' => 'required|numeric|min:0',
         ]);
 
         $particular = BudgetParticular::find($validated['particular_id']);
-        if (!$particular || (int) $particular->category_id !== (int) $validated['category_id'] || (int) $particular->department_id !== (int) $validated['department_id']) {
+        if (! $particular || (int) $particular->category_id !== (int) $validated['category_id'] || (int) $particular->department_id !== (int) $validated['department_id']) {
             throw ValidationException::withMessages([
                 'particular_id' => 'Selected account title must belong to the chosen category and responsibility center.',
             ]);
         }
 
-        $month = (int) ($validated['month'] ?: $item->month ?: 1);
+        $allocationMonth = ! empty($validated['allocation_month'])
+            ? Carbon::parse($validated['allocation_month'])->startOfMonth()
+            : $annualBudget->allocationMonthForNumber((int) $validated['month']);
+        $errorField = ! empty($validated['allocation_month']) ? 'allocation_month' : 'month';
+        if (! $annualBudget->containsDate($allocationMonth)) {
+            throw ValidationException::withMessages([
+                $errorField => "Choose a month within {$annualBudget->fiscal_year_label}.",
+            ]);
+        }
+        $month = $allocationMonth->month;
         $duplicateExists = $annualBudget->items()
             ->where('particular_id', $validated['particular_id'])
-            ->where('month', $month)
+            ->whereDate('allocation_month', $allocationMonth->toDateString())
             ->whereKeyNot($item->id)
             ->exists();
 
         if ($duplicateExists) {
             $monthName = date('F', mktime(0, 0, 0, $month, 1));
+            $periodText = $errorField === 'month'
+                ? "{$monthName} {$annualBudget->fiscal_year_label}"
+                : $allocationMonth->format('F Y');
 
             throw ValidationException::withMessages([
-                'month' => "An allocation already exists for {$particular->particular} in {$monthName} FY {$annualBudget->year}. Edit the existing row or choose another month.",
+                $errorField => "An allocation already exists for {$particular->particular} in {$periodText}. Edit the existing row or choose another month.",
             ]);
         }
 
-        $this->ensureIncomeExistsForYear((int) $annualBudget->year);
+        $this->ensureIncomeExistsForPeriod(
+            $annualBudget->fiscalStart()->toDateString(),
+            $annualBudget->fiscalEnd()->toDateString()
+        );
 
         $validated['month'] = $month;
-        if ($month !== (int) $item->month) {
-            $validated['ref_no'] = preg_replace(
-                '/^MB-\d{4}-\d{2}-/',
-                sprintf('MB-%d-%02d-', $annualBudget->year, $month),
-                (string) $item->ref_no
-            );
-        }
+        $validated['allocation_month'] = $allocationMonth->toDateString();
         unset($validated['department_id']);
 
         DB::transaction(function () use ($item, $validated) {
@@ -603,8 +773,6 @@ class AnnualBudgetController extends Controller
         DB::transaction(function () use ($annualBudget) {
             $items = $annualBudget->items()->get();
             $itemIds = $items->pluck('id');
-            $year = (int) $annualBudget->year;
-
             if ($itemIds->isNotEmpty()) {
                 IncomeAllocation::whereIn('budget_item_id', $itemIds)->delete();
                 AuditTrail::where('auditable_type', BudgetItem::class)
@@ -612,15 +780,7 @@ class AnnualBudgetController extends Controller
                     ->delete();
 
                 $expenseIds = Expense::query()
-                    ->whereYear('date_encoded', $year)
-                    ->where(function ($query) use ($items) {
-                        foreach ($items as $item) {
-                            $query->orWhere(function ($subQuery) use ($item) {
-                                $subQuery->where('category_id', $item->category_id)
-                                    ->where('particular_id', $item->particular_id);
-                            });
-                        }
-                    })
+                    ->whereIn('budget_item_id', $itemIds)
                     ->pluck('id');
 
                 if ($expenseIds->isNotEmpty()) {
