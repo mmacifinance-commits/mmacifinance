@@ -16,55 +16,31 @@ body {
     overflow-x: hidden;
 }
 
-html.app-loading::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    z-index: 9998;
-    pointer-events: none;
-    background:
-        radial-gradient(circle at 20% 10%, rgba(212, 168, 67, 0.16), transparent 28rem),
-        linear-gradient(180deg, rgba(26, 39, 68, 0.12), rgba(26, 39, 68, 0.04));
-    animation: app-loading-fade 180ms ease-out both;
-}
-
 html.app-loading::after {
     content: "";
     position: fixed;
     top: 0;
     left: 0;
     z-index: 10000;
-    width: 42%;
-    height: 3px;
+    width: 100%;
+    height: 4px;
     pointer-events: none;
-    background: linear-gradient(90deg, transparent, var(--color-mustard), #f8e4a3, var(--color-mustard));
-    box-shadow: 0 0 18px rgba(212, 168, 67, 0.75);
-    animation: app-loading-bar 1.05s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+    background:
+        linear-gradient(90deg, transparent 0%, rgba(212, 168, 67, 0.25) 16%, var(--color-mustard) 32%, #fff1b8 48%, var(--color-mustard) 64%, rgba(212, 168, 67, 0.25) 80%, transparent 100%),
+        linear-gradient(90deg, var(--color-navy-dark), var(--color-navy), var(--color-navy-dark));
+    background-size: 42% 100%, 100% 100%;
+    background-repeat: no-repeat;
+    box-shadow: 0 1px 10px rgba(212, 168, 67, 0.35);
+    animation: app-loading-flow 1.15s cubic-bezier(0.45, 0, 0.2, 1) infinite;
 }
 
-@keyframes app-loading-bar {
+@keyframes app-loading-flow {
     0% {
-        transform: translateX(-60%);
-        opacity: 0.45;
-    }
-
-    45% {
-        opacity: 1;
+        background-position: -45% 0, 0 0;
     }
 
     100% {
-        transform: translateX(260%);
-        opacity: 0.45;
-    }
-}
-
-@keyframes app-loading-fade {
-    from {
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
+        background-position: 145% 0, 0 0;
     }
 }
 
@@ -201,14 +177,9 @@ td {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    html.app-loading::before,
     html.app-loading::after {
         animation: none !important;
-    }
-
-    html.app-loading::after {
-        width: 100%;
-        transform: none;
+        background-position: 50% 0, 0 0;
     }
 
     .chart-shell--ready {
