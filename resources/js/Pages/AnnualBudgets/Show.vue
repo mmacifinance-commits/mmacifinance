@@ -433,7 +433,7 @@ function catBalancePercent(group) {
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">CSV File</label>
                     <input
                         type="file"
-                        accept=".csv,text/csv"
+                        accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
                         @change="(e) => importForm.csv_file = e.target.files?.[0] || null"
                         required

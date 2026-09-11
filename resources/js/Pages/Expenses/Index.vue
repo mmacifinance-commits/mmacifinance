@@ -632,7 +632,7 @@ function splitDate(d) {
             </div>
             <div>
                 <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV File</label>
-                <input type="file" accept=".csv,text/csv" @change="e => importForm.csv_file = e.target.files[0]" class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm" required />
+                <input type="file" accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" @change="e => importForm.csv_file = e.target.files[0]" class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm" required />
             </div>
             <div class="flex items-center justify-end gap-3 border-t pt-5">
                 <button type="button" @click="showImportModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>

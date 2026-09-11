@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\BudgetCategory;
+use App\Support\SpreadsheetImportExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
 use Inertia\Inertia;
@@ -143,84 +144,47 @@ class BudgetCategoryController extends Controller
      */
     public function exportCsv()
     {
-        $filename = sprintf(
-            'budget-categories-%s.csv',
-            now()->format('Ymd-His')
-        );
+        $filename = sprintf('budget-categories-%s', now()->format('Ymd-His'));
 
-        $categories = BudgetCategory::orderBy('name')
-            ->get([
-                'name',
-                'description',
-            ]);
+        $categories = BudgetCategory::orderBy('name')->get([
+            'name',
+            'description',
+        ]);
 
-        return Response::streamDownload(
-            function () use ($categories) {
-                $out = fopen('php://output', 'w');
+        $rows = [['budget_category', 'description']];
+        foreach ($categories as $category) {
+            $rows[] = [$category->name, $category->description];
+        }
 
-                fputcsv($out, [
-                    'budget_category',
-                    'description',
-                ]);
-
-                foreach ($categories as $category) {
-                    fputcsv($out, [
-                        $category->name,
-                        $category->description,
-                    ]);
-                }
-
-                fclose($out);
-            },
-            $filename,
-            [
-                'Content-Type' => 'text/csv; charset=UTF-8',
-            ]
-        );
+        return SpreadsheetImportExport::downloadXlsx($filename, $rows);
     }
 
     /**
-     * Import budget categories from CSV.
+     * Import budget categories from CSV or Excel.
      */
     public function importCsv(Request $request)
     {
-        $validated = $request->validate([
-            'csv_file' => [
-                'required',
-                'file',
-                'mimes:csv,txt',
-            ],
-        ]);
+        $validated = $request->validate(SpreadsheetImportExport::validationRules('csv_file', false));
 
-        $handle = fopen(
-            $validated['csv_file']->getRealPath(),
-            'r'
-        );
-
-        if (!$handle) {
+        try {
+            [$headers, $rows] = SpreadsheetImportExport::readRows($validated['csv_file']);
+        } catch (\RuntimeException $exception) {
             return back()->withErrors([
-                'csv_file' => 'The CSV file could not be opened.',
+                'csv_file' => $exception->getMessage(),
             ]);
         }
 
-        $headerRow = fgetcsv($handle) ?: [];
+        if (empty($headers)) {
+            return back()->withErrors([
+                'csv_file' => 'The CSV/Excel file could not be opened.',
+            ]);
+        }
 
-        $headers = array_map(
-            fn ($value) => strtolower(trim((string) $value)),
-            $headerRow
-        );
-
-        $required = [
-            'budget_category',
-            'description',
-        ];
+        $required = ['budget_category', 'description'];
 
         if (array_diff($required, $headers)) {
-            fclose($handle);
-
             return back()->withErrors([
-                'csv_file' =>
-                    'CSV must contain these columns: budget_category, description.',
+                'csv_file' => 'CSV/Excel must contain these columns: budget_category, description.',
             ]);
         }
 
@@ -230,18 +194,10 @@ class BudgetCategoryController extends Controller
         $updated = 0;
         $skipped = 0;
 
-        // Prevent duplicate rows inside the same CSV file.
         $seen = [];
 
-        while (($row = fgetcsv($handle)) !== false) {
-            // Ignore completely empty rows.
-            if (
-                !array_filter(
-                    $row,
-                    fn ($value) =>
-                        trim((string) $value) !== ''
-                )
-            ) {
+        foreach ($rows as $row) {
+            if (!array_filter($row, fn ($value) => trim((string) $value) !== '')) {
                 continue;
             }
 
@@ -253,25 +209,11 @@ class BudgetCategoryController extends Controller
                 $row[$index['description']] ?? null
             );
 
-            // Ignore rows without category names.
             if ($name === '') {
                 $skipped++;
                 continue;
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | Duplicate CSV row check
-            |--------------------------------------------------------------------------
-            |
-            | These will be considered the same:
-            |
-            | AUXILIARY FUND
-            | auxiliary fund
-            | Auxiliary Fund
-            |  Auxiliary    Fund
-            |
-            */
             $key = mb_strtolower($name);
 
             if (isset($seen[$key])) {
@@ -281,35 +223,17 @@ class BudgetCategoryController extends Controller
 
             $seen[$key] = true;
 
-            /*
-            |--------------------------------------------------------------------------
-            | Find existing category
-            |--------------------------------------------------------------------------
-            |
-            | We compare names case-insensitively so importing:
-            |
-            | "auxiliary fund"
-            |
-            | will find:
-            |
-            | "AUXILIARY FUND"
-            |
-            | instead of creating another record.
-            |
-            */
             $category = BudgetCategory::whereRaw(
                 'LOWER(TRIM(name)) = ?',
                 [mb_strtolower($name)]
             )->first();
 
             if ($category) {
-                // Existing category: update description only.
                 $category->description = $description;
                 $category->save();
 
                 $updated++;
             } else {
-                // New category.
                 BudgetCategory::create([
                     'name' => $name,
                     'description' => $description,
@@ -318,8 +242,6 @@ class BudgetCategoryController extends Controller
                 $created++;
             }
         }
-
-        fclose($handle);
 
         return redirect()
             ->route('budget-categories.index')

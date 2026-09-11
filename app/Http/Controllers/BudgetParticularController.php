@@ -8,6 +8,7 @@ use App\Models\Department;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
 use Inertia\Inertia;
+use App\Support\SpreadsheetImportExport;
 
 class BudgetParticularController extends Controller
 {
@@ -64,41 +65,41 @@ class BudgetParticularController extends Controller
 
     public function exportCsv()
     {
-        $filename = sprintf('account-titles-%s.csv', now()->format('Ymd-His'));
+        $filename = sprintf('account-titles-%s', now()->format('Ymd-His'));
         $particulars = BudgetParticular::with(['category', 'department'])->orderBy('particular')->get();
 
-        return Response::streamDownload(function () use ($particulars) {
-            $out = fopen('php://output', 'w');
-            fputcsv($out, ['budget_category', 'responsibility_center', 'account_code', 'account_name', 'account_title', 'description']);
+        $rows = [['budget_category', 'responsibility_center', 'account_code', 'account_name', 'account_title', 'description']];
+        foreach ($particulars as $particular) {
+            $rows[] = [
+                $particular->category?->name,
+                $particular->department?->code,
+                $particular->account_code,
+                $particular->account_name,
+                $particular->particular,
+                $particular->description,
+            ];
+        }
 
-            foreach ($particulars as $particular) {
-                fputcsv($out, [
-                    $particular->category?->name,
-                    $particular->department?->code,
-                    $particular->account_code,
-                    $particular->account_name,
-                    $particular->particular,
-                    $particular->description,
-                ]);
-            }
-
-            fclose($out);
-        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+        return SpreadsheetImportExport::downloadXlsx($filename, $rows);
     }
 
     public function importCsv(Request $request)
     {
-        $validated = $request->validate([
-            'csv_file' => 'required|file|mimes:csv,txt',
-        ]);
+        $validated = $request->validate(SpreadsheetImportExport::validationRules('csv_file', false));
 
-        $handle = fopen($validated['csv_file']->getRealPath(), 'r');
-        $headers = array_map(fn ($value) => strtolower(trim((string) $value)), fgetcsv($handle) ?: []);
+        try {
+            [$headers, $rows] = SpreadsheetImportExport::readRows($validated['csv_file']);
+        } catch (\RuntimeException $exception) {
+            return back()->withErrors(['csv_file' => $exception->getMessage()]);
+        }
+
+        if (empty($headers)) {
+            return back()->withErrors(['csv_file' => 'CSV/Excel file is empty.']);
+        }
+
         $required = ['budget_category', 'responsibility_center', 'account_code', 'account_name', 'account_title', 'description'];
         if (array_diff($required, $headers)) {
-            fclose($handle);
-
-            return back()->withErrors(['csv_file' => 'CSV must contain these columns: budget_category, responsibility_center, account_code, account_name, account_title, description.']);
+            return back()->withErrors(['csv_file' => 'CSV/Excel must contain these columns: budget_category, responsibility_center, account_code, account_name, account_title, description.']);
         }
 
         $index = array_flip($headers);
@@ -110,7 +111,7 @@ class BudgetParticularController extends Controller
         $skipped = [];
         $line = 1;
 
-        while (($row = fgetcsv($handle)) !== false) {
+        foreach ($rows as $row) {
             $line++;
             if (! array_filter($row, fn ($value) => trim((string) $value) !== '')) {
                 continue;
@@ -142,14 +143,12 @@ class BudgetParticularController extends Controller
                     $missing[] = "responsibility center '{$departmentRef}'";
                 }
                 $skipped[] = 'Row '.$line.' could not find '.implode(' and ', $missing).'.';
-
                 continue;
             }
 
             $key = strtolower($category->id.'|'.$department->id.'|'.$accountCode.'|'.$particular);
             if (isset($seen[$key])) {
                 $duplicates++;
-
                 continue;
             }
             $seen[$key] = true;
@@ -170,11 +169,9 @@ class BudgetParticularController extends Controller
             $item->wasRecentlyCreated ? $created++ : $updated++;
         }
 
-        fclose($handle);
-
         if ($dataRows === 0) {
             return back()->withErrors([
-                'csv_file' => 'The CSV contains only the header row. Add at least one account title row before importing.',
+                'csv_file' => 'The CSV/Excel contains only the header row. Add at least one account title row before importing.',
             ]);
         }
 

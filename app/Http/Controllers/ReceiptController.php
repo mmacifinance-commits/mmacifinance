@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
+use App\Support\SpreadsheetImportExport;
 
 class ReceiptController extends Controller
 {
@@ -87,57 +88,46 @@ class ReceiptController extends Controller
         $search = trim((string) $request->query('search', ''));
         $term = trim((string) $request->query('term', ''));
 
-        $fileName = 'receipts-export-'.now()->format('Y-m-d_His').'.csv';
+        $fileName = 'receipts-export-'.now()->format('Y-m-d_His');
         $query = $this->receiptQuery($selectedPeriod, $search, $term);
 
-        return Response::streamDownload(function () use ($query) {
-            $handle = fopen('php://output', 'w');
-            fwrite($handle, "\xEF\xBB\xBF");
-            fputcsv($handle, ['income_no', 'receipt_no', 'receipt_type', 'source', 'description', 'amount', 'date_encoded', 'notes']);
+        $rows = [['income_no', 'receipt_no', 'receipt_type', 'source', 'description', 'amount', 'date_encoded', 'notes']];
 
-            $query->orderBy('date_encoded')->orderBy('id')->chunk(200, function ($rows) use ($handle) {
-                foreach ($rows as $income) {
-                    fputcsv($handle, [
-                        $income->income_no,
-                        $income->receipt_no,
-                        $this->receiptType($income),
-                        $income->source,
-                        $income->description,
-                        $income->amount,
-                        $income->date_encoded?->format('Y-m-d'),
-                        $income->notes,
-                    ]);
-                }
-            });
+        $query->orderBy('date_encoded')->orderBy('id')->chunk(200, function ($rowsChunk) use (&$rows) {
+            foreach ($rowsChunk as $income) {
+                $rows[] = [
+                    $income->income_no,
+                    $income->receipt_no,
+                    $this->receiptType($income),
+                    $income->source,
+                    $income->description,
+                    $income->amount,
+                    $income->date_encoded?->format('Y-m-d'),
+                    $income->notes,
+                ];
+            }
+        });
 
-            fclose($handle);
-        }, $fileName, ['Content-Type' => 'text/csv; charset=UTF-8']);
+        return SpreadsheetImportExport::downloadXlsx($fileName, $rows);
     }
 
     public function importCsv(Request $request)
     {
-        $request->validate([
-            'csv_file' => 'required|file|mimes:csv,txt|max:10240',
-        ]);
+        $request->validate(SpreadsheetImportExport::validationRules('csv_file', true));
 
-        $handle = fopen($request->file('csv_file')->getRealPath(), 'r');
-        if ($handle === false) {
-            return back()->withErrors(['csv_file' => 'Unable to read the uploaded CSV file.']);
+        try {
+            [$header, $rows] = SpreadsheetImportExport::readRows($request->file('csv_file'));
+        } catch (\RuntimeException $exception) {
+            return back()->withErrors(['csv_file' => $exception->getMessage()]);
         }
 
-        $header = fgetcsv($handle);
-        if (! $header) {
-            fclose($handle);
-
-            return back()->withErrors(['csv_file' => 'CSV file is empty.']);
+        if (empty($header)) {
+            return back()->withErrors(['csv_file' => 'CSV/Excel file is empty.']);
         }
 
-        $header = array_map(fn ($value) => strtolower(trim((string) $value)), $header);
         $required = ['receipt_no', 'source', 'description', 'amount', 'date_encoded'];
         foreach ($required as $column) {
             if (! in_array($column, $header, true)) {
-                fclose($handle);
-
                 return back()->withErrors(['csv_file' => "Missing required column: {$column}"]);
             }
         }
@@ -148,7 +138,7 @@ class ReceiptController extends Controller
         $skipped = [];
         $line = 1;
 
-        while (($row = fgetcsv($handle)) !== false) {
+        foreach ($rows as $row) {
             $line++;
             if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
                 continue;
@@ -163,7 +153,6 @@ class ReceiptController extends Controller
 
             if ($receiptNo === '' || $source === '' || $description === '' || $dateEncoded === '') {
                 $skipped[] = "Row {$line} is missing receipt_no, source, description, or date_encoded.";
-
                 continue;
             }
 
@@ -182,8 +171,6 @@ class ReceiptController extends Controller
 
             $isNew ? $created++ : $updated++;
         }
-
-        fclose($handle);
 
         if (($created + $updated) === 0) {
             return back()->withErrors([

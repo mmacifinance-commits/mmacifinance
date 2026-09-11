@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
+use App\Support\SpreadsheetImportExport;
 
 class IncomeController extends Controller
 {
@@ -164,64 +165,46 @@ class IncomeController extends Controller
 
     public function exportCsv()
     {
-        $fileName = 'income-export-'.now()->format('Y-m-d_His').'.csv';
-        $headers = [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="'.$fileName.'"',
-        ];
+        $fileName = 'income-export-'.now()->format('Y-m-d_His');
+        $rows = [['income_no', 'receipt_no', 'source', 'description', 'amount', 'date_encoded', 'notes']];
 
-        $callback = function () {
-            $handle = fopen('php://output', 'w');
-            fwrite($handle, "\xEF\xBB\xBF");
-            fputcsv($handle, ['income_no', 'receipt_no', 'source', 'description', 'amount', 'date_encoded', 'notes']);
+        Income::query()
+            ->orderBy('date_encoded')
+            ->orderBy('id')
+            ->chunk(200, function ($rowsChunk) use (&$rows) {
+                foreach ($rowsChunk as $income) {
+                    $rows[] = [
+                        $income->income_no,
+                        $income->receipt_no,
+                        $income->source,
+                        $income->description,
+                        $income->amount,
+                        optional($income->date_encoded)->format('Y-m-d'),
+                        $income->notes,
+                    ];
+                }
+            });
 
-            Income::query()
-                ->orderBy('date_encoded')
-                ->orderBy('id')
-                ->chunk(200, function ($rows) use ($handle) {
-                    foreach ($rows as $income) {
-                        fputcsv($handle, [
-                            $income->income_no,
-                            $income->receipt_no,
-                            $income->source,
-                            $income->description,
-                            $income->amount,
-                            optional($income->date_encoded)->format('Y-m-d'),
-                            $income->notes,
-                        ]);
-                    }
-                });
-
-            fclose($handle);
-        };
-
-        return Response::streamDownload($callback, $fileName, $headers);
+        return SpreadsheetImportExport::downloadXlsx($fileName, $rows);
     }
 
     public function importCsv(Request $request)
     {
-        $request->validate([
-            'csv_file' => 'required|file|mimes:csv,txt|max:10240',
-        ]);
+        $request->validate(SpreadsheetImportExport::validationRules('csv_file', true));
 
-        $handle = fopen($request->file('csv_file')->getRealPath(), 'r');
-        if ($handle === false) {
-            return back()->withErrors(['csv_file' => 'Unable to read the uploaded CSV file.']);
+        try {
+            [$header, $rows] = SpreadsheetImportExport::readRows($request->file('csv_file'));
+        } catch (\RuntimeException $exception) {
+            return back()->withErrors(['csv_file' => $exception->getMessage()]);
         }
 
-        $header = fgetcsv($handle);
-        if (! $header) {
-            fclose($handle);
-
-            return back()->withErrors(['csv_file' => 'CSV file is empty.']);
+        if (empty($header)) {
+            return back()->withErrors(['csv_file' => 'CSV/Excel file is empty.']);
         }
 
-        $header = array_map(fn ($value) => trim((string) $value), $header);
         $required = ['source', 'description', 'amount', 'date_encoded', 'notes'];
         foreach ($required as $column) {
             if (! in_array($column, $header, true)) {
-                fclose($handle);
-
                 return back()->withErrors(['csv_file' => "Missing required column: {$column}"]);
             }
         }
@@ -230,7 +213,7 @@ class IncomeController extends Controller
         $created = 0;
         $updated = 0;
 
-        while (($row = fgetcsv($handle)) !== false) {
+        foreach ($rows as $row) {
             if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
                 continue;
             }
@@ -270,8 +253,6 @@ class IncomeController extends Controller
             $isNew ? $created++ : $updated++;
         }
 
-        fclose($handle);
-
-        return redirect()->back()->with('success', "Income CSV imported successfully. Created: {$created}, Updated: {$updated}");
+        return redirect()->back()->with('success', "Income CSV/Excel imported successfully. Created: {$created}, Updated: {$updated}");
     }
 }

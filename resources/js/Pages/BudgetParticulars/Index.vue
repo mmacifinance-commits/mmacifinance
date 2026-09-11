@@ -171,7 +171,7 @@ function importCsv() {
             </div>
             <div>
                 <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV File</label>
-                <input type="file" accept=".csv,text/csv" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required @change="(e) => importForm.csv_file = e.target.files?.[0] || null" />
+                <input type="file" accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required @change="(e) => importForm.csv_file = e.target.files?.[0] || null" />
                 <p v-if="importForm.errors.csv_file" class="mt-1 text-xs text-red-500">{{ importForm.errors.csv_file }}</p>
             </div>
             <div class="flex items-center justify-end gap-3 border-t pt-5">

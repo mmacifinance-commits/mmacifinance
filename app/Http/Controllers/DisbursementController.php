@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
+use App\Support\SpreadsheetImportExport;
 
 class DisbursementController extends Controller
 {
@@ -397,78 +398,60 @@ class DisbursementController extends Controller
 
     public function exportCsv()
     {
-        $fileName = 'disbursements-export-'.now()->format('Y-m-d_His').'.csv';
-        $headers = [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="'.$fileName.'"',
-        ];
+        $fileName = 'disbursements-export-'.now()->format('Y-m-d_His');
+        $rows = [['disbursement_no', 'expense_ref_no', 'description', 'source', 'pay_to', 'amount', 'method', 'date_encoded', 'status', 'notes', 'remarks']];
 
-        $callback = function () {
-            $handle = fopen('php://output', 'w');
-            fwrite($handle, "\xEF\xBB\xBF");
-            fputcsv($handle, ['disbursement_no', 'expense_ref_no', 'description', 'source', 'pay_to', 'amount', 'method', 'date_encoded', 'status', 'notes', 'remarks']);
+        Disbursement::with('expense:id,ref_no')->orderBy('id')->chunk(200, function ($rowsChunk) use (&$rows) {
+            foreach ($rowsChunk as $dsb) {
+                $rows[] = [
+                    $dsb->disbursement_no,
+                    $dsb->expense?->ref_no,
+                    $dsb->description,
+                    $dsb->source,
+                    $dsb->pay_to,
+                    $dsb->amount,
+                    $dsb->method,
+                    optional($dsb->date_encoded)->format('Y-m-d'),
+                    $dsb->status,
+                    $dsb->notes,
+                    $dsb->remarks,
+                ];
+            }
+        });
 
-            Disbursement::with('expense:id,ref_no')->orderBy('id')->chunk(200, function ($rows) use ($handle) {
-                foreach ($rows as $dsb) {
-                    fputcsv($handle, [
-                        $dsb->disbursement_no,
-                        $dsb->expense?->ref_no,
-                        $dsb->description,
-                        $dsb->source,
-                        $dsb->pay_to,
-                        $dsb->amount,
-                        $dsb->method,
-                        optional($dsb->date_encoded)->format('Y-m-d'),
-                        $dsb->status,
-                        $dsb->notes,
-                        $dsb->remarks,
-                    ]);
-                }
-            });
-
-            fclose($handle);
-        };
-
-        return Response::streamDownload($callback, $fileName, $headers);
+        return SpreadsheetImportExport::downloadXlsx($fileName, $rows);
     }
 
     public function importCsv(Request $request)
     {
-        $request->validate([
-            'csv_file' => 'required|file|mimes:csv,txt|max:10240',
-        ]);
+        $request->validate(SpreadsheetImportExport::validationRules('csv_file', true));
 
-        $handle = fopen($request->file('csv_file')->getRealPath(), 'r');
-        if ($handle === false) {
-            return back()->withErrors(['csv_file' => 'Unable to read the uploaded CSV file.']);
+        try {
+            [$header, $rows] = SpreadsheetImportExport::readRows($request->file('csv_file'));
+        } catch (\RuntimeException $exception) {
+            return back()->withErrors(['csv_file' => $exception->getMessage()]);
         }
 
-        $header = fgetcsv($handle);
-        if (! $header) {
-            fclose($handle);
-
-            return back()->withErrors(['csv_file' => 'CSV file is empty.']);
+        if (empty($header)) {
+            return back()->withErrors(['csv_file' => 'CSV/Excel file is empty.']);
         }
 
-        $header = array_map(fn ($value) => trim((string) $value), $header);
         $required = ['disbursement_no', 'expense_ref_no', 'description', 'source', 'pay_to', 'amount', 'method', 'date_encoded', 'status', 'notes', 'remarks'];
         foreach ($required as $column) {
             if (! in_array($column, $header, true)) {
-                fclose($handle);
-
                 return back()->withErrors(['csv_file' => "Missing required column: {$column}"]);
             }
         }
 
         $index = array_flip($header);
         $allowedStatuses = ['draft', 'for_release', 'for_approval'];
-        $rows = [];
+        $parsedRows = [];
 
-        while (($row = fgetcsv($handle)) !== false) {
+        foreach ($rows as $row) {
             if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
                 continue;
             }
-            $rows[] = [
+            $parsedRows[] = [
                 'disbursement_no' => trim((string) ($row[$index['disbursement_no']] ?? '')),
                 'expense_ref_no' => trim((string) ($row[$index['expense_ref_no']] ?? '')),
                 'description' => trim((string) ($row[$index['description']] ?? '')),
@@ -483,9 +466,7 @@ class DisbursementController extends Controller
             ];
         }
 
-        fclose($handle);
-
-        foreach ($rows as $i => $row) {
+        foreach ($parsedRows as $i => $row) {
             if ($row['disbursement_no'] === '' || $row['expense_ref_no'] === '' || $row['description'] === '' || $row['source'] === '' || $row['pay_to'] === '' || $row['date_encoded'] === '') {
                 return back()->withErrors(['csv_file' => 'Row '.($i + 2).' is missing required data.']);
             }
@@ -511,8 +492,8 @@ class DisbursementController extends Controller
         $created = 0;
         $updated = 0;
 
-        DB::transaction(function () use ($rows, &$created, &$updated) {
-            foreach ($rows as $row) {
+        DB::transaction(function () use ($parsedRows, &$created, &$updated) {
+            foreach ($parsedRows as $row) {
                 $expense = Expense::where('ref_no', $row['expense_ref_no'])->where('status', 'approved')->first();
                 if (! $expense) {
                     continue;
@@ -534,7 +515,7 @@ class DisbursementController extends Controller
                 $disbursement->prepared_by_id = auth()->id();
                 $disbursement->save();
 
-                AuditTrail::log($disbursement, $isNew ? 'created' : 'modified', auth()->user(), $row['remarks'] !== '' ? $row['remarks'] : ($isNew ? 'Disbursement imported from CSV.' : 'Disbursement updated from CSV.'));
+                AuditTrail::log($disbursement, $isNew ? 'created' : 'modified', auth()->user(), $row['remarks'] !== '' ? $row['remarks'] : ($isNew ? 'Disbursement imported from CSV/Excel.' : 'Disbursement updated from CSV/Excel.'));
                 if ($disbursement->status === 'posted') {
                     $this->syncExpensePaidAmount($disbursement->expense_id);
                 }
@@ -543,7 +524,7 @@ class DisbursementController extends Controller
             }
         });
 
-        return redirect()->back()->with('success', "Disbursement CSV imported successfully. Created: {$created}, Updated: {$updated}");
+        return redirect()->back()->with('success', "Disbursement CSV/Excel imported successfully. Created: {$created}, Updated: {$updated}");
     }
 
     protected function syncExpensePaidAmount(?int $expenseId)

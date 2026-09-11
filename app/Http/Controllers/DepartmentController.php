@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Department;
+use App\Support\SpreadsheetImportExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
 use Inertia\Inertia;
@@ -62,36 +63,37 @@ class DepartmentController extends Controller
 
     public function exportCsv(Request $request)
     {
-        $filename = sprintf('responsibility-centers-%s.csv', now()->format('Ymd-His'));
+        $filename = sprintf('responsibility-centers-%s', now()->format('Ymd-His'));
         $departments = Department::orderBy('name')->get(['name', 'code']);
 
-        return Response::streamDownload(function () use ($departments) {
-            $out = fopen('php://output', 'w');
-            fputcsv($out, ['responsibility_center', 'code']);
+        $rows = [['responsibility_center', 'code']];
+        foreach ($departments as $department) {
+            $rows[] = [$department->name, $department->code];
+        }
 
-            foreach ($departments as $department) {
-                fputcsv($out, [$department->name, $department->code]);
-            }
-
-            fclose($out);
-        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+        return SpreadsheetImportExport::downloadXlsx($filename, $rows);
     }
 
     public function importCsv(Request $request)
     {
         $this->authorizeManagement($request);
 
-        $validated = $request->validate([
-            'csv_file' => 'required|file|mimes:csv,txt',
-        ]);
+        $validated = $request->validate(SpreadsheetImportExport::validationRules('csv_file', false));
 
-        $handle = fopen($validated['csv_file']->getRealPath(), 'r');
-        $headers = array_map(fn ($value) => strtolower(trim((string) $value)), fgetcsv($handle) ?: []);
+        try {
+            [$headers, $rows] = SpreadsheetImportExport::readRows($validated['csv_file']);
+        } catch (\RuntimeException $exception) {
+            return back()->withErrors(['csv_file' => $exception->getMessage()]);
+        }
+
+        if (empty($headers)) {
+            return back()->withErrors(['csv_file' => 'CSV/Excel file is empty.']);
+        }
+
         $required = ['responsibility_center', 'code'];
         $missing = array_diff($required, $headers);
         if ($missing) {
-            fclose($handle);
-            return back()->withErrors(['csv_file' => 'CSV must contain these columns: responsibility_center, code.']);
+            return back()->withErrors(['csv_file' => 'CSV/Excel must contain these columns: responsibility_center, code.']);
         }
 
         $index = array_flip($headers);
@@ -99,7 +101,7 @@ class DepartmentController extends Controller
         $updated = 0;
         $seen = [];
 
-        while (($row = fgetcsv($handle)) !== false) {
+        foreach ($rows as $row) {
             if (!array_filter($row, fn ($value) => trim((string) $value) !== '')) {
                 continue;
             }
@@ -124,8 +126,6 @@ class DepartmentController extends Controller
 
             $department->wasRecentlyCreated ? $created++ : $updated++;
         }
-
-        fclose($handle);
 
         return redirect()
             ->route('departments.index')

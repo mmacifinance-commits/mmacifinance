@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
+use App\Support\SpreadsheetImportExport;
 
 class ExpenseController extends Controller
 {
@@ -315,74 +316,56 @@ class ExpenseController extends Controller
 
     public function exportCsv()
     {
-        $fileName = 'expenses-export-'.now()->format('Y-m-d_His').'.csv';
-        $headers = [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="'.$fileName.'"',
-        ];
+        $fileName = 'expenses-export-'.now()->format('Y-m-d_His');
+        $rows = [['ref_no', 'description', 'category_id', 'particular_id', 'monthly_allocation_ref', 'amount', 'date_encoded', 'date_approved', 'status', 'notes']];
 
-        $callback = function () {
-            $handle = fopen('php://output', 'w');
-            fwrite($handle, "\xEF\xBB\xBF");
-            fputcsv($handle, ['ref_no', 'description', 'category_id', 'particular_id', 'monthly_allocation_ref', 'amount', 'date_encoded', 'date_approved', 'status', 'notes']);
+        Expense::query()->with('budgetItem:id,ref_no')->orderBy('id')->chunk(200, function ($rowsChunk) use (&$rows) {
+            foreach ($rowsChunk as $expense) {
+                $rows[] = [
+                    $expense->ref_no,
+                    $expense->description,
+                    $expense->category_id,
+                    $expense->particular_id,
+                    $expense->budgetItem?->ref_no,
+                    $expense->amount,
+                    optional($expense->date_encoded)->format('Y-m-d'),
+                    optional($expense->date_approved)->format('Y-m-d'),
+                    $expense->status,
+                    $expense->notes,
+                ];
+            }
+        });
 
-            Expense::query()->with('budgetItem:id,ref_no')->orderBy('id')->chunk(200, function ($rows) use ($handle) {
-                foreach ($rows as $expense) {
-                    fputcsv($handle, [
-                        $expense->ref_no,
-                        $expense->description,
-                        $expense->category_id,
-                        $expense->particular_id,
-                        $expense->budgetItem?->ref_no,
-                        $expense->amount,
-                        optional($expense->date_encoded)->format('Y-m-d'),
-                        optional($expense->date_approved)->format('Y-m-d'),
-                        $expense->status,
-                        $expense->notes,
-                    ]);
-                }
-            });
-
-            fclose($handle);
-        };
-
-        return Response::streamDownload($callback, $fileName, $headers);
+        return SpreadsheetImportExport::downloadXlsx($fileName, $rows);
     }
 
     public function importCsv(Request $request)
     {
-        $request->validate([
-            'csv_file' => 'required|file|mimes:csv,txt|max:10240',
-        ]);
+        $request->validate(SpreadsheetImportExport::validationRules('csv_file', true));
 
-        $handle = fopen($request->file('csv_file')->getRealPath(), 'r');
-        if ($handle === false) {
-            return back()->withErrors(['csv_file' => 'Unable to read the uploaded CSV file.']);
+        try {
+            [$header, $rows] = SpreadsheetImportExport::readRows($request->file('csv_file'));
+        } catch (\RuntimeException $exception) {
+            return back()->withErrors(['csv_file' => $exception->getMessage()]);
         }
 
-        $header = fgetcsv($handle);
-        if (! $header) {
-            fclose($handle);
-
-            return back()->withErrors(['csv_file' => 'CSV file is empty.']);
+        if (empty($header)) {
+            return back()->withErrors(['csv_file' => 'CSV/Excel file is empty.']);
         }
 
-        $header = array_map(fn ($value) => trim((string) $value), $header);
         $required = ['ref_no', 'description', 'category', 'account_title', 'amount', 'date_encoded', 'date_approved', 'status', 'notes'];
         foreach ($required as $column) {
             if (! in_array($column, $header, true)) {
-                fclose($handle);
-
                 return back()->withErrors(['csv_file' => "Missing required column: {$column}"]);
             }
         }
 
         $index = array_flip($header);
         $allowedStatuses = ['pending', 'cancelled'];
-        $rows = [];
+        $parsedRows = [];
         $years = [];
 
-        while (($row = fgetcsv($handle)) !== false) {
+        foreach ($rows as $row) {
             if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
                 continue;
             }
@@ -390,7 +373,7 @@ class ExpenseController extends Controller
             $categoryRaw = trim((string) ($row[$index['category']] ?? ''));
             $particularRaw = trim((string) ($row[$index['account_title']] ?? ''));
 
-            $rows[] = [
+            $parsedRows[] = [
                 'ref_no' => trim((string) ($row[$index['ref_no']] ?? '')),
                 'category_raw' => $categoryRaw,
                 'particular_raw' => $particularRaw,
@@ -404,9 +387,7 @@ class ExpenseController extends Controller
             ];
         }
 
-        fclose($handle);
-
-        foreach ($rows as $i => $row) {
+        foreach ($parsedRows as $i => $row) {
             if ($row['ref_no'] === '' || $row['description'] === '' || $row['category_raw'] === '' || $row['particular_raw'] === '' || $row['date_encoded'] === '') {
                 return back()->withErrors(['csv_file' => 'Row '.($i + 2).' is missing required data.']);
             }
@@ -427,23 +408,21 @@ class ExpenseController extends Controller
                 return back()->withErrors(['csv_file' => 'Row '.($i + 2)." references an unknown account title: {$row['particular_raw']}"]);
             }
 
-            $rows[$i]['category_id'] = $category->id;
-            $rows[$i]['particular_id'] = $particular->id;
+            $parsedRows[$i]['category_id'] = $category->id;
+            $parsedRows[$i]['particular_id'] = $particular->id;
             if ($row['allocation_ref'] !== '') {
                 $budgetItem = BudgetItem::where('ref_no', $row['allocation_ref'])->first();
                 if (! $budgetItem) {
                     return back()->withErrors(['csv_file' => 'Row '.($i + 2)." references an unknown monthly allocation: {$row['allocation_ref']}"]);
                 }
-                $rows[$i]['budget_item_id'] = $this->validateSelectedBudgetItem([
+                $parsedRows[$i]['budget_item_id'] = $this->validateSelectedBudgetItem([
                     'category_id' => $category->id,
                     'particular_id' => $particular->id,
                     'budget_item_id' => $budgetItem->id,
                     'date_encoded' => $row['date_encoded'],
                 ])->id;
             } else {
-                // Backward compatibility for exports created before allocation
-                // references were included in the expense CSV format.
-                $rows[$i]['budget_item_id'] = $this->resolveBudgetItemId([
+                $parsedRows[$i]['budget_item_id'] = $this->resolveBudgetItemId([
                     'category_id' => $category->id,
                     'particular_id' => $particular->id,
                     'date_encoded' => $row['date_encoded'],
@@ -454,7 +433,7 @@ class ExpenseController extends Controller
                 return back()->withErrors(['csv_file' => 'Row '.($i + 2).' must have an amount greater than zero.']);
             }
 
-            $budgetItem = BudgetItem::findOrFail($rows[$i]['budget_item_id']);
+            $budgetItem = BudgetItem::findOrFail($parsedRows[$i]['budget_item_id']);
             $existingExpense = Expense::where('ref_no', $row['ref_no'])->first();
             $available = app(BudgetUtilizationService::class)->availableForExpense($budgetItem, $existingExpense);
             if ($row['amount'] > $available) {
@@ -468,8 +447,8 @@ class ExpenseController extends Controller
         $created = 0;
         $updated = 0;
 
-        DB::transaction(function () use ($rows, &$created, &$updated) {
-            foreach ($rows as $row) {
+        DB::transaction(function () use ($parsedRows, &$created, &$updated) {
+            foreach ($parsedRows as $row) {
                 $expense = Expense::firstOrNew(['ref_no' => $row['ref_no']]);
 
                 $isNew = ! $expense->exists;
@@ -488,7 +467,7 @@ class ExpenseController extends Controller
                     $expense,
                     $isNew ? 'created' : 'modified',
                     auth()->user(),
-                    $row['notes'] !== '' ? $row['notes'] : ($isNew ? 'Expense imported from CSV.' : 'Expense updated from CSV.'),
+                    $row['notes'] !== '' ? $row['notes'] : ($isNew ? 'Expense imported from CSV/Excel.' : 'Expense updated from CSV/Excel.'),
                     [
                         'status' => $expense->status,
                         'amount' => (float) $expense->amount,
@@ -501,7 +480,7 @@ class ExpenseController extends Controller
             }
         });
 
-        return redirect()->back()->with('success', "Expense CSV imported successfully. Created: {$created}, Updated: {$updated}");
+        return redirect()->back()->with('success', "Expense CSV/Excel imported successfully. Created: {$created}, Updated: {$updated}");
     }
 
     protected function resolveExpenseCategory(string $raw): ?BudgetCategory

@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
+use App\Support\SpreadsheetImportExport;
 
 class AnnualBudgetController extends Controller
 {
@@ -283,57 +284,34 @@ class AnnualBudgetController extends Controller
     public function exportCsv(AnnualBudget $annualBudget)
     {
         $budget = $annualBudget->load(['items.category', 'items.particular.department']);
-        $filename = sprintf('annual-budget-%s.csv', $budget->year);
+        $filename = sprintf('annual-budget-%s', $budget->year);
 
-        return response()->streamDownload(function () use ($budget) {
-            $out = fopen('php://output', 'w');
-            fprintf($out, chr(0xEF).chr(0xBB).chr(0xBF));
+        $rows = [['annual_ref_no', 'fiscal_year', 'fiscal_year_label', 'fiscal_start_date', 'fiscal_end_date', 'allocation_month', 'month', 'budget_category', 'responsibility_center', 'account_code', 'account_title', 'description', 'appropriation']];
 
-            fputcsv($out, [
-                'annual_ref_no',
-                'fiscal_year',
-                'fiscal_year_label',
-                'fiscal_start_date',
-                'fiscal_end_date',
-                'allocation_month',
-                'month',
-                'budget_category',
-                'responsibility_center',
-                'account_code',
-                'account_title',
-                'description',
-                'appropriation',
-            ]);
+        foreach ($budget->items as $item) {
+            $rows[] = [
+                $budget->ref_no,
+                $budget->year,
+                $budget->fiscal_year_label,
+                $budget->fiscalStart()->toDateString(),
+                $budget->fiscalEnd()->toDateString(),
+                $item->allocation_month?->format('Y-m'),
+                $item->month,
+                $item->category?->name,
+                $item->particular?->department?->name,
+                $item->particular?->account_code,
+                $item->particular?->particular,
+                $item->particular?->description,
+                $item->appropriation,
+            ];
+        }
 
-            foreach ($budget->items as $item) {
-                fputcsv($out, [
-                    $budget->ref_no,
-                    $budget->year,
-                    $budget->fiscal_year_label,
-                    $budget->fiscalStart()->toDateString(),
-                    $budget->fiscalEnd()->toDateString(),
-                    $item->allocation_month?->format('Y-m'),
-                    $item->month,
-                    $item->category?->name,
-                    $item->particular?->department?->name,
-                    $item->particular?->account_code,
-                    $item->particular?->particular,
-                    $item->particular?->description,
-                    $item->appropriation,
-                ]);
-            }
-
-            fclose($out);
-        }, $filename, [
-            'Content-Type' => 'text/csv',
-        ]);
+        return SpreadsheetImportExport::downloadXlsx($filename, $rows);
     }
 
     public function importCsv(Request $request, AnnualBudget $annualBudget)
     {
-        $request->validate([
-            'csv_file' => 'required|file|mimes:csv,txt',
-        ]);
+        $request->validate(SpreadsheetImportExport::validationRules('csv_file', false));
 
         try {
             $this->ensureIncomeExistsForPeriod(
@@ -349,37 +327,32 @@ class AnnualBudgetController extends Controller
         }
 
         $file = $request->file('csv_file');
-        $handle = fopen($file->getRealPath(), 'r');
-        if (! $handle) {
-            return back()->with('error', 'Unable to read CSV file.');
+
+        try {
+            [$headers, $rows] = SpreadsheetImportExport::readRows($file);
+        } catch (\RuntimeException $exception) {
+            return back()->with('error', $exception->getMessage());
         }
 
-        $headers = fgetcsv($handle);
-        if (! $headers) {
-            fclose($handle);
-
-            return back()->with('error', 'CSV file is empty.');
+        if (empty($headers)) {
+            return back()->with('error', 'CSV/Excel file is empty.');
         }
 
         $headers = array_map(fn ($header) => $this->normalizeHeader((string) $header), $headers);
         $required = ['budget_category', 'responsibility_center', 'account_title', 'appropriation'];
         foreach ($required as $column) {
             if (! in_array($column, $headers, true)) {
-                fclose($handle);
-
-                return back()->with('error', 'CSV is missing required column: '.$column);
+                return back()->with('error', 'CSV/Excel is missing required column: '.$column);
             }
         }
         if (! in_array('allocation_month', $headers, true) && ! in_array('month', $headers, true)) {
-            fclose($handle);
-
-            return back()->with('error', 'CSV is missing required column: allocation_month (or legacy month).');
+            return back()->with('error', 'CSV/Excel is missing required column: allocation_month (or legacy month).');
         }
 
-        $rows = [];
+        $parsedRows = [];
         $csvTotalAppropriation = 0.0;
 
-        while (($row = fgetcsv($handle)) !== false) {
+        foreach ($rows as $row) {
             if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
                 continue;
             }
@@ -390,12 +363,9 @@ class AnnualBudgetController extends Controller
             }
 
             $amount = $this->parseMoney($data['appropriation'] ?? 0);
-            $rows[] = $data;
+            $parsedRows[] = $data;
             $csvTotalAppropriation += $amount;
         }
-
-        rewind($handle);
-        fgetcsv($handle); // skip header row
 
         $availableIncome = (float) Income::whereBetween('date_encoded', [
             $annualBudget->fiscalStart()->toDateString(),
@@ -407,7 +377,6 @@ class AnnualBudgetController extends Controller
         $remainingIncome = round($availableIncome - $allocatedIncome, 2);
 
         if ($csvTotalAppropriation > $remainingIncome) {
-            fclose($handle);
             throw ValidationException::withMessages([
                 'csv_file' => 'Appropriation must not be more than the income. Available income balance is '.number_format($remainingIncome, 2).'.',
             ]);
@@ -416,27 +385,27 @@ class AnnualBudgetController extends Controller
         $rowsCreated = 0;
         $rowsUpdated = 0;
 
-        DB::transaction(function () use ($rows, $annualBudget, &$rowsCreated, &$rowsUpdated) {
-            foreach ($rows as $data) {
+        DB::transaction(function () use ($parsedRows, $annualBudget, &$rowsCreated, &$rowsUpdated) {
+            foreach ($parsedRows as $data) {
                 $csvYear = isset($data['fiscal_year']) && $data['fiscal_year'] !== '' ? (int) $data['fiscal_year'] : (int) $annualBudget->year;
                 if ($csvYear !== (int) $annualBudget->fiscalStart()->year) {
                     throw ValidationException::withMessages([
-                        'csv_file' => "CSV fiscal year {$csvYear} does not match {$annualBudget->fiscal_year_label}.",
+                        'csv_file' => "CSV/Excel fiscal year {$csvYear} does not match {$annualBudget->fiscal_year_label}.",
                     ]);
                 }
                 if (! empty($data['fiscal_year_label']) && trim((string) $data['fiscal_year_label']) !== $annualBudget->fiscal_year_label) {
                     throw ValidationException::withMessages([
-                        'csv_file' => "CSV fiscal year label must be {$annualBudget->fiscal_year_label}.",
+                        'csv_file' => "CSV/Excel fiscal year label must be {$annualBudget->fiscal_year_label}.",
                     ]);
                 }
                 if (! empty($data['fiscal_start_date']) && Carbon::parse($data['fiscal_start_date'])->toDateString() !== $annualBudget->fiscalStart()->toDateString()) {
                     throw ValidationException::withMessages([
-                        'csv_file' => "CSV fiscal start date must be {$annualBudget->fiscalStart()->toDateString()}.",
+                        'csv_file' => "CSV/Excel fiscal start date must be {$annualBudget->fiscalStart()->toDateString()}.",
                     ]);
                 }
                 if (! empty($data['fiscal_end_date']) && Carbon::parse($data['fiscal_end_date'])->toDateString() !== $annualBudget->fiscalEnd()->toDateString()) {
                     throw ValidationException::withMessages([
-                        'csv_file' => "CSV fiscal end date must be {$annualBudget->fiscalEnd()->toDateString()}.",
+                        'csv_file' => "CSV/Excel fiscal end date must be {$annualBudget->fiscalEnd()->toDateString()}.",
                     ]);
                 }
 
@@ -487,11 +456,11 @@ class AnnualBudgetController extends Controller
 
         if (($rowsCreated + $rowsUpdated) === 0) {
             return back()->withErrors([
-                'csv_file' => 'No budget rows were imported. Please check the CSV headers, month values, and prerequisite data.',
+                'csv_file' => 'No budget rows were imported. Please check the CSV/Excel headers, month values, and prerequisite data.',
             ]);
         }
 
-        return redirect()->route('annual-budgets.show', $annualBudget)->with('success', "CSV imported successfully. Created {$rowsCreated} row(s), updated {$rowsUpdated} row(s). Missing categories/account titles were created automatically.");
+        return redirect()->route('annual-budgets.show', $annualBudget)->with('success', "CSV/Excel imported successfully. Created {$rowsCreated} row(s), updated {$rowsUpdated} row(s). Missing categories/account titles were created automatically.");
     }
 
     public function index()

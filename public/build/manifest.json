@@ -1,6 +1,6 @@
 {
-  "_AppLayout-D-GuQn3_.js": {
-    "file": "assets/AppLayout-D-GuQn3_.js",
+  "_AppLayout-97tPKpl1.js": {
+    "file": "assets/AppLayout-97tPKpl1.js",
     "name": "AppLayout",
     "imports": [
       "resources/js/app.js"
@@ -13,30 +13,30 @@
     "file": "assets/AppLayout-DGbjgWVD.css",
     "src": "_AppLayout-DGbjgWVD.css"
   },
-  "_ComboTrendChart-CIs_Wu0-.js": {
-    "file": "assets/ComboTrendChart-CIs_Wu0-.js",
+  "_ComboTrendChart-D-k_Bvam.css": {
+    "file": "assets/ComboTrendChart-D-k_Bvam.css",
+    "src": "_ComboTrendChart-D-k_Bvam.css"
+  },
+  "_ComboTrendChart-DuxOkK7q.js": {
+    "file": "assets/ComboTrendChart-DuxOkK7q.js",
     "name": "ComboTrendChart",
     "imports": [
-      "_AppLayout-D-GuQn3_.js",
+      "_AppLayout-97tPKpl1.js",
       "resources/js/app.js"
     ],
     "css": [
       "assets/ComboTrendChart-D-k_Bvam.css"
     ]
   },
-  "_ComboTrendChart-D-k_Bvam.css": {
-    "file": "assets/ComboTrendChart-D-k_Bvam.css",
-    "src": "_ComboTrendChart-D-k_Bvam.css"
-  },
-  "_Modal-sL7giycd.js": {
-    "file": "assets/Modal-sL7giycd.js",
+  "_Modal-BtM26RPk.js": {
+    "file": "assets/Modal-BtM26RPk.js",
     "name": "Modal",
     "imports": [
       "resources/js/app.js"
     ]
   },
   "resources/css/app.css": {
-    "file": "assets/app-BPvQnTy8.css",
+    "file": "assets/app-CXqMwE_f.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -45,29 +45,29 @@
     ]
   },
   "resources/js/Pages/AnnualBudgets/Index.vue": {
-    "file": "assets/Index-DF9-H9jS.js",
+    "file": "assets/Index-CV9yK-AF.js",
     "name": "Index",
     "src": "resources/js/Pages/AnnualBudgets/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-D-GuQn3_.js",
-      "_Modal-sL7giycd.js"
+      "_AppLayout-97tPKpl1.js",
+      "_Modal-BtM26RPk.js"
     ]
   },
   "resources/js/Pages/AnnualBudgets/Show.vue": {
-    "file": "assets/Show-ZIMq6L1e.js",
+    "file": "assets/Show-B4yW3cRS.js",
     "name": "Show",
     "src": "resources/js/Pages/AnnualBudgets/Show.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-D-GuQn3_.js",
-      "_Modal-sL7giycd.js"
+      "_AppLayout-97tPKpl1.js",
+      "_Modal-BtM26RPk.js"
     ]
   },
   "resources/js/Pages/Auth/ForgotPassword.vue": {
-    "file": "assets/ForgotPassword-BV36Vvb2.js",
+    "file": "assets/ForgotPassword-CJGQqwfI.js",
     "name": "ForgotPassword",
     "src": "resources/js/Pages/Auth/ForgotPassword.vue",
     "isDynamicEntry": true,
@@ -76,7 +76,7 @@
     ]
   },
   "resources/js/Pages/Auth/Login.vue": {
-    "file": "assets/Login-DlxIwtfC.js",
+    "file": "assets/Login-xD6PRUOi.js",
     "name": "Login",
     "src": "resources/js/Pages/Auth/Login.vue",
     "isDynamicEntry": true,
@@ -85,7 +85,7 @@
     ]
   },
   "resources/js/Pages/Auth/ResetPassword.vue": {
-    "file": "assets/ResetPassword-C-bbBIHa.js",
+    "file": "assets/ResetPassword-kpHRmN34.js",
     "name": "ResetPassword",
     "src": "resources/js/Pages/Auth/ResetPassword.vue",
     "isDynamicEntry": true,
@@ -94,7 +94,7 @@
     ]
   },
   "resources/js/Pages/Auth/Verify2FA.vue": {
-    "file": "assets/Verify2FA-DU0sEBFh.js",
+    "file": "assets/Verify2FA-Df34ezUG.js",
     "name": "Verify2FA",
     "src": "resources/js/Pages/Auth/Verify2FA.vue",
     "isDynamicEntry": true,
@@ -103,112 +103,123 @@
     ]
   },
   "resources/js/Pages/BudgetCategories/Index.vue": {
-    "file": "assets/Index-DQyKsUgY.js",
+    "file": "assets/Index-DkIWaoPY.js",
     "name": "Index",
     "src": "resources/js/Pages/BudgetCategories/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-D-GuQn3_.js",
-      "_Modal-sL7giycd.js"
+      "_AppLayout-97tPKpl1.js",
+      "_Modal-BtM26RPk.js"
     ]
   },
   "resources/js/Pages/BudgetParticulars/Index.vue": {
-    "file": "assets/Index-BLbNGYkO.js",
+    "file": "assets/Index-_PGhHlnt.js",
     "name": "Index",
     "src": "resources/js/Pages/BudgetParticulars/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-D-GuQn3_.js",
-      "_Modal-sL7giycd.js"
+      "_AppLayout-97tPKpl1.js",
+      "_Modal-BtM26RPk.js"
     ]
   },
   "resources/js/Pages/Dashboard.vue": {
-    "file": "assets/Dashboard-B8k9Q0Dd.js",
+    "file": "assets/Dashboard-BEIrsob5.js",
     "name": "Dashboard",
     "src": "resources/js/Pages/Dashboard.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-D-GuQn3_.js",
-      "_ComboTrendChart-CIs_Wu0-.js"
+      "_AppLayout-97tPKpl1.js",
+      "_ComboTrendChart-DuxOkK7q.js"
     ],
     "css": [
-      "assets/Dashboard-Cnze87-Q.css"
+      "assets/Dashboard-BpcTTyX-.css"
     ]
   },
   "resources/js/Pages/Departments/Index.vue": {
-    "file": "assets/Index-DpH8n6OA.js",
+    "file": "assets/Index-4h2tJGrW.js",
     "name": "Index",
     "src": "resources/js/Pages/Departments/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-D-GuQn3_.js",
-      "_Modal-sL7giycd.js"
+      "_AppLayout-97tPKpl1.js",
+      "_Modal-BtM26RPk.js"
     ]
   },
   "resources/js/Pages/Disbursements/Index.vue": {
-    "file": "assets/Index-CdycJcuJ.js",
+    "file": "assets/Index-DMKBzT9Q.js",
     "name": "Index",
     "src": "resources/js/Pages/Disbursements/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-D-GuQn3_.js",
-      "_Modal-sL7giycd.js"
+      "_AppLayout-97tPKpl1.js",
+      "_Modal-BtM26RPk.js"
     ]
   },
   "resources/js/Pages/Expenses/Index.vue": {
-    "file": "assets/Index-t8UFq_lr.js",
+    "file": "assets/Index-CsgeCNUW.js",
     "name": "Index",
     "src": "resources/js/Pages/Expenses/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-D-GuQn3_.js",
-      "_Modal-sL7giycd.js"
+      "_AppLayout-97tPKpl1.js",
+      "_Modal-BtM26RPk.js"
     ]
   },
   "resources/js/Pages/Income/Index.vue": {
-    "file": "assets/Index-Cz-4a4ql.js",
+    "file": "assets/Index-C7GP0ZcD.js",
     "name": "Index",
     "src": "resources/js/Pages/Income/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-D-GuQn3_.js",
-      "_Modal-sL7giycd.js"
+      "_AppLayout-97tPKpl1.js",
+      "_Modal-BtM26RPk.js"
+    ]
+  },
+  "resources/js/Pages/Receipts/Index.vue": {
+    "file": "assets/Index-Dd9AkJTk.js",
+    "name": "Index",
+    "src": "resources/js/Pages/Receipts/Index.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/app.js",
+      "_AppLayout-97tPKpl1.js",
+      "_Modal-BtM26RPk.js"
     ]
   },
   "resources/js/Pages/Reports/Index.vue": {
-    "file": "assets/Index-DVPy6g4j.js",
+    "file": "assets/Index-BQuDzhhY.js",
     "name": "Index",
     "src": "resources/js/Pages/Reports/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-D-GuQn3_.js",
-      "_Modal-sL7giycd.js"
+      "_AppLayout-97tPKpl1.js",
+      "_Modal-BtM26RPk.js"
     ]
   },
   "resources/js/Pages/Revenue/Index.vue": {
-    "file": "assets/Index-CdnP_tMJ.js",
+    "file": "assets/Index-Dl1urmzR.js",
     "name": "Index",
     "src": "resources/js/Pages/Revenue/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-D-GuQn3_.js",
-      "_ComboTrendChart-CIs_Wu0-.js"
+      "_AppLayout-97tPKpl1.js",
+      "_ComboTrendChart-DuxOkK7q.js"
     ],
     "css": [
       "assets/Index-CZ6HYJ5U.css"
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-BY3KDQlx.js",
+    "file": "assets/app-BclenlvP.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
@@ -226,6 +237,7 @@
       "resources/js/Pages/Disbursements/Index.vue",
       "resources/js/Pages/Expenses/Index.vue",
       "resources/js/Pages/Income/Index.vue",
+      "resources/js/Pages/Receipts/Index.vue",
       "resources/js/Pages/Reports/Index.vue",
       "resources/js/Pages/Revenue/Index.vue"
     ]

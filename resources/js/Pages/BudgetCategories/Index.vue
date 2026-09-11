@@ -374,7 +374,7 @@ function importCsv() {
 
                     <input
                         type="file"
-                        accept=".csv,text/csv"
+                        accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
                         @change="importForm.csv_file = $event.target.files?.[0] || null"
                     />
