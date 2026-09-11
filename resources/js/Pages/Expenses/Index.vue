@@ -387,7 +387,7 @@ function splitDate(d) {
         <div v-if="perms.canManageExpenses" class="flex flex-wrap gap-2">
             <button @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">Export CSV</button>
             <button @click="showImportModal = true" class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Import CSV</button>
-            <button @click="openCreate" data-onboarding-target="expense-add" data-onboarding-click="expense-add" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">Add Expense</button>
+            <button @click="openCreate" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">Add Expense</button>
         </div>
     </div>
     <div class="flex flex-col sm:flex-row gap-4 mb-6">
@@ -574,7 +574,7 @@ function splitDate(d) {
             </div>
             <div class="flex items-center justify-end gap-3 pt-5 border-t mt-4">
                 <button type="button" @click="showModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button type="submit" :disabled="form.processing" data-onboarding-target="expense-save" data-onboarding-click="expense-save" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy shadow-sm">{{ form.processing ? 'Saving...' : (editing ? 'Update' : 'Create Expense') }}</button>
+                <button type="submit" :disabled="form.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy shadow-sm">{{ form.processing ? 'Saving...' : (editing ? 'Update' : 'Create Expense') }}</button>
             </div>
         </form>
     </Modal>
@@ -642,3 +642,4 @@ function splitDate(d) {
     </Modal>
 </AppLayout>
 </template>
+

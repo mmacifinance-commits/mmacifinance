@@ -58,6 +58,7 @@ class IncomeController extends Controller
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
                 $q->where('income_no', 'like', "%{$search}%")
+                    ->orWhere('receipt_no', 'like', "%{$search}%")
                     ->orWhere('source', 'like', "%{$search}%")
                     ->orWhere('description', 'like', "%{$search}%");
             });
@@ -111,6 +112,7 @@ class IncomeController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
+            'receipt_no' => 'nullable|string|max:100',
             'source' => 'required|string|max:255',
             'description' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
@@ -118,6 +120,7 @@ class IncomeController extends Controller
             'notes' => 'nullable|string',
         ]);
 
+        $validated['receipt_no'] = filled($validated['receipt_no'] ?? null) ? trim($validated['receipt_no']) : null;
         $validated['income_no'] = sprintf('INC-%s-%04d', date('Y'), Income::count() + 1);
         $validated['created_by_id'] = auth()->id();
 
@@ -133,6 +136,7 @@ class IncomeController extends Controller
     public function update(Request $request, Income $income)
     {
         $validated = $request->validate([
+            'receipt_no' => 'nullable|string|max:100',
             'source' => 'required|string|max:255',
             'description' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
@@ -140,6 +144,7 @@ class IncomeController extends Controller
             'notes' => 'nullable|string',
         ]);
 
+        $validated['receipt_no'] = filled($validated['receipt_no'] ?? null) ? trim($validated['receipt_no']) : null;
         $income->update($validated);
 
         if ($request->header('X-Offline-Sync')) {
@@ -167,7 +172,7 @@ class IncomeController extends Controller
         $callback = function () {
             $handle = fopen('php://output', 'w');
             fwrite($handle, "\xEF\xBB\xBF");
-            fputcsv($handle, ['income_no', 'source', 'description', 'amount', 'date_encoded', 'notes']);
+            fputcsv($handle, ['income_no', 'receipt_no', 'source', 'description', 'amount', 'date_encoded', 'notes']);
 
             Income::query()
                 ->orderBy('date_encoded')
@@ -176,6 +181,7 @@ class IncomeController extends Controller
                     foreach ($rows as $income) {
                         fputcsv($handle, [
                             $income->income_no,
+                            $income->receipt_no,
                             $income->source,
                             $income->description,
                             $income->amount,
@@ -229,6 +235,7 @@ class IncomeController extends Controller
             }
 
             $source = trim((string) ($row[$index['source']] ?? ''));
+            $receiptNo = isset($index['receipt_no']) ? trim((string) ($row[$index['receipt_no']] ?? '')) : '';
             $description = trim((string) ($row[$index['description']] ?? ''));
             $amount = (float) ($row[$index['amount']] ?? 0);
             $dateEncoded = trim((string) ($row[$index['date_encoded']] ?? ''));
@@ -245,6 +252,7 @@ class IncomeController extends Controller
             ]);
 
             $isNew = ! $income->exists;
+            $income->receipt_no = $receiptNo !== '' ? $receiptNo : null;
             $income->amount = $amount;
             $income->notes = $notes !== '' ? $notes : null;
             if ($isNew) {

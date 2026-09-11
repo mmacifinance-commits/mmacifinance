@@ -1,6 +1,5 @@
 const ONLINE_ONLY_PATTERNS = [
     /^\/(login|logout|2fa|forgot-password|reset-password)(\/|$)/,
-    /^\/tutorial(\/|$)/,
     /\/(import-csv|export-csv)(\/|$)/,
     /\/(approve|reject|return|post|submit)(\/|$)/,
     /\/rollover(\/|$)/,

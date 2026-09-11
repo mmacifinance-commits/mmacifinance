@@ -11,6 +11,7 @@ class Income extends Model
 {
     protected $fillable = [
         'income_no',
+        'receipt_no',
         'source',
         'description',
         'amount',

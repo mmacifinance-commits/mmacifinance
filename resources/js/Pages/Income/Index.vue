@@ -20,7 +20,7 @@ const incomeItems = computed(() => props.incomeRecords?.data || props.incomeReco
 const showModal = ref(false)
 const showImportModal = ref(false)
 const editing = ref(null)
-const form = useForm({ source: '', description: '', amount: 0, date_encoded: '', notes: '' })
+const form = useForm({ receipt_no: '', source: '', description: '', amount: 0, date_encoded: '', notes: '' })
 const importForm = useForm({ csv_file: null })
 const formErrorMessages = computed(() => Object.values(form.errors || {}).flat().filter(Boolean))
 const PESO = '\u20b1'
@@ -63,6 +63,7 @@ function openCreate() {
 
 function openEdit(item) {
     form.clearErrors()
+    form.receipt_no = item.receipt_no || ''
     form.source = item.source
     form.description = item.description
     form.amount = item.amount
@@ -108,7 +109,7 @@ function importCsv() {
         <div v-if="perms.canManageIncome" class="flex flex-wrap gap-2">
             <button @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">Export CSV</button>
             <button @click="showImportModal = true" class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Import CSV</button>
-            <button @click="openCreate" data-onboarding-target="income-add" data-onboarding-click="income-add" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
+            <button @click="openCreate" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
                 Add Income
             </button>
         </div>
@@ -157,7 +158,7 @@ function importCsv() {
     <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm mb-6">
         <label class="block text-[11px] font-bold uppercase tracking-wide text-gray-700">Search</label>
         <div class="mt-1 flex gap-3">
-            <input v-model="searchQuery" @input="applyFilters" type="text" placeholder="Search source or description..." class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm" />
+            <input v-model="searchQuery" @input="applyFilters" type="text" placeholder="Search income no, receipt no, source, or description..." class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm" />
         </div>
     </div>
 
@@ -177,6 +178,7 @@ function importCsv() {
             <div v-for="item in incomeItems" :key="item.id" class="grid grid-cols-1 gap-3 px-5 py-4 sm:grid-cols-[1.15fr_1.9fr_0.9fr_0.85fr_auto] sm:items-center sm:gap-4">
                 <div class="min-w-0">
                     <p class="text-sm font-bold text-gray-900">{{ item.income_no }}</p>
+                    <p class="mt-1 text-[11px] font-semibold text-slate-500">Receipt: {{ item.receipt_no || 'No receipt no.' }}</p>
                     <p class="mt-1 text-[11px] text-gray-400 sm:hidden">{{ item.date_encoded?.slice?.(0, 10) }}</p>
                 </div>
                 <div class="min-w-0">
@@ -216,24 +218,26 @@ function importCsv() {
                 <ul class="mt-1 list-disc space-y-1 pl-5"><li v-for="message in formErrorMessages" :key="message">{{ message }}</li></ul>
             </div>
             <div class="grid gap-4 sm:grid-cols-2">
+                <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Receipt No.</label><input v-model="form.receipt_no" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" placeholder="Official receipt or collection ref" /></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Source</label><input v-model="form.source" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Amount</label><input v-model.number="form.amount" type="number" step="0.01" min="0" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Date</label><input v-model="form.date_encoded" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
-                <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Description</label><input v-model="form.description" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
+                <div class="sm:col-span-2"><label class="block text-sm font-medium text-gray-700 mb-1.5">Description</label><input v-model="form.description" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
                 <div class="sm:col-span-2"><label class="block text-sm font-medium text-gray-700 mb-1.5">Notes</label><textarea v-model="form.notes" rows="3" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"></textarea></div>
             </div>
             <div class="flex items-center justify-end gap-3 pt-5 border-t mt-4">
                 <button type="button" @click="showModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
-                <button type="submit" :disabled="form.processing" data-onboarding-target="income-save" data-onboarding-click="income-save" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">{{ form.processing ? 'Saving...' : (editing ? 'Update' : 'Save Income') }}</button>
+                <button type="submit" :disabled="form.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">{{ form.processing ? 'Saving...' : (editing ? 'Update' : 'Save Income') }}</button>
             </div>
         </form>
     </Modal>
 
-    <Modal :show="showImportModal" title="Import Income CSV" subtitle="Upload a CSV with required columns: source, description, amount, date_encoded, notes." max-width="lg" @close="showImportModal = false">
+    <Modal :show="showImportModal" title="Import Income CSV" subtitle="Upload a CSV with required columns: source, description, amount, date_encoded, notes. Optional: receipt_no." max-width="lg" @close="showImportModal = false">
         <form @submit.prevent="importCsv" class="space-y-4">
             <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 <p class="font-semibold">Required columns</p>
                 <p class="mt-1 font-mono text-xs">source, description, amount, date_encoded, notes</p>
+                <p class="mt-2 text-xs">Optional column: <span class="font-mono">receipt_no</span></p>
             </div>
             <div>
                 <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV File</label>
@@ -247,3 +251,4 @@ function importCsv() {
     </Modal>
 </AppLayout>
 </template>
+

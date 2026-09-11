@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
@@ -359,7 +359,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
         <div v-if="perms.canManageDisbursements || perms.isCashier || perms.isSuperAdmin" class="flex flex-wrap gap-2">
             <button @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">Export CSV</button>
             <button @click="showImportModal = true" class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Import CSV</button>
-            <button @click="openCreate" data-onboarding-target="disbursement-create" data-onboarding-click="disbursement-create" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
+            <button @click="openCreate" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
                 Create Payment Release
             </button>
         </div>
@@ -438,8 +438,6 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                                 <!-- Cashier Submit Action -->
                                 <button v-if="(d.status === 'draft' || d.status === 'returned_for_revision') && (perms.isCashier || perms.canManageDisbursements || perms.isSuperAdmin)"
                                     @click="submitForApproval(d)"
-                                    data-onboarding-target="disbursement-submit"
-                                    data-onboarding-click="disbursement-submit"
                                     class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-xs font-bold shadow-sm transition">
                                     Submit Release
                                 </button>
@@ -447,8 +445,6 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                                 <!-- Head of Finance Approve Action -->
                                 <button v-if="d.status === 'for_approval' && perms.canApprove"
                                     @click="openActionModal(d, 'approve')"
-                                    data-onboarding-target="disbursement-approve"
-                                    data-onboarding-click="disbursement-approve"
                                     class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold shadow-sm transition">
                                     Approve
                                 </button>
@@ -456,8 +452,6 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                                 <!-- Head of Finance Post Action -->
                                 <button v-if="d.status === 'approved' && perms.canPost"
                                     @click="openActionModal(d, 'post')"
-                                    data-onboarding-target="disbursement-post"
-                                    data-onboarding-click="disbursement-post"
                                     class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold shadow-sm transition">
                                     Post Release
                                 </button>
@@ -652,7 +646,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                     <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1.5">Notes / Purpose</label><input v-model="form.notes" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" placeholder="Supporting details or notes" /></div>
                     <div class="sm:col-span-2 flex items-center justify-end gap-3 pt-2 border-t mt-2">
                         <button type="button" @click="showModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                        <button type="submit" :disabled="form.processing" data-onboarding-target="disbursement-save" data-onboarding-click="disbursement-save" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy shadow-sm">
+                        <button type="submit" :disabled="form.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy shadow-sm">
                             {{ form.processing ? 'Saving...' : (editing ? 'Update Record' : (perms.isCashier ? 'Submit for Approval' : 'Save Record')) }}
                         </button>
                     </div>
@@ -754,3 +748,4 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
     </Modal>
 </AppLayout>
 </template>
+

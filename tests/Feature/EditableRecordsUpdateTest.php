@@ -12,6 +12,7 @@ use App\Models\Expense;
 use App\Models\Income;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class EditableRecordsUpdateTest extends TestCase
@@ -76,6 +77,7 @@ class EditableRecordsUpdateTest extends TestCase
         ]);
 
         $payload = [
+            'receipt_no' => 'OR-2026-0001',
             'source' => 'Updated Source',
             'description' => 'Updated income',
             'amount' => 60000,
@@ -83,11 +85,56 @@ class EditableRecordsUpdateTest extends TestCase
             'notes' => 'Updated notes',
         ];
         $this->actingAs($user)->put("/income/{$income->id}", $payload)->assertSessionHasNoErrors();
-        $this->assertDatabaseHas('incomes', ['id' => $income->id, 'source' => 'Updated Source', 'amount' => 60000]);
+        $this->assertDatabaseHas('incomes', [
+            'id' => $income->id,
+            'receipt_no' => 'OR-2026-0001',
+            'source' => 'Updated Source',
+            'amount' => 60000,
+        ]);
 
         $payload['amount'] = -1;
         $this->actingAs($user)->put("/income/{$income->id}", $payload)->assertSessionHasErrors('amount');
         $this->assertEquals(60000, $income->fresh()->amount);
+    }
+
+    public function test_income_receipt_number_is_searchable_and_preserved_in_csv(): void
+    {
+        $user = $this->superAdmin();
+
+        $this->actingAs($user)->post('/income', [
+            'receipt_no' => 'OR-SEARCH-001',
+            'source' => 'Collections',
+            'description' => 'Receipt income',
+            'amount' => 7500,
+            'date_encoded' => '2026-08-01',
+            'notes' => 'With receipt',
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($user)
+            ->get('/income?search=OR-SEARCH-001')
+            ->assertInertia(fn ($page) => $page
+                ->where('incomeRecords.data.0.receipt_no', 'OR-SEARCH-001'));
+
+        $export = $this->actingAs($user)->get('/income/export-csv')->streamedContent();
+        $this->assertStringContainsString('receipt_no', $export);
+        $this->assertStringContainsString('OR-SEARCH-001', $export);
+
+        $csv = implode("\n", [
+            'income_no,receipt_no,source,description,amount,date_encoded,notes',
+            'INC-IGNORED,OR-IMPORT-001,Imported Collections,Imported income,12000,2026-08-02,Imported with receipt',
+            '',
+        ]);
+
+        $this->actingAs($user)->post('/income/import-csv', [
+            'csv_file' => UploadedFile::fake()->createWithContent('income.csv', $csv),
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('incomes', [
+            'receipt_no' => 'OR-IMPORT-001',
+            'source' => 'Imported Collections',
+            'description' => 'Imported income',
+            'amount' => 12000,
+        ]);
     }
 
     public function test_expense_edit_saves_and_invalid_edit_is_rejected(): void

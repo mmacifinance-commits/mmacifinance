@@ -27,13 +27,6 @@ class HandleInertiaRequests extends Middleware
                     'email' => $user->email,
                     'role' => $user->role,
                     'role_label' => $user->role_label,
-                    'tutorial_state' => [
-                        'status' => $user->tutorial_status ?? 'pending',
-                        'version' => $user->tutorial_version,
-                        'current_step' => $user->tutorial_current_step,
-                        'completed_at' => $user->tutorial_completed_at?->toISOString(),
-                        'skipped_at' => $user->tutorial_skipped_at?->toISOString(),
-                    ],
                 ] : null,
             ],
             'permissions' => $user ? [
@@ -45,10 +38,10 @@ class HandleInertiaRequests extends Middleware
                 'isSuperAdmin' => $user->isSuperAdmin(),
             ] : [],
             'flash' => [
-                'success' => fn() => $request->session()->get('success'),
-                'error' => fn() => $request->session()->get('error'),
-                'message' => fn() => $request->session()->get('message'),
-                'warning' => fn() => $request->session()->get('warning'),
+                'success' => fn () => $request->session()->get('success'),
+                'error' => fn () => $request->session()->get('error'),
+                'message' => fn () => $request->session()->get('message'),
+                'warning' => fn () => $request->session()->get('warning'),
             ],
         ];
     }

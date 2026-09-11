@@ -1,24 +1,12 @@
-﻿<script setup>
+<script setup>
 import { ref, computed, watch } from 'vue'
 import { Link, usePage, router } from '@inertiajs/vue3'
 import OfflineBanner from '@/Components/OfflineBanner.vue'
-import OnboardingController from '@/Components/Onboarding/OnboardingController.vue'
-import { useOfflineQueue } from '@/composables/useOfflineQueue'
 
 const page = usePage()
 const auth = computed(() => page.props.auth)
-const tutorial = computed(() => {
-    if (page.props.tutorial) return page.props.tutorial
-    const state = page.props.auth?.user?.tutorial_state
-    return {
-        show: state?.show || state?.status === 'active' || state?.status === 'pending',
-        state: state || {},
-    }
-})
 const flash = computed(() => page.props.flash)
-const tutorialRoleLabel = computed(() => auth.value?.user?.role_label || 'Tutorial')
-const canUseTutorial = computed(() => auth.value?.user?.role !== 'auditor')
-const { isOnline } = useOfflineQueue()
+const roleLabel = computed(() => auth.value?.user?.role_label || 'User')
 
 const mainNavItems = [
     { href: '/', label: 'DASHBOARD', icon: '', section: 'dashboard' },
@@ -41,7 +29,6 @@ const sidebarMenus = {
 
 const mobileMenuOpen = ref(false)
 const showFlash = ref(true)
-const tutorialController = ref(null)
 
 const currentPath = computed(() => page.url)
 
@@ -75,16 +62,6 @@ function logout() {
     router.post('/logout')
 }
 
-function openTutorial() {
-    if (!canUseTutorial.value || !isOnline.value) return
-    tutorialController.value?.openTutorial?.()
-}
-
-watch(isOnline, (nextOnline) => {
-    if (!nextOnline) {
-        window.dispatchEvent(new CustomEvent('tutorial:close'))
-    }
-})
 
 watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value = false }, 4000) }, { deep: true })
 </script>
@@ -105,20 +82,9 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
                     </div>
                 </div>
                 <div class="flex items-center gap-3">
-                    <button
-                        v-if="canUseTutorial"
-                        type="button"
-                        class="hidden md:inline-flex items-center rounded-md bg-white/10 px-3 py-1.5 text-xs font-medium text-white border border-white/10 transition disabled:cursor-not-allowed disabled:bg-white/5 disabled:text-white/40"
-                        title="Open tutorial"
-                        aria-label="Open tutorial"
-                        :disabled="!isOnline"
-                        @click="openTutorial"
-                    >
-                        Tutorial
-                    </button>
                     <div class="hidden md:flex items-center gap-2 rounded-md bg-white/10 px-3 py-1.5">
                         <span class="text-mustard text-sm"></span>
-                        <span class="text-sm font-medium text-white">{{ tutorialRoleLabel }}</span>
+                        <span class="text-sm font-medium text-white">{{ roleLabel }}</span>
                     </div>
                     <button @click="logout" class="rounded-md bg-red-500/20 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/30 transition hidden md:block">
                         Logout
@@ -137,8 +103,6 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
                     v-for="item in mainNavItems"
                     :key="item.section"
                     :href="item.href"
-                    :data-onboarding-target="`nav-${item.section}`"
-                    :data-onboarding-click="`nav-${item.section}`"
                     :class="[
                         'flex items-center gap-2 px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition-all',
                         isMainActive(item)
@@ -153,23 +117,12 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
             <!-- Mobile nav -->
             <div v-if="mobileMenuOpen" class="md:hidden">
                 <div class="flex items-center justify-between border-b border-navy-light px-4 py-3">
-                    <span class="text-xs font-semibold text-mustard">{{ tutorialRoleLabel }}</span>
-                    <button
-                        v-if="canUseTutorial"
-                        type="button"
-                        class="border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-                        :disabled="!isOnline"
-                        @click="openTutorial(); mobileMenuOpen = false"
-                    >
-                        Tutorial
-                    </button>
+                    <span class="text-xs font-semibold text-mustard">{{ roleLabel }}</span>
                 </div>
                 <Link
                     v-for="item in mainNavItems"
                     :key="item.section"
                     :href="item.href"
-                    :data-onboarding-target="`nav-${item.section}`"
-                    :data-onboarding-click="`nav-${item.section}`"
                     @click="mobileMenuOpen = false"
                     :class="[
                         'block px-4 py-3 text-xs font-bold uppercase tracking-wider border-b border-navy-light',
@@ -246,7 +199,6 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
 
             <!-- Main Content -->
         <main class="mobile-app-content min-w-0 flex-1 p-3 sm:p-4 md:p-6">
-                <OnboardingController v-if="canUseTutorial" ref="tutorialController" :tutorial="tutorial" />
                 <slot />
         </main>
         </div>
@@ -257,3 +209,4 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
         </footer>
     </div>
 </template>
+
