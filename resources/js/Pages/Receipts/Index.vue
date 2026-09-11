@@ -17,9 +17,20 @@ const selectedFiscalPeriod = ref(props.filters?.fiscal_period_id || '')
 const selectedTerm = ref(props.filters?.term || '')
 const searchQuery = ref(props.filters?.search || '')
 const showImportModal = ref(false)
+const showReceiptModal = ref(false)
+const editingReceiptId = ref(null)
 const importForm = useForm({ csv_file: null })
+const receiptForm = useForm({
+    receipt_no: '',
+    source: '',
+    description: '',
+    amount: '',
+    date_encoded: '',
+    notes: '',
+})
 const receiptItems = computed(() => props.receipts?.data || [])
 const importErrorMessages = computed(() => Object.values(importForm.errors || {}).flat().filter(Boolean))
+const receiptErrorMessages = computed(() => Object.values(receiptForm.errors || {}).flat().filter(Boolean))
 
 function fmt(value) {
     return new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(value || 0)
@@ -64,6 +75,52 @@ function importCsv() {
         },
     })
 }
+
+function openCreateReceipt() {
+    editingReceiptId.value = null
+    receiptForm.reset()
+    receiptForm.clearErrors()
+    receiptForm.date_encoded = new Date().toISOString().slice(0, 10)
+    showReceiptModal.value = true
+}
+
+function openEditReceipt(item) {
+    editingReceiptId.value = item.id
+    receiptForm.clearErrors()
+    receiptForm.receipt_no = item.receipt_no || ''
+    receiptForm.source = item.source || ''
+    receiptForm.description = item.description || ''
+    receiptForm.amount = item.amount || ''
+    receiptForm.date_encoded = item.date_encoded || ''
+    receiptForm.notes = item.notes || ''
+    showReceiptModal.value = true
+}
+
+function saveReceipt() {
+    const options = {
+        preserveScroll: true,
+        onSuccess: () => {
+            showReceiptModal.value = false
+            receiptForm.reset()
+            editingReceiptId.value = null
+        },
+    }
+
+    if (editingReceiptId.value) {
+        receiptForm.put(`/receipts/${editingReceiptId.value}`, options)
+        return
+    }
+
+    receiptForm.post('/receipts', options)
+}
+
+function deleteReceipt(item) {
+    if (!window.confirm(`Delete receipt ${item.receipt_no}? This cannot be undone.`)) {
+        return
+    }
+
+    router.delete(`/receipts/${item.id}`, { preserveScroll: true })
+}
 </script>
 
 <template>
@@ -75,6 +132,7 @@ function importCsv() {
             <p class="text-sm text-gray-500">Cash receipts from enrollment, premidterm, midterm, pre-final, and final exam collections</p>
         </div>
         <div class="flex flex-wrap gap-2">
+            <button @click="openCreateReceipt" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-navy">Add Receipt</button>
             <button @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">Export CSV</button>
             <button @click="openImport" class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Import CSV</button>
         </div>
@@ -152,16 +210,17 @@ function importCsv() {
             <h3 class="text-sm font-bold uppercase tracking-wider text-white">Cash Receipt Records</h3>
         </div>
         <div class="divide-y">
-            <div class="hidden grid-cols-[1fr_1fr_2fr_0.9fr_0.9fr] items-center gap-4 px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-gray-500 md:grid">
+            <div class="hidden grid-cols-[1fr_1fr_2fr_0.9fr_0.9fr_auto] items-center gap-4 px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-gray-500 md:grid">
                 <div>Receipt No.</div>
                 <div>Income No.</div>
                 <div>Source / Description</div>
                 <div>Date</div>
                 <div class="text-right">Amount</div>
+                <div class="text-right">Actions</div>
             </div>
-            <div v-for="item in receiptItems" :key="item.id" class="grid grid-cols-1 gap-3 px-5 py-4 md:grid-cols-[1fr_1fr_2fr_0.9fr_0.9fr] md:items-center md:gap-4">
+            <div v-for="item in receiptItems" :key="item.id" class="grid grid-cols-1 gap-3 px-5 py-4 md:grid-cols-[1fr_1fr_2fr_0.9fr_0.9fr_auto] md:items-center md:gap-4">
                 <div>
-                    <p class="text-sm font-bold text-gray-900">{{ item.receipt_no || 'No receipt no.' }}</p>
+                    <p class="text-sm font-bold text-gray-900">{{ item.receipt_no }}</p>
                     <p class="mt-1 inline-flex border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">{{ item.receipt_type }}</p>
                 </div>
                 <div>
@@ -176,6 +235,10 @@ function importCsv() {
                 <div class="md:text-right">
                     <p class="text-sm font-bold tabular-nums text-gray-900">{{ PESO }}{{ fmt(item.amount) }}</p>
                     <p class="mt-1 text-xs text-gray-500">{{ item.notes || 'No notes' }}</p>
+                </div>
+                <div class="flex justify-start gap-2 md:justify-end">
+                    <button @click="openEditReceipt(item)" class="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">Edit</button>
+                    <button @click="deleteReceipt(item)" class="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100">Delete</button>
                 </div>
             </div>
             <div v-if="!receiptItems.length" class="px-5 py-8 text-center text-gray-400">No receipt records found.</div>
@@ -193,6 +256,60 @@ function importCsv() {
             :class="link.active ? 'border-navy-dark bg-navy-dark text-white' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50'"
         />
     </div>
+
+    <Modal :show="showReceiptModal" :title="editingReceiptId ? 'Edit Receipt' : 'Add Receipt'" subtitle="Receipt number is required and must be unique." max-width="2xl" @close="showReceiptModal = false">
+        <form @submit.prevent="saveReceipt" class="space-y-4">
+            <div v-if="receiptErrorMessages.length" class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+                <p class="font-semibold">Please correct the following before saving:</p>
+                <ul class="mt-1 list-disc space-y-1 pl-5">
+                    <li v-for="message in receiptErrorMessages" :key="message">{{ message }}</li>
+                </ul>
+            </div>
+
+            <div class="grid gap-4 md:grid-cols-2">
+                <div class="space-y-1">
+                    <label class="block text-sm font-medium text-gray-700">Receipt No. <span class="text-red-600">*</span></label>
+                    <input v-model="receiptForm.receipt_no" type="text" required class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm shadow-sm focus:border-navy focus:ring-navy" :class="{ 'border-red-400': receiptForm.errors.receipt_no }" />
+                    <p v-if="receiptForm.errors.receipt_no" class="text-xs text-red-600">{{ receiptForm.errors.receipt_no }}</p>
+                </div>
+                <div class="space-y-1">
+                    <label class="block text-sm font-medium text-gray-700">Date <span class="text-red-600">*</span></label>
+                    <input v-model="receiptForm.date_encoded" type="date" required class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm shadow-sm focus:border-navy focus:ring-navy" :class="{ 'border-red-400': receiptForm.errors.date_encoded }" />
+                    <p v-if="receiptForm.errors.date_encoded" class="text-xs text-red-600">{{ receiptForm.errors.date_encoded }}</p>
+                </div>
+            </div>
+
+            <div class="space-y-1">
+                <label class="block text-sm font-medium text-gray-700">Source <span class="text-red-600">*</span></label>
+                <input v-model="receiptForm.source" type="text" required placeholder="Example: Enrollment Collections" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm shadow-sm focus:border-navy focus:ring-navy" :class="{ 'border-red-400': receiptForm.errors.source }" />
+                <p v-if="receiptForm.errors.source" class="text-xs text-red-600">{{ receiptForm.errors.source }}</p>
+            </div>
+
+            <div class="space-y-1">
+                <label class="block text-sm font-medium text-gray-700">Description <span class="text-red-600">*</span></label>
+                <input v-model="receiptForm.description" type="text" required placeholder="Example: Premidterm Assessment" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm shadow-sm focus:border-navy focus:ring-navy" :class="{ 'border-red-400': receiptForm.errors.description }" />
+                <p v-if="receiptForm.errors.description" class="text-xs text-red-600">{{ receiptForm.errors.description }}</p>
+            </div>
+
+            <div class="grid gap-4 md:grid-cols-2">
+                <div class="space-y-1">
+                    <label class="block text-sm font-medium text-gray-700">Amount <span class="text-red-600">*</span></label>
+                    <input v-model="receiptForm.amount" type="number" min="0" step="0.01" required class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm shadow-sm focus:border-navy focus:ring-navy" :class="{ 'border-red-400': receiptForm.errors.amount }" />
+                    <p v-if="receiptForm.errors.amount" class="text-xs text-red-600">{{ receiptForm.errors.amount }}</p>
+                </div>
+                <div class="space-y-1">
+                    <label class="block text-sm font-medium text-gray-700">Notes</label>
+                    <input v-model="receiptForm.notes" type="text" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm shadow-sm focus:border-navy focus:ring-navy" :class="{ 'border-red-400': receiptForm.errors.notes }" />
+                    <p v-if="receiptForm.errors.notes" class="text-xs text-red-600">{{ receiptForm.errors.notes }}</p>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-3 border-t pt-5">
+                <button type="button" @click="showReceiptModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Cancel</button>
+                <button type="submit" :disabled="receiptForm.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-navy">{{ receiptForm.processing ? 'Saving...' : (editingReceiptId ? 'Update Receipt' : 'Create Receipt') }}</button>
+            </div>
+        </form>
+    </Modal>
 
     <Modal :show="showImportModal" title="Import Receipts CSV" subtitle="Upload cash receipt rows. Required columns: receipt_no, source, description, amount, date_encoded." max-width="lg" @close="showImportModal = false">
         <form @submit.prevent="importCsv" class="space-y-4">

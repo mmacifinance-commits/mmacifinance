@@ -47,6 +47,14 @@ class ReceiptPageTest extends TestCase
             'amount' => 15000,
             'date_encoded' => '2027-03-01',
         ]);
+        Income::create([
+            'income_no' => 'INC-NO-RECEIPT',
+            'receipt_no' => null,
+            'source' => 'Enrollment Collections',
+            'description' => 'Should not appear on receipts page',
+            'amount' => 99999,
+            'date_encoded' => '2026-08-01',
+        ]);
 
         $this->actingAs($user)
             ->get('/receipts?fiscal_period_id='.$period->id)
@@ -62,6 +70,97 @@ class ReceiptPageTest extends TestCase
                 ->where('receipts.data.0.receipt_type', 'Final Exam')
                 ->where('receipts.data.1.receipt_type', 'Midterm')
                 ->where('receipts.data.2.receipt_type', 'Enrollment'));
+    }
+
+    public function test_receipts_can_be_created_updated_and_deleted(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_CASHIER]);
+
+        $this->actingAs($user)
+            ->post('/receipts', [
+                'receipt_no' => 'OR-CRUD-001',
+                'source' => 'Enrollment Collections',
+                'description' => 'Enrollment Receipt',
+                'amount' => 2500,
+                'date_encoded' => '2026-08-01',
+                'notes' => 'Created from receipts page',
+            ])
+            ->assertRedirect('/receipts')
+            ->assertSessionHasNoErrors();
+
+        $receipt = Income::where('receipt_no', 'OR-CRUD-001')->firstOrFail();
+        $this->assertDatabaseHas('incomes', [
+            'id' => $receipt->id,
+            'income_no' => $receipt->income_no,
+            'source' => 'Enrollment Collections',
+            'amount' => 2500,
+        ]);
+
+        $this->actingAs($user)
+            ->put("/receipts/{$receipt->id}", [
+                'receipt_no' => 'OR-CRUD-002',
+                'source' => 'Midterm Collections',
+                'description' => 'Midterm Receipt',
+                'amount' => 3000,
+                'date_encoded' => '2026-10-01',
+                'notes' => 'Updated from receipts page',
+            ])
+            ->assertRedirect('/receipts')
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('incomes', [
+            'id' => $receipt->id,
+            'receipt_no' => 'OR-CRUD-002',
+            'source' => 'Midterm Collections',
+            'amount' => 3000,
+            'notes' => 'Updated from receipts page',
+        ]);
+
+        $this->actingAs($user)
+            ->delete("/receipts/{$receipt->id}")
+            ->assertRedirect('/receipts')
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseMissing('incomes', [
+            'id' => $receipt->id,
+        ]);
+    }
+
+    public function test_receipt_number_is_required_and_unique_for_receipt_crud(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_CASHIER]);
+        Income::create([
+            'income_no' => 'INC-DUPLICATE',
+            'receipt_no' => 'OR-DUPLICATE',
+            'source' => 'Enrollment Collections',
+            'description' => 'Existing receipt',
+            'amount' => 1000,
+            'date_encoded' => '2026-08-01',
+        ]);
+
+        $this->actingAs($user)
+            ->from('/receipts')
+            ->post('/receipts', [
+                'receipt_no' => '',
+                'source' => 'Enrollment Collections',
+                'description' => 'Missing receipt number',
+                'amount' => 1000,
+                'date_encoded' => '2026-08-01',
+            ])
+            ->assertRedirect('/receipts')
+            ->assertSessionHasErrors('receipt_no');
+
+        $this->actingAs($user)
+            ->from('/receipts')
+            ->post('/receipts', [
+                'receipt_no' => 'OR-DUPLICATE',
+                'source' => 'Enrollment Collections',
+                'description' => 'Duplicate receipt number',
+                'amount' => 1000,
+                'date_encoded' => '2026-08-01',
+            ])
+            ->assertRedirect('/receipts')
+            ->assertSessionHasErrors('receipt_no');
     }
 
     public function test_auditor_cannot_access_receipts_page(): void

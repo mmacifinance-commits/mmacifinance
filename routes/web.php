@@ -53,6 +53,9 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:super_admin,budget_officer,disbursement_officer,cashier')->group(function () {
         Route::get('/receipts/export-csv', [ReceiptController::class, 'exportCsv'])->name('receipts.export-csv');
         Route::post('/receipts/import-csv', [ReceiptController::class, 'importCsv'])->name('receipts.import-csv');
+        Route::post('/receipts', [ReceiptController::class, 'store'])->name('receipts.store');
+        Route::put('/receipts/{receipt}', [ReceiptController::class, 'update'])->name('receipts.update');
+        Route::delete('/receipts/{receipt}', [ReceiptController::class, 'destroy'])->name('receipts.destroy');
     });
     Route::redirect('/revenue', '/iaeo', 301);
 

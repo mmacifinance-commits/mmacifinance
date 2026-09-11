@@ -8,6 +8,7 @@ use App\Services\BudgetUtilizationService;
 use App\Services\FiscalPeriodService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class IncomeController extends Controller
@@ -112,7 +113,7 @@ class IncomeController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'receipt_no' => 'nullable|string|max:100',
+            'receipt_no' => ['nullable', 'string', 'max:100', Rule::unique('incomes', 'receipt_no')],
             'source' => 'required|string|max:255',
             'description' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
@@ -136,7 +137,7 @@ class IncomeController extends Controller
     public function update(Request $request, Income $income)
     {
         $validated = $request->validate([
-            'receipt_no' => 'nullable|string|max:100',
+            'receipt_no' => ['nullable', 'string', 'max:100', Rule::unique('incomes', 'receipt_no')->ignore($income->id)],
             'source' => 'required|string|max:255',
             'description' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
@@ -245,15 +246,20 @@ class IncomeController extends Controller
                 continue;
             }
 
-            $income = Income::firstOrNew([
-                'source' => $source,
-                'description' => $description,
-                'date_encoded' => $dateEncoded,
-            ]);
+            $income = $receiptNo !== ''
+                ? Income::firstOrNew(['receipt_no' => $receiptNo])
+                : Income::firstOrNew([
+                    'source' => $source,
+                    'description' => $description,
+                    'date_encoded' => $dateEncoded,
+                ]);
 
             $isNew = ! $income->exists;
             $income->receipt_no = $receiptNo !== '' ? $receiptNo : null;
+            $income->source = $source;
+            $income->description = $description;
             $income->amount = $amount;
+            $income->date_encoded = $dateEncoded;
             $income->notes = $notes !== '' ? $notes : null;
             if ($isNew) {
                 $income->income_no = sprintf('INC-%s-%04d', date('Y'), Income::count() + 1);

@@ -6,6 +6,7 @@ use App\Models\Income;
 use App\Services\FiscalPeriodService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class ReceiptController extends Controller
@@ -198,6 +199,54 @@ class ReceiptController extends Controller
         return redirect()->route('receipts.index')->with('success', $message);
     }
 
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'receipt_no' => ['required', 'string', 'max:100', Rule::unique('incomes', 'receipt_no')],
+            'source' => 'required|string|max:255',
+            'description' => 'required|string|max:255',
+            'amount' => 'required|numeric|min:0',
+            'date_encoded' => 'required|date',
+            'notes' => 'nullable|string',
+        ]);
+
+        $validated['receipt_no'] = trim($validated['receipt_no']);
+        $validated['income_no'] = sprintf('INC-%s-%04d', date('Y'), Income::count() + 1);
+        $validated['created_by_id'] = auth()->id();
+
+        Income::create($validated);
+
+        return redirect()->route('receipts.index')->with('success', 'Receipt created successfully.');
+    }
+
+    public function update(Request $request, Income $receipt)
+    {
+        abort_if(blank($receipt->receipt_no), 404);
+
+        $validated = $request->validate([
+            'receipt_no' => ['required', 'string', 'max:100', Rule::unique('incomes', 'receipt_no')->ignore($receipt->id)],
+            'source' => 'required|string|max:255',
+            'description' => 'required|string|max:255',
+            'amount' => 'required|numeric|min:0',
+            'date_encoded' => 'required|date',
+            'notes' => 'nullable|string',
+        ]);
+
+        $validated['receipt_no'] = trim($validated['receipt_no']);
+        $receipt->update($validated);
+
+        return redirect()->route('receipts.index')->with('success', 'Receipt updated successfully.');
+    }
+
+    public function destroy(Income $receipt)
+    {
+        abort_if(blank($receipt->receipt_no), 404);
+
+        $receipt->delete();
+
+        return redirect()->route('receipts.index')->with('success', 'Receipt deleted successfully.');
+    }
+
     private function receiptType(Income $income): string
     {
         $text = strtolower($income->source.' '.$income->description);
@@ -219,27 +268,8 @@ class ReceiptController extends Controller
                 $selectedPeriod->fiscalStart()->toDateString(),
                 $selectedPeriod->fiscalEnd()->toDateString(),
             ]))
-            ->where(function ($q) {
-                $q->whereNotNull('receipt_no')
-                    ->orWhere('source', 'like', '%enrollment%')
-                    ->orWhere('description', 'like', '%enrollment%')
-                    ->orWhere('source', 'like', '%premidterm%')
-                    ->orWhere('description', 'like', '%premidterm%')
-                    ->orWhere('source', 'like', '%pre midterm%')
-                    ->orWhere('description', 'like', '%pre midterm%')
-                    ->orWhere('source', 'like', '%prelim%')
-                    ->orWhere('description', 'like', '%prelim%')
-                    ->orWhere('source', 'like', '%midterm%')
-                    ->orWhere('description', 'like', '%midterm%')
-                    ->orWhere('source', 'like', '%pre-final%')
-                    ->orWhere('description', 'like', '%pre-final%')
-                    ->orWhere('source', 'like', '%prefinal%')
-                    ->orWhere('description', 'like', '%prefinal%')
-                    ->orWhere('source', 'like', '%final exam%')
-                    ->orWhere('description', 'like', '%final exam%')
-                    ->orWhere('source', 'like', '%final%')
-                    ->orWhere('description', 'like', '%final%');
-            });
+            ->whereNotNull('receipt_no')
+            ->where('receipt_no', '<>', '');
 
         if ($term !== '') {
             $patterns = $this->termPatterns($term);
