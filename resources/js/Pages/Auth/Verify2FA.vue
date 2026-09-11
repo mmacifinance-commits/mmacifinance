@@ -1,6 +1,7 @@
 <script setup>
 import { useForm, Head } from '@inertiajs/vue3'
 import { ref, onMounted, onUnmounted, watch } from 'vue'
+import LoadingOverlay from '@/Components/LoadingOverlay.vue'
 
 const props = defineProps({
     cooldownSeconds: {
@@ -135,7 +136,14 @@ function resendCode() {
 
 <template>
     <Head title="Verify Your Identity" />
-    <div class="flex min-h-[100dvh] items-start justify-center bg-[#253955] px-3 pb-6 pt-14 font-sans sm:items-center sm:px-4 sm:py-14">
+    <div class="relative flex min-h-[100dvh] items-start justify-center bg-[#253955] px-3 pb-6 pt-14 font-sans sm:items-center sm:px-4 sm:py-14">
+        <LoadingOverlay
+            :show="form.processing || resendForm.processing"
+            full-screen
+            :text="resendForm.processing ? 'Sending code...' : 'Verifying...'"
+            subtext="Please wait while we process your security request."
+        />
+
         <div class="w-full max-w-md">
             <!-- Card -->
             <div class="relative bg-white px-4 pb-6 pt-10 text-center shadow-2xl sm:px-10 sm:pb-10 sm:pt-12">

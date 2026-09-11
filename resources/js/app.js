@@ -8,7 +8,7 @@ let pendingVisits = 0
 let loadingTimer = null
 
 function setGlobalLoading(active) {
-    document.documentElement.classList.toggle('app-loading', active)
+    window.dispatchEvent(new CustomEvent('app:loading', { detail: { active } }))
 }
 
 router.on('start', () => {

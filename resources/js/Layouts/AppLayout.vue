@@ -1,8 +1,9 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Link, usePage, router } from '@inertiajs/vue3'
 import OfflineBanner from '@/Components/OfflineBanner.vue'
 import SystemAlert from '@/Components/SystemAlert.vue'
+import LoadingOverlay from '@/Components/LoadingOverlay.vue'
 
 const page = usePage()
 const auth = computed(() => page.props.auth)
@@ -32,6 +33,8 @@ const sidebarMenus = {
 
 const mobileMenuOpen = ref(false)
 const showFlash = ref(true)
+const pageLoading = ref(false)
+let loadingHideTimer = null
 
 const currentPath = computed(() => page.url)
 
@@ -65,6 +68,27 @@ function isSideActive(href) {
 function logout() {
     router.post('/logout')
 }
+
+function handleGlobalLoading(event) {
+    clearTimeout(loadingHideTimer)
+    if (event.detail?.active) {
+        pageLoading.value = true
+        return
+    }
+
+    loadingHideTimer = setTimeout(() => {
+        pageLoading.value = false
+    }, 120)
+}
+
+onMounted(() => {
+    window.addEventListener('app:loading', handleGlobalLoading)
+})
+
+onUnmounted(() => {
+    window.removeEventListener('app:loading', handleGlobalLoading)
+    clearTimeout(loadingHideTimer)
+})
 
 
 watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value = false }, 4000) }, { deep: true })
@@ -168,7 +192,13 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
         </div>
 
         <!-- Body: Sidebar + Content -->
-        <div class="flex flex-1 min-w-0">
+        <div class="relative flex flex-1 min-w-0">
+            <LoadingOverlay
+                :show="pageLoading"
+                text="Loading..."
+                subtext="Please wait while the page updates."
+            />
+
             <!-- Sidebar -->
             <aside v-if="hasSidebar" class="hidden px-4 mt-2 md:block w-64 bg-white border-r border-gray-200 flex-shrink-0">
                 <div class="border-t-4 border-mustard bg-navy-dark px-4 py-2">

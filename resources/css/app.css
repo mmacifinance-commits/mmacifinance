@@ -16,31 +16,26 @@ body {
     overflow-x: hidden;
 }
 
-html.app-loading::after {
-    content: "";
-    position: fixed;
-    top: 0;
-    left: 0;
-    z-index: 10000;
-    width: 100%;
-    height: 4px;
-    pointer-events: none;
-    background:
-        linear-gradient(90deg, transparent 0%, rgba(212, 168, 67, 0.25) 16%, var(--color-mustard) 32%, #fff1b8 48%, var(--color-mustard) 64%, rgba(212, 168, 67, 0.25) 80%, transparent 100%),
-        linear-gradient(90deg, var(--color-navy-dark), var(--color-navy), var(--color-navy-dark));
-    background-size: 42% 100%, 100% 100%;
-    background-repeat: no-repeat;
-    box-shadow: 0 1px 10px rgba(212, 168, 67, 0.35);
-    animation: app-loading-flow 1.15s cubic-bezier(0.45, 0, 0.2, 1) infinite;
-}
-
-@keyframes app-loading-flow {
+@keyframes loading-flow {
     0% {
-        background-position: -45% 0, 0 0;
+        transform: translateX(-120%);
     }
 
     100% {
-        background-position: 145% 0, 0 0;
+        transform: translateX(320%);
+    }
+}
+
+@keyframes loading-pulse {
+    0%,
+    100% {
+        opacity: 0.72;
+        transform: scale(0.96);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1);
     }
 }
 
@@ -177,9 +172,9 @@ td {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    html.app-loading::after {
+    .animate-\[loading-flow_1\.1s_ease-in-out_infinite\],
+    .animate-\[loading-pulse_1\.4s_ease-in-out_infinite\] {
         animation: none !important;
-        background-position: 50% 0, 0 0;
     }
 
     .chart-shell--ready {

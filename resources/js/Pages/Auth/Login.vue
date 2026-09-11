@@ -1,6 +1,6 @@
 <script setup>
 import { useForm, Head, Link } from '@inertiajs/vue3'
-import { ref } from 'vue'
+import LoadingOverlay from '@/Components/LoadingOverlay.vue'
 
 const props = defineProps({
     demoUsers: Array,
@@ -26,7 +26,14 @@ function submit() {
 
 <template>
     <Head title="Login" />
-    <div class="flex min-h-screen items-center justify-center bg-gradient-to-br from-navy-dark via-navy to-navy-light px-4">
+    <div class="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-navy-dark via-navy to-navy-light px-4">
+        <LoadingOverlay
+            :show="form.processing"
+            full-screen
+            text="Signing in..."
+            subtext="Please wait while we verify your account."
+        />
+
         <div class="w-full max-w-md">
             <div class="rounded-2xl bg-white/10 backdrop-blur-lg border border-white/20 p-8 shadow-2xl">
                 <!-- Logo -->
