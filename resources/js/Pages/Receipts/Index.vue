@@ -169,7 +169,7 @@ function deleteReceipt(item) {
         </div>
     </div>
 
-    <div class="mb-6 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+    <div class="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div class="h-1 bg-navy-dark"></div>
             <div class="p-4">
@@ -189,7 +189,7 @@ function deleteReceipt(item) {
         <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div class="h-1 bg-emerald-500"></div>
             <div class="p-4">
-                <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Cash On Hand</p>
+                <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Available Cash</p>
                 <p class="mt-0.5 text-xl font-extrabold text-emerald-700">{{ PESO }}{{ fmt(summary?.cashOnHand) }}</p>
                 <p class="mt-1 text-xs text-gray-500">Receipts less posted disbursements.</p>
             </div>
@@ -200,14 +200,6 @@ function deleteReceipt(item) {
                 <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Committed Cash</p>
                 <p class="mt-0.5 text-xl font-extrabold text-orange-700">{{ PESO }}{{ fmt(summary?.committedDisbursements) }}</p>
                 <p class="mt-1 text-xs text-gray-500">Draft, pending, approved, and posted releases.</p>
-            </div>
-        </div>
-        <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-            <div class="h-1 bg-teal-500"></div>
-            <div class="p-4">
-                <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Available for Disbursement</p>
-                <p class="mt-0.5 text-xl font-extrabold text-teal-700">{{ PESO }}{{ fmt(summary?.availableForDisbursement) }}</p>
-                <p class="mt-1 text-xs text-gray-500">Receipts less committed disbursements.</p>
             </div>
         </div>
         <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
