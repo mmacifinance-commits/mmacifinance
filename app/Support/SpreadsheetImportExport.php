@@ -242,10 +242,9 @@ class SpreadsheetImportExport
 
     private static function writeReportSection($worksheet, int $row, array $section): int
     {
-        $headers = $section['headers'] ?? [];
-        $rows = $section['rows'] ?? [];
-        $columnCount = max(count($headers), 1);
-        $lastColumn = self::columnName($columnCount);
+        $headers = self::reportHeaders($section);
+        $rows = self::reportRows($section);
+        $lastColumn = 'I';
 
         $worksheet->mergeCells("A{$row}:{$lastColumn}{$row}");
         $worksheet->setCellValue("A{$row}", $section['title'] ?? 'Report Section');
@@ -266,6 +265,7 @@ class SpreadsheetImportExport
             'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => '111827']]],
             'alignment' => ['wrapText' => true],
         ]);
+        $worksheet->getRowDimension($headerRow)->setRowHeight(34);
         $row++;
 
         $firstDataRow = $row;
@@ -290,7 +290,8 @@ class SpreadsheetImportExport
 
         $lastDataRow = max($firstDataRow, $row - 1);
         $totalRow = $row;
-        self::writeReportTotalRow($worksheet, $totalRow, $firstDataRow, $lastDataRow, $section['type'] ?? '', $columnCount);
+        self::mergeReportSectionWideCells($worksheet, $section['type'] ?? '', $headerRow, $firstDataRow, $lastDataRow, $rows !== []);
+        self::writeReportTotalRow($worksheet, $totalRow, $firstDataRow, $lastDataRow, $section['type'] ?? '');
 
         $worksheet->getStyle("A{$firstDataRow}:{$lastColumn}{$totalRow}")->applyFromArray([
             'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'CBD5E1']]],
@@ -300,9 +301,80 @@ class SpreadsheetImportExport
             'font' => ['bold' => true],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F8FAFC']],
         ]);
+        $worksheet->mergeCells("A{$totalRow}:B{$totalRow}");
+        $worksheet->getRowDimension($totalRow)->setRowHeight(24);
         $worksheet->getStyle("A{$headerRow}:{$lastColumn}{$totalRow}")->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
 
         return $totalRow;
+    }
+
+    private static function mergeReportSectionWideCells($worksheet, string $type, int $headerRow, int $firstDataRow, int $lastDataRow, bool $hasRows): void
+    {
+        if ($type === 'receipts') {
+            $worksheet->mergeCells("E{$headerRow}:G{$headerRow}");
+            if ($hasRows) {
+                for ($row = $firstDataRow; $row <= $lastDataRow; $row++) {
+                    $worksheet->mergeCells("E{$row}:G{$row}");
+                }
+            }
+        }
+
+        if ($type === 'disbursements') {
+            $worksheet->mergeCells("F{$headerRow}:G{$headerRow}");
+            if ($hasRows) {
+                for ($row = $firstDataRow; $row <= $lastDataRow; $row++) {
+                    $worksheet->mergeCells("F{$row}:G{$row}");
+                }
+            }
+        }
+    }
+
+    private static function reportHeaders(array $section): array
+    {
+        return match ($section['type'] ?? '') {
+            'receipts' => [
+                'Receipt No.', 'Income No.', 'Receipt Type', 'Source',
+                'Description', '', '', 'Receipt Date', 'Amount',
+            ],
+            'disbursements' => [
+                'DSB No.', 'Expense Ref', 'Allocation Month', 'Expense Date',
+                'Disbursement Date', 'Payee', '', 'Status', 'Amount',
+            ],
+            default => array_pad(array_slice($section['headers'] ?? [], 0, 9), 9, ''),
+        };
+    }
+
+    private static function reportRows(array $section): array
+    {
+        return array_map(function (array $row) use ($section): array {
+            $values = array_values($row);
+
+            return match ($section['type'] ?? '') {
+                'receipts' => [
+                    $values[0] ?? '',
+                    $values[1] ?? '',
+                    $values[2] ?? '',
+                    $values[3] ?? '',
+                    $values[4] ?? '',
+                    '',
+                    '',
+                    $values[5] ?? '',
+                    $values[6] ?? 0,
+                ],
+                'disbursements' => [
+                    $values[0] ?? '',
+                    $values[1] ?? '',
+                    $values[2] ?? '',
+                    $values[3] ?? '',
+                    $values[4] ?? '',
+                    $values[5] ?? '',
+                    '',
+                    $values[6] ?? '',
+                    $values[7] ?? 0,
+                ],
+                default => array_pad(array_slice($values, 0, 9), 9, ''),
+            };
+        }, $section['rows'] ?? []);
     }
 
     private static function applyReportRowFormulas($worksheet, int $row, string $type): void
@@ -315,14 +387,12 @@ class SpreadsheetImportExport
         }
 
         if (in_array($type, ['receipts', 'disbursements'], true)) {
-            $amountColumn = $type === 'receipts' ? 'G' : 'H';
-            $worksheet->getStyle("{$amountColumn}{$row}")->getNumberFormat()->setFormatCode('"₱"#,##0.00');
+            $worksheet->getStyle("I{$row}")->getNumberFormat()->setFormatCode('"₱"#,##0.00');
         }
     }
 
-    private static function writeReportTotalRow($worksheet, int $row, int $firstDataRow, int $lastDataRow, string $type, int $columnCount): void
+    private static function writeReportTotalRow($worksheet, int $row, int $firstDataRow, int $lastDataRow, string $type): void
     {
-        $lastColumn = self::columnName($columnCount);
         $worksheet->setCellValue("A{$row}", $type === 'budget' ? 'TOTAL' : 'TOTAL '.strtoupper($type));
 
         if ($type === 'budget') {
@@ -336,18 +406,16 @@ class SpreadsheetImportExport
         }
 
         if ($type === 'receipts') {
-            $worksheet->setCellValue("G{$row}", "=SUM(G{$firstDataRow}:G{$lastDataRow})");
-            $worksheet->getStyle("G{$row}")->getNumberFormat()->setFormatCode('"₱"#,##0.00');
+            $worksheet->setCellValue("I{$row}", "=SUM(I{$firstDataRow}:I{$lastDataRow})");
+            $worksheet->getStyle("I{$row}")->getNumberFormat()->setFormatCode('"₱"#,##0.00');
             return;
         }
 
         if ($type === 'disbursements') {
-            $worksheet->setCellValue("H{$row}", "=SUM(H{$firstDataRow}:H{$lastDataRow})");
-            $worksheet->getStyle("H{$row}")->getNumberFormat()->setFormatCode('"₱"#,##0.00');
+            $worksheet->setCellValue("I{$row}", "=SUM(I{$firstDataRow}:I{$lastDataRow})");
+            $worksheet->getStyle("I{$row}")->getNumberFormat()->setFormatCode('"₱"#,##0.00');
             return;
         }
-
-        $worksheet->mergeCells("A{$row}:{$lastColumn}{$row}");
     }
 
     private static function columnName(int $columnNumber): string
