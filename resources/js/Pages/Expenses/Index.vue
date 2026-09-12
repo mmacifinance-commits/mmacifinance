@@ -10,7 +10,7 @@ const perms = computed(() => usePage().props.permissions || {})
 const { isOnline, offlinePost, offlinePut } = useOfflineQueue()
 
 const props = defineProps({
-    expenses: Array,
+    expenses: [Array, Object],
     categories: Array,
     budgetedCategories: Array,
     particulars: Array,
@@ -40,6 +40,14 @@ const monthNames = [
 
 // Local optimistic list for offline-queued items
 const offlineRows = ref([])
+const paginatedExpenses = computed(() => props.expenses || {})
+const expenseItems = computed(() => {
+    const source = paginatedExpenses.value
+    return Array.isArray(source) ? source : (source.data || [])
+})
+const expenseTotalRecords = computed(() => Array.isArray(paginatedExpenses.value) ? expenseItems.value.length : (paginatedExpenses.value.total || 0))
+const expenseFirstRecord = computed(() => Array.isArray(paginatedExpenses.value) ? (expenseItems.value.length ? 1 : 0) : (paginatedExpenses.value.from || 0))
+const expenseLastRecord = computed(() => Array.isArray(paginatedExpenses.value) ? expenseItems.value.length : (paginatedExpenses.value.to || 0))
 
 const filterSearch = ref('')
 const filterCategory = ref('')
@@ -86,7 +94,7 @@ const maximumExpenseAmount = computed(() => {
     if (!selectedAllocation.value) return null
 
     let available = Number(selectedAllocation.value.balance || 0)
-    const currentExpense = (props.expenses || []).find(row => String(row.id) === String(editing.value))
+    const currentExpense = expenseItems.value.find(row => String(row.id) === String(editing.value))
     if (currentExpense && String(currentExpense.budget_item_id) === String(selectedAllocation.value.id)) {
         available += (currentExpense.disbursements || [])
             .filter(disbursement => disbursement.status === 'posted')
@@ -121,7 +129,7 @@ function expenseAllocationLabel(expense) {
 }
 
 const filteredExpenses = computed(() => {
-    const all = [...props.expenses, ...offlineRows.value]
+    const all = [...expenseItems.value, ...offlineRows.value]
     return all.filter(e => {
         const matchSearch = filterSearch.value ?
             ((e.ref_no || '').toLowerCase().includes(filterSearch.value.toLowerCase()) ||
@@ -234,7 +242,7 @@ async function save() {
             {
                 resource: 'expense',
                 rank: 30,
-                baseVersion: props.expenses.find((row) => String(row.id) === String(editing.value))?.updated_at || null,
+                baseVersion: expenseItems.value.find((row) => String(row.id) === String(editing.value))?.updated_at || null,
             }
         )
         if (queued) {
@@ -511,9 +519,20 @@ function splitDate(d) {
                 </tbody>
             </table>
         </div>
-        <div class="px-5 py-3 bg-gray-50 text-xs text-gray-500 border-t flex items-center justify-between">
-            <span>Total Records: {{ filteredExpenses.length }}</span>
-            <button type="button" @click="clearFilters" class="px-3 py-1.5 rounded-md bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-semibold shadow-sm">Clear Filters</button>
+        <div class="px-5 py-3 bg-gray-50 text-xs text-gray-500 border-t flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span>Showing {{ expenseFirstRecord }}-{{ expenseLastRecord }} of {{ expenseTotalRecords }} expenditure(s)</span>
+            <div class="flex flex-wrap items-center gap-2">
+                <button type="button" @click="clearFilters" class="px-3 py-1.5 rounded-md bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-semibold shadow-sm">Clear Filters</button>
+                <button
+                    v-for="link in (paginatedExpenses.links || [])"
+                    :key="link.label"
+                    :disabled="!link.url"
+                    @click="link.url && router.visit(link.url, { preserveState: true, preserveScroll: true })"
+                    v-html="link.label"
+                    class="rounded-md border px-3 py-1.5 text-xs font-semibold transition"
+                    :class="link.active ? 'border-navy-dark bg-navy-dark text-white' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50'"
+                />
+            </div>
         </div>
     </div>
 

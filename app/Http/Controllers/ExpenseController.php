@@ -21,17 +21,26 @@ class ExpenseController extends Controller
 {
     public function index(Request $request)
     {
-        $expenses = Expense::with([
+        $yearExpression = DB::getDriverName() === 'sqlite'
+            ? "CAST(strftime('%Y', date_encoded) AS INTEGER)"
+            : 'YEAR(date_encoded)';
+
+        $expenseQuery = Expense::with([
             'category',
             'particular.department',
             'budgetItem.budget',
             'auditTrails',
             'disbursements',
-        ])->latest()->get();
+        ])->latest();
 
-        $yearsFromExpenses = $expenses->pluck('date_encoded')
+        $expenses = $expenseQuery->paginate(25)->withQueryString();
+
+        $yearsFromExpenses = Expense::query()
+            ->selectRaw("{$yearExpression} as year")
+            ->distinct()
+            ->pluck('year')
             ->filter()
-            ->map(fn ($d) => (int) date('Y', strtotime($d)))
+            ->map(fn ($year) => (int) $year)
             ->unique()
             ->sortDesc()
             ->values();
