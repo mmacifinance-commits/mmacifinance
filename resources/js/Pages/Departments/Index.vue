@@ -1,6 +1,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
+import ImportPreviewPanel from '@/Components/ImportPreviewPanel.vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
 
@@ -415,81 +416,18 @@ function importCsv() {
         <Modal
             :show="showImportModal"
             title="Import Responsibility Centers CSV"
-            subtitle="Required columns: responsibility_center, code"
+            subtitle="Preview the file before saving responsibility centers."
+            max-width="4xl"
             @close="showImportModal = false"
         >
-            <form
-                @submit.prevent="importCsv"
-                class="space-y-4"
-            >
-                <div
-                    class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
-                >
-                    <p class="font-semibold">
-                        Required columns
-                    </p>
-
-                    <p class="mt-1 font-mono text-xs">
-                        responsibility_center, code
-                    </p>
-
-                    <p class="mt-2 text-xs">
-                        Responsibility Centers are used by Account Titles and
-                        Annual Budget Allocations. Codes should be short and
-                        unique, like FIN.
-                    </p>
-                </div>
-
-                <div>
-                    <label
-                        class="mb-1.5 block text-sm font-medium text-gray-700"
-                    >
-                        CSV File
-                    </label>
-
-                    <input
-                        type="file"
-                        accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
-                        @change="
-                            (e) =>
-                                importForm.csv_file =
-                                    e.target.files?.[0] || null
-                        "
-                    />
-
-                    <p
-                        v-if="importForm.errors.csv_file"
-                        class="mt-1 text-xs text-red-500"
-                    >
-                        {{ importForm.errors.csv_file }}
-                    </p>
-                </div>
-
-                <div
-                    class="flex items-center justify-end gap-3 border-t pt-5"
-                >
-                    <button
-                        type="button"
-                        @click="showImportModal = false"
-                        class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-                    >
-                        Cancel
-                    </button>
-
-                    <button
-                        type="submit"
-                        :disabled="importForm.processing"
-                        class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-navy disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                        {{
-                            importForm.processing
-                                ? 'Importing...'
-                                : 'Import CSV'
-                        }}
-                    </button>
-                </div>
-            </form>
+            <ImportPreviewPanel
+                module="departments"
+                :form="importForm"
+                :error-messages="Object.values(importForm.errors || {}).flat().filter(Boolean)"
+                required-columns="responsibility_center, code"
+                @cancel="showImportModal = false"
+                @confirm="importCsv"
+            />
         </Modal>
     </AppLayout>
 </template>

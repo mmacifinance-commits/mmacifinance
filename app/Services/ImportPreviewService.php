@@ -18,6 +18,9 @@ class ImportPreviewService
         $duplicates = [];
         $seen = [];
         $line = 1;
+        $validCount = 0;
+        $invalidCount = count($missing);
+        $duplicateCount = 0;
 
         foreach ($rows as $row) {
             $line++;
@@ -34,6 +37,7 @@ class ImportPreviewService
             $key = $result['key'] ?? null;
 
             if ($key && isset($seen[$key])) {
+                $duplicateCount++;
                 $duplicates[] = [
                     'line' => $line,
                     'message' => "Duplicate row key also appears on line {$seen[$key]}.",
@@ -44,20 +48,25 @@ class ImportPreviewService
                 $seen[$key] = $line;
             }
 
-            if (($result['valid'] ?? false) && count($valid) < $limit) {
-                $valid[] = ['line' => $line, 'row' => $data, 'message' => $result['message'] ?? 'Ready to import.'];
-            }
-            if (! ($result['valid'] ?? false) && count($invalid) < $limit) {
-                $invalid[] = ['line' => $line, 'row' => $data, 'message' => $result['message'] ?? 'Invalid row.'];
+            if (($result['valid'] ?? false)) {
+                $validCount++;
+                if (count($valid) < $limit) {
+                    $valid[] = ['line' => $line, 'row' => $data, 'message' => $result['message'] ?? 'Ready to import.'];
+                }
+            } else {
+                $invalidCount++;
+                if (count($invalid) < $limit) {
+                    $invalid[] = ['line' => $line, 'row' => $data, 'message' => $result['message'] ?? 'Invalid row.'];
+                }
             }
         }
 
         return [
             'headers' => $header,
             'missing_columns' => $missing,
-            'valid_count' => count($valid),
-            'invalid_count' => count($invalid) + count($missing),
-            'duplicate_count' => count($duplicates),
+            'valid_count' => $validCount,
+            'invalid_count' => $invalidCount,
+            'duplicate_count' => $duplicateCount,
             'valid_rows' => $valid,
             'invalid_rows' => $missing
                 ? [['line' => null, 'message' => 'Missing required columns: '.implode(', ', $missing), 'row' => []]]

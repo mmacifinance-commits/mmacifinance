@@ -1,6 +1,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
+import ImportPreviewPanel from '@/Components/ImportPreviewPanel.vue'
 import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3'
 import { ref, computed, watch } from 'vue'
 
@@ -448,40 +449,15 @@ function catBalancePercent(group) {
         </form>
     </Modal>
 
-    <Modal :show="showImportModal" title="Import Budget CSV" subtitle="Upload a CSV file to add or update monthly budget allocation rows. Missing budget categories, departments, and account titles will be created automatically." max-width="lg" @close="showImportModal = false">
-        <form @submit.prevent="handleImportCsv">
-            <div class="space-y-4">
-                <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                    <p class="font-semibold text-slate-900 mb-2">Required columns</p>
-                    <p class="text-xs leading-6">
-                        <span class="font-semibold">allocation_month</span> (YYYY-MM), <span class="font-semibold">budget_category</span>, <span class="font-semibold">responsibility_center</span>, <span class="font-semibold">account_title</span>, <span class="font-semibold">appropriation</span>
-                    </p>
-                    <p class="mt-2 text-xs leading-6">
-                    Optional columns: <span class="font-semibold">month</span> (legacy), <span class="font-semibold">fiscal_year_label</span>, <span class="font-semibold">fiscal_start_date</span>, <span class="font-semibold">fiscal_end_date</span>, <span class="font-semibold">account_code</span>, <span class="font-semibold">description</span>. Expenditure is recalculated automatically and ignored on import.
-                </p>
-            </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">CSV File</label>
-                    <input
-                        type="file"
-                        accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
-                        @change="(e) => importForm.csv_file = e.target.files?.[0] || null"
-                        required
-                    />
-                </div>
-                <div v-if="importForm.errors.csv_file" class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                    {{ importForm.errors.csv_file }}
-                </div>
-                <div v-if="importForm.processing" class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800">
-                    Importing CSV... please wait.
-                </div>
-            </div>
-            <div class="flex items-center justify-end gap-3 pt-5 border-t mt-4">
-                <button type="button" @click="showImportModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button type="submit" :disabled="importForm.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">{{ importForm.processing ? 'Importing...' : 'Import CSV' }}</button>
-            </div>
-        </form>
+    <Modal :show="showImportModal" title="Import Budget CSV" subtitle="Preview monthly budget allocation rows before saving." max-width="4xl" @close="showImportModal = false">
+        <ImportPreviewPanel
+            module="annual-budget-items"
+            :form="importForm"
+            :error-messages="Object.values(importForm.errors || {}).flat().filter(Boolean)"
+            required-columns="allocation_month, budget_category, responsibility_center, account_title, appropriation"
+            @cancel="showImportModal = false"
+            @confirm="handleImportCsv"
+        />
     </Modal>
 </AppLayout>
 </template>

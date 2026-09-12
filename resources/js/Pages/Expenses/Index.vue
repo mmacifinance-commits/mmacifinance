@@ -1,6 +1,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
+import ImportPreviewPanel from '@/Components/ImportPreviewPanel.vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import { ref, computed, watch } from 'vue'
 import { useOfflineQueue } from '@/composables/useOfflineQueue'
@@ -614,32 +615,15 @@ function splitDate(d) {
         </div>
     </Modal>
 
-    <Modal :show="showImportModal" title="Import Expenditures CSV" subtitle="Use readable category and account title names from the system." max-width="lg" @close="showImportModal = false">
-        <form @submit.prevent="importCsv" class="space-y-4">
-            <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                <p class="font-semibold">Required columns</p>
-                <p class="mt-1 font-mono text-xs">ref_no, description, category, account_title, amount, date_encoded, date_approved, status, notes</p>
-                <p class="mt-2 text-xs">
-                    Optional: <span class="font-mono font-semibold">monthly_allocation_ref</span>. Use a reference such as MB-2026-08-0001 to charge a month that differs from the expense date. Older files without it continue using date-based matching.
-                </p>
-                <p class="mt-2 text-xs">
-                    Expenditures can only be imported for categories and account titles that already have Annual Budget Allocations for the expense fiscal year.
-                    Import status is limited to pending or cancelled so workflow stamps stay intact.
-                </p>
-            </div>
-            <div v-if="importForm.errors.csv_file" class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                {{ importForm.errors.csv_file }}
-            </div>
-            <div>
-                <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV File</label>
-                <input type="file" accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" @change="e => importForm.csv_file = e.target.files[0]" class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm" required />
-            </div>
-            <div class="flex items-center justify-end gap-3 border-t pt-5">
-                <button type="button" @click="showImportModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
-                <button type="submit" :disabled="importForm.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">{{ importForm.processing ? 'Importing...' : 'Import CSV' }}</button>
-            </div>
-        </form>
+    <Modal :show="showImportModal" title="Import Expenditures CSV" subtitle="Preview the file before saving expenditures." max-width="4xl" @close="showImportModal = false">
+        <ImportPreviewPanel
+            module="expenses"
+            :form="importForm"
+            :error-messages="Object.values(importForm.errors || {}).flat().filter(Boolean)"
+            required-columns="ref_no, description, category, account_title, amount, date_encoded, date_approved, status, notes"
+            @cancel="showImportModal = false"
+            @confirm="importCsv"
+        />
     </Modal>
 </AppLayout>
 </template>
-

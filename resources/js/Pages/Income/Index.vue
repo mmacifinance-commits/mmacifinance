@@ -2,6 +2,7 @@
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
 import SystemAlert from '@/Components/SystemAlert.vue'
+import ImportPreviewPanel from '@/Components/ImportPreviewPanel.vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import { computed, ref } from 'vue'
 
@@ -231,23 +232,15 @@ function importCsv() {
         </form>
     </Modal>
 
-    <Modal :show="showImportModal" title="Import Income CSV" subtitle="Upload a CSV with required columns: source, description, amount, date_encoded, notes. Optional: receipt_no." max-width="lg" @close="showImportModal = false">
-        <form @submit.prevent="importCsv" class="space-y-4">
-            <SystemAlert v-if="importErrorMessages.length" tone="error" title="The income file could not be imported" :messages="importErrorMessages" />
-            <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                <p class="font-semibold">Required columns</p>
-                <p class="mt-1 font-mono text-xs">source, description, amount, date_encoded, notes</p>
-                <p class="mt-2 text-xs">Optional column: <span class="font-mono">receipt_no</span></p>
-            </div>
-            <div>
-                <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV File</label>
-                <input type="file" accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" @change="e => importForm.csv_file = e.target.files[0]" class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm" required />
-            </div>
-            <div class="flex items-center justify-end gap-3 border-t pt-5">
-                <button type="button" @click="showImportModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
-                <button type="submit" :disabled="importForm.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">{{ importForm.processing ? 'Importing...' : 'Import CSV' }}</button>
-            </div>
-        </form>
+    <Modal :show="showImportModal" title="Import Income CSV" subtitle="Preview the file before saving income records." max-width="4xl" @close="showImportModal = false">
+        <ImportPreviewPanel
+            module="income"
+            :form="importForm"
+            :error-messages="importErrorMessages"
+            required-columns="source, description, amount, date_encoded, notes"
+            @cancel="showImportModal = false"
+            @confirm="importCsv"
+        />
     </Modal>
 </AppLayout>
 </template>

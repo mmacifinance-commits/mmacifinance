@@ -2,6 +2,7 @@
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
 import SystemAlert from '@/Components/SystemAlert.vue'
+import ImportPreviewPanel from '@/Components/ImportPreviewPanel.vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
 import { useOfflineQueue } from '@/composables/useOfflineQueue'
@@ -808,23 +809,15 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
         </div>
     </Modal>
 
-    <Modal :show="showImportModal" title="Import Disbursements CSV" subtitle="Required columns: disbursement_no, expense_ref_no, description, source, pay_to, amount, method, date_encoded, status, notes, remarks" max-width="lg" @close="showImportModal = false">
-        <form @submit.prevent="importCsv" class="space-y-4">
-            <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                <p class="font-semibold">Required columns</p>
-                <p class="mt-1 font-mono text-xs">disbursement_no, expense_ref_no, description, source, pay_to, amount, method, date_encoded, status, notes, remarks</p>
-                <p class="mt-2 text-xs">Only approved expenses can be linked. Import status is limited to draft, for_release, or for_approval so workflow stamps stay intact.</p>
-            </div>
-            <SystemAlert v-if="importErrorMessages.length" tone="error" title="The disbursements file could not be imported" :messages="importErrorMessages" />
-            <div>
-                <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV File</label>
-                <input type="file" accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" @change="e => importForm.csv_file = e.target.files[0]" class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm" required />
-            </div>
-            <div class="flex items-center justify-end gap-3 border-t pt-5">
-                <button type="button" @click="showImportModal = false" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
-                <button type="submit" :disabled="importForm.processing" class="rounded-lg bg-navy-dark px-5 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">{{ importForm.processing ? 'Importing...' : 'Import CSV' }}</button>
-            </div>
-        </form>
+    <Modal :show="showImportModal" title="Import Disbursements CSV" subtitle="Preview the file before saving disbursements." max-width="4xl" @close="showImportModal = false">
+        <ImportPreviewPanel
+            module="disbursements"
+            :form="importForm"
+            :error-messages="importErrorMessages"
+            required-columns="disbursement_no, expense_ref_no, description, source, pay_to, amount, method, date_encoded, status, notes, remarks"
+            @cancel="showImportModal = false"
+            @confirm="importCsv"
+        />
     </Modal>
 </AppLayout>
 </template>
