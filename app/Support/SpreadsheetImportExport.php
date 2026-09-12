@@ -136,8 +136,10 @@ class SpreadsheetImportExport
         return self::downloadPreparedXlsx($filename, function (Spreadsheet $spreadsheet) use ($metadata, $sections): void {
             $worksheet = $spreadsheet->getActiveSheet();
             $worksheet->setTitle('Financial Report');
+            $worksheet->getSheetView()->setZoomScale(100);
+            $worksheet->setShowGridlines(false);
             $worksheet->getDefaultRowDimension()->setRowHeight(20);
-            $worksheet->getDefaultColumnDimension()->setWidth(15);
+            $worksheet->getDefaultColumnDimension()->setWidth(14);
             $worksheet->getPageSetup()
                 ->setPaperSize(PageSetup::PAPERSIZE_A4)
                 ->setOrientation(PageSetup::ORIENTATION_LANDSCAPE)
@@ -160,7 +162,7 @@ class SpreadsheetImportExport
                 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
             ]);
             $worksheet->getRowDimension($row)->setRowHeight(28);
-            $row += 2;
+            $row += 3;
 
             $pairs = [
                 ['Fiscal Year', $metadata['fiscal_year'] ?? 'N/A'],
@@ -173,14 +175,16 @@ class SpreadsheetImportExport
                 ['Available Cash', $metadata['available_cash'] ?? 0],
             ];
 
-            foreach (array_chunk($pairs, 4) as $pairRow) {
+            foreach (array_chunk($pairs, 2) as $pairRow) {
                 $column = 1;
                 foreach ($pairRow as [$label, $value]) {
                     $labelCell = self::cellCoordinate($column, $row);
-                    $valueCell = self::cellCoordinate($column + 1, $row);
+                    $valueStartCell = self::cellCoordinate($column + 1, $row);
+                    $valueEndCell = self::cellCoordinate($column + 3, $row);
                     $worksheet->setCellValue($labelCell, $label);
-                    $worksheet->setCellValue($valueCell, $value);
-                    $worksheet->getStyle("{$labelCell}:{$valueCell}")->applyFromArray([
+                    $worksheet->mergeCells("{$valueStartCell}:{$valueEndCell}");
+                    $worksheet->setCellValue($valueStartCell, $value);
+                    $worksheet->getStyle("{$labelCell}:{$valueEndCell}")->applyFromArray([
                         'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'CBD5E1']]],
                     ]);
                     $worksheet->getStyle($labelCell)->applyFromArray([
@@ -188,10 +192,12 @@ class SpreadsheetImportExport
                         'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F8FAFC']],
                     ]);
                     if (is_numeric($value) && (str_contains((string) $label, 'Total') || str_contains((string) $label, 'Cash'))) {
-                        $worksheet->getStyle($valueCell)->getNumberFormat()->setFormatCode('"₱"#,##0.00');
+                        $worksheet->getStyle($valueStartCell)->getNumberFormat()->setFormatCode('"₱"#,##0.00');
                     }
-                    $column += 2;
+                    $worksheet->getStyle("{$labelCell}:{$valueEndCell}")->getAlignment()->setWrapText(true);
+                    $column += 5;
                 }
+                $worksheet->getRowDimension($row)->setRowHeight(24);
                 $row++;
             }
             $row += 2;
@@ -201,10 +207,8 @@ class SpreadsheetImportExport
                 $row += 2;
             }
 
-            $worksheet->freezePane('A7');
-            foreach (range('A', $lastColumn) as $column) {
-                $worksheet->getColumnDimension($column)->setAutoSize(true);
-            }
+            $worksheet->freezePane('A9');
+            self::applyFinancialReportColumnWidths($worksheet);
             $worksheet->getStyle("A1:{$lastColumn}".max(1, $row))->getAlignment()->setVertical(Alignment::VERTICAL_TOP);
         });
     }
@@ -354,6 +358,25 @@ class SpreadsheetImportExport
     private static function cellCoordinate(int $columnNumber, int $rowNumber): string
     {
         return self::columnName($columnNumber).$rowNumber;
+    }
+
+    private static function applyFinancialReportColumnWidths($worksheet): void
+    {
+        $widths = [
+            'A' => 18,
+            'B' => 18,
+            'C' => 20,
+            'D' => 24,
+            'E' => 34,
+            'F' => 18,
+            'G' => 18,
+            'H' => 18,
+            'I' => 14,
+        ];
+
+        foreach ($widths as $column => $width) {
+            $worksheet->getColumnDimension($column)->setWidth($width);
+        }
     }
 
     private static function copyUploadWithExtension(UploadedFile $file, string $path): string
