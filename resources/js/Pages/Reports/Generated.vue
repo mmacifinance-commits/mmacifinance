@@ -1,6 +1,6 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3'
-import { computed, nextTick } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 
 const props = defineProps({
     reportType: String,
@@ -20,6 +20,7 @@ const props = defineProps({
 })
 
 const PESO = '₱'
+const printMenuOpen = ref(false)
 const fmt = (value) => new Intl.NumberFormat('en-PH', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -98,12 +99,17 @@ const receiptTotal = computed(() => (props.receiptRows || []).reduce((sum, row) 
 const disbursementTotal = computed(() => (props.disbursementRows || []).reduce((sum, row) => sum + Number(row.amount || 0), 0))
 
 const printReport = async () => {
+    printMenuOpen.value = false
     await nextTick()
 
     requestAnimationFrame(() => {
         window.focus()
         window.print()
     })
+}
+
+const saveAsPdf = () => {
+    printReport()
 }
 </script>
 
@@ -115,16 +121,37 @@ const printReport = async () => {
             <Link href="/reports" class="border border-slate-600 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">
                 Back to Reports
             </Link>
-            <button
-                type="button"
-                @click="printReport"
-                class="border border-mustard bg-mustard px-4 py-2 text-sm font-bold text-navy-dark hover:bg-[#c99a2c]"
-            >
-                Print / Save PDF
-            </button>
+            <div class="relative">
+                <button
+                    type="button"
+                    @click="printMenuOpen = !printMenuOpen"
+                    class="border border-mustard bg-mustard px-4 py-2 text-sm font-bold text-navy-dark hover:bg-[#c99a2c]"
+                >
+                    Print / Save PDF
+                </button>
+                <div
+                    v-if="printMenuOpen"
+                    class="absolute right-0 mt-2 w-48 border border-slate-300 bg-white text-sm shadow-xl"
+                >
+                    <button
+                        type="button"
+                        @click="printReport"
+                        class="block w-full px-4 py-2 text-left font-semibold text-slate-900 hover:bg-slate-100"
+                    >
+                        Print
+                    </button>
+                    <button
+                        type="button"
+                        @click="saveAsPdf"
+                        class="block w-full border-t border-slate-200 px-4 py-2 text-left font-semibold text-slate-900 hover:bg-slate-100"
+                    >
+                        Save as PDF
+                    </button>
+                </div>
+            </div>
         </div>
 
-        <main class="mx-auto my-6 min-h-[8.5in] w-[11in] bg-white p-[0.45in] shadow-2xl print:m-0 print:min-h-0 print:w-auto print:p-0 print:shadow-none">
+        <main class="mx-auto my-6 min-h-[297mm] w-[210mm] bg-white p-[14mm] shadow-2xl print:m-0 print:min-h-0 print:w-auto print:p-0 print:shadow-none">
             <header class="grid grid-cols-[110px_1fr_150px] items-center gap-4 border-b-[3px] border-black pb-2">
                 <div>
                     <img src="/images/logo.png" alt="MMACI Logo" class="h-[92px] w-[92px] object-contain" />
@@ -334,8 +361,8 @@ const printReport = async () => {
 <style>
 @media print {
     @page {
-        size: landscape;
-        margin: 0.35in;
+        size: A4 portrait;
+        margin: 12mm;
     }
 
     html,
