@@ -394,15 +394,6 @@ const activeReportLabel = computed(() => {
                 </tbody>
             </table>
         </div>
-        <div v-else-if="filterReportType === 'audit_trail' || filterReportType === 'closing_report'" class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead><tr class="bg-navy-dark text-white border-b-2 border-mustard"><th class="px-4 py-3 text-left">Date</th><th class="px-4 py-3 text-left">User</th><th class="px-4 py-3 text-left">Role</th><th class="px-4 py-3 text-left">Action</th><th class="px-4 py-3 text-left">Remarks</th></tr></thead>
-                <tbody>
-                    <tr v-for="row in asArray(auditRows)" :key="row.id" class="border-b"><td class="px-4 py-3">{{ row.created_at }}</td><td class="px-4 py-3">{{ row.user_name }}</td><td class="px-4 py-3">{{ row.user_role }}</td><td class="px-4 py-3 uppercase text-xs font-bold">{{ row.action }}</td><td class="px-4 py-3">{{ row.remarks }}</td></tr>
-                    <tr v-if="!asArray(auditRows).length"><td colspan="5" class="px-4 py-8 text-center text-gray-400">No audit rows match the selected filters.</td></tr>
-                </tbody>
-            </table>
-        </div>
         <div v-else class="px-5 py-4 text-sm text-gray-600">
             This report type uses the budget utilization and monthly reconciliation sections below. Click fiscal year totals or use Generate Report for a printable layout.
         </div>

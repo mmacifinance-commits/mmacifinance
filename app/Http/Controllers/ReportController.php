@@ -27,7 +27,7 @@ class ReportController extends Controller
         CashFlowService $cashFlow
     ) {
         $validated = $request->validate([
-            'report_type' => ['nullable', 'string', 'in:overall_financial,budget_utilization,cash_receipts,disbursements,income_vs_receipts,fund_balance,responsibility_center,account_title_ledger,audit_trail,closing_report'],
+            'report_type' => ['nullable', 'string', 'in:overall_financial,budget_utilization,cash_receipts,disbursements,income_vs_receipts,fund_balance,responsibility_center,account_title_ledger,closing_report'],
             'fiscal_period_id' => ['nullable', 'integer', 'exists:annual_budgets,id'],
             'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
             'allocation_month' => ['nullable', 'date_format:Y-m-d'],
@@ -234,7 +234,7 @@ class ReportController extends Controller
         CashFlowService $cashFlow
     ) {
         $validated = $request->validate([
-            'report_type' => ['nullable', 'string', 'in:overall_financial,budget_utilization,cash_receipts,disbursements,income_vs_receipts,fund_balance,responsibility_center,account_title_ledger,audit_trail,closing_report'],
+            'report_type' => ['nullable', 'string', 'in:overall_financial,budget_utilization,cash_receipts,disbursements,income_vs_receipts,fund_balance,responsibility_center,account_title_ledger,closing_report'],
             'fiscal_period_id' => ['nullable', 'integer', 'exists:annual_budgets,id'],
             'allocation_month' => ['nullable', 'date_format:Y-m-d'],
             'start_date' => ['nullable', 'date'],
@@ -244,6 +244,7 @@ class ReportController extends Controller
             'account_title_id' => ['nullable', 'integer', 'exists:budget_particulars,id'],
         ]);
 
+        $reportType = $validated['report_type'] ?? 'overall_financial';
         $selectedPeriod = $fiscalPeriods->resolve(isset($validated['fiscal_period_id']) ? (int) $validated['fiscal_period_id'] : null);
         $allocationMonth = $selectedPeriod
             ? $fiscalPeriods->allocationMonth($selectedPeriod, $validated['allocation_month'] ?? null)
@@ -266,13 +267,17 @@ class ReportController extends Controller
         $items = $itemsQuery->orderBy('allocation_month')->get();
         BudgetItem::hydrateDerivedTotals($items);
 
-        $rows = [[
-            'report_type', 'fiscal_year', 'allocation_month', 'responsibility_center', 'category',
-            'account_title', 'appropriation', 'posted_expenditure', 'budget_balance',
-            'total_receipts', 'cash_on_hand',
-        ]];
-
         $cashSummary = $cashFlow->summary($selectedPeriod);
+        $budgetRows = [[
+            'allocation_month', 'monthly_ref_no', 'responsibility_center', 'category',
+            'account_title', 'appropriation', 'total_cost_incurred_to_date', 'balance', 'utilization_percent',
+        ]];
+        $budgetTotals = [
+            'appropriation' => 0.0,
+            'expenditure' => 0.0,
+            'balance' => 0.0,
+        ];
+
         foreach ($items as $item) {
             $posted = $selectedPeriod
                 ? (float) $utilization->queryForAnnualBudgetFilters(
@@ -286,22 +291,107 @@ class ReportController extends Controller
                 )->sum('amount')
                 : 0.0;
             $appropriation = (float) $item->appropriation;
-            $rows[] = [
-                $validated['report_type'] ?? 'budget_utilization',
-                $selectedPeriod?->fiscal_year_label,
+            $balance = $appropriation - $posted;
+            $budgetTotals['appropriation'] += $appropriation;
+            $budgetTotals['expenditure'] += $posted;
+            $budgetTotals['balance'] += $balance;
+
+            $budgetRows[] = [
                 $item->allocation_month?->format('Y-m'),
+                $item->ref_no,
                 $item->particular?->department?->name,
                 $item->category?->name,
                 $item->particular?->particular,
                 $appropriation,
                 $posted,
-                $appropriation - $posted,
-                $cashSummary['receipts'],
-                $cashSummary['cashOnHand'],
+                $balance,
+                $appropriation > 0 ? round(($posted / $appropriation) * 100, 2) : 0,
+            ];
+        }
+        $budgetRows[] = [
+            'TOTAL', '', '', '', '',
+            $budgetTotals['appropriation'],
+            $budgetTotals['expenditure'],
+            $budgetTotals['balance'],
+            $budgetTotals['appropriation'] > 0 ? round(($budgetTotals['expenditure'] / $budgetTotals['appropriation']) * 100, 2) : 0,
+        ];
+
+        $receiptRows = [[
+            'receipt_no', 'income_no', 'receipt_type', 'source', 'description', 'receipt_date', 'amount',
+        ]];
+        foreach ($this->receiptRows($selectedPeriod, $startDate, $endDate, null) as $receipt) {
+            $receiptRows[] = [
+                $receipt['receipt_no'],
+                $receipt['income_no'],
+                $receipt['receipt_type'],
+                $receipt['source'],
+                $receipt['description'],
+                $receipt['receipt_date'],
+                $receipt['amount'],
             ];
         }
 
-        return SpreadsheetImportExport::downloadXlsx('financial-report-'.now()->format('Ymd-His'), $rows);
+        $disbursementRows = [[
+            'disbursement_no', 'expense_ref', 'allocation_month', 'expense_date',
+            'disbursement_date', 'payee', 'status', 'amount',
+        ]];
+        foreach ($this->disbursementRows($selectedPeriod, $startDate, $endDate, null) as $disbursement) {
+            $disbursementRows[] = [
+                $disbursement['disbursement_no'],
+                $disbursement['expense_ref'],
+                $disbursement['allocation_month'],
+                $disbursement['expense_date'],
+                $disbursement['disbursement_date'],
+                $disbursement['pay_to'],
+                $disbursement['status'],
+                $disbursement['amount'],
+            ];
+        }
+
+        $metadataRows = [
+            ['report_type', collect($this->reportTypes())->firstWhere('value', $reportType)['label'] ?? 'Financial Report'],
+            ['fiscal_year', $selectedPeriod?->fiscal_year_label ?? 'No fiscal year selected'],
+            ['fiscal_period', $selectedPeriod?->period_label ?? 'N/A'],
+            ['allocation_month', $allocationMonth ? Carbon::parse($allocationMonth)->format('F Y') : 'All Fiscal Months'],
+            ['date_range', $this->dateRangeLabel($startDate, $endDate)],
+            ['total_receipts', $cashSummary['receipts']],
+            ['available_cash', $cashSummary['cashOnHand']],
+            [],
+        ];
+
+        $rows = $metadataRows;
+        $appendSection = function (string $title, array $sectionRows) use (&$rows): void {
+            $rows[] = [$title];
+            foreach ($sectionRows as $sectionRow) {
+                $rows[] = $sectionRow;
+            }
+            $rows[] = [];
+        };
+
+        switch ($reportType) {
+            case 'cash_receipts':
+                $appendSection('Cash Receipts', $receiptRows);
+                break;
+            case 'disbursements':
+                $appendSection('Disbursement Details', $disbursementRows);
+                break;
+            case 'overall_financial':
+            case 'income_vs_receipts':
+            case 'fund_balance':
+            case 'closing_report':
+                $appendSection('Budget Utilization', $budgetRows);
+                $appendSection('Cash Receipts', $receiptRows);
+                $appendSection('Disbursement Details', $disbursementRows);
+                break;
+            default:
+                $appendSection('Budget Utilization', $budgetRows);
+                break;
+        }
+
+        return SpreadsheetImportExport::downloadXlsx(
+            str_replace('_', '-', $reportType).'-report-'.now()->format('Ymd-His'),
+            $rows
+        );
     }
 
     public function generate(
@@ -311,7 +401,7 @@ class ReportController extends Controller
         CashFlowService $cashFlow
     ) {
         $validated = $request->validate([
-            'report_type' => ['nullable', 'string', 'in:overall_financial,budget_utilization,cash_receipts,disbursements,income_vs_receipts,fund_balance,responsibility_center,account_title_ledger,audit_trail,closing_report'],
+            'report_type' => ['nullable', 'string', 'in:overall_financial,budget_utilization,cash_receipts,disbursements,income_vs_receipts,fund_balance,responsibility_center,account_title_ledger,closing_report'],
             'fiscal_period_id' => ['nullable', 'integer', 'exists:annual_budgets,id'],
             'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
             'allocation_month' => ['nullable', 'date_format:Y-m-d'],
@@ -425,7 +515,6 @@ class ReportController extends Controller
             'rows' => $rows,
             'receiptRows' => $this->receiptRows($selectedPeriod, $startDate, $endDate),
             'disbursementRows' => $this->disbursementRows($selectedPeriod, $startDate, $endDate),
-            'auditRows' => $this->auditRows($selectedPeriod, $startDate, $endDate),
             'reconciliationWarnings' => $this->reportWarnings($selectedPeriod, [
                 'cashOnHand' => $totals['cashOnHand'],
                 'budgetBalance' => $totals['balance'],
@@ -458,12 +547,11 @@ class ReportController extends Controller
             ['value' => 'fund_balance', 'label' => 'Fund Balance Report'],
             ['value' => 'responsibility_center', 'label' => 'Responsibility Center Report'],
             ['value' => 'account_title_ledger', 'label' => 'Account Title Ledger'],
-            ['value' => 'audit_trail', 'label' => 'Audit Trail Report'],
             ['value' => 'closing_report', 'label' => 'Closing Report'],
         ];
     }
 
-    private function receiptRows(?AnnualBudget $period, ?string $startDate, ?string $endDate): array
+    private function receiptRows(?AnnualBudget $period, ?string $startDate, ?string $endDate, ?int $limit = 25): array
     {
         return Income::query()
             ->whereNotNull('receipt_no')
@@ -475,7 +563,7 @@ class ReportController extends Controller
             ->when($startDate, fn ($query) => $query->whereDate('date_encoded', '>=', $startDate))
             ->when($endDate, fn ($query) => $query->whereDate('date_encoded', '<=', $endDate))
             ->latest('date_encoded')
-            ->limit(25)
+            ->when($limit, fn ($query) => $query->limit($limit))
             ->get()
             ->map(fn (Income $income) => [
                 'id' => $income->id,
@@ -490,7 +578,7 @@ class ReportController extends Controller
             ->all();
     }
 
-    private function disbursementRows(?AnnualBudget $period, ?string $startDate, ?string $endDate): array
+    private function disbursementRows(?AnnualBudget $period, ?string $startDate, ?string $endDate, ?int $limit = 25): array
     {
         return Disbursement::query()
             ->with(['expense.budgetItem.category', 'expense.budgetItem.particular.department'])
@@ -501,7 +589,7 @@ class ReportController extends Controller
             ->when($startDate, fn ($query) => $query->whereDate('date_encoded', '>=', $startDate))
             ->when($endDate, fn ($query) => $query->whereDate('date_encoded', '<=', $endDate))
             ->latest('date_encoded')
-            ->limit(25)
+            ->when($limit, fn ($query) => $query->limit($limit))
             ->get()
             ->map(fn (Disbursement $disbursement) => [
                 'id' => $disbursement->id,
@@ -517,13 +605,13 @@ class ReportController extends Controller
             ->all();
     }
 
-    private function auditRows(?AnnualBudget $period, ?string $startDate, ?string $endDate): array
+    private function auditRows(?AnnualBudget $period, ?string $startDate, ?string $endDate, ?int $limit = 30): array
     {
         return AuditTrail::query()
             ->when($startDate, fn ($query) => $query->whereDate('created_at', '>=', $startDate))
             ->when($endDate, fn ($query) => $query->whereDate('created_at', '<=', $endDate))
             ->latest()
-            ->limit(30)
+            ->when($limit, fn ($query) => $query->limit($limit))
             ->get()
             ->map(fn (AuditTrail $audit) => [
                 'id' => $audit->id,

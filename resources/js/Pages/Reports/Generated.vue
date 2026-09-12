@@ -13,7 +13,6 @@ const props = defineProps({
     rows: Array,
     receiptRows: Array,
     disbursementRows: Array,
-    auditRows: Array,
     reconciliationWarnings: Array,
     totals: Object,
     generatedAt: String,
@@ -65,12 +64,6 @@ const shouldShowDisbursementRows = () => [
     'overall_financial',
     'disbursements',
     'fund_balance',
-    'closing_report',
-].includes(props.reportType || 'overall_financial')
-
-const shouldShowAuditRows = () => [
-    'overall_financial',
-    'audit_trail',
     'closing_report',
 ].includes(props.reportType || 'overall_financial')
 
@@ -319,33 +312,6 @@ const disbursementTotal = computed(() => (props.disbursementRows || []).reduce((
                         <td class="border border-black px-2 py-2 text-right">{{ PESO }}{{ fmt(disbursementTotal) }}</td>
                     </tr>
                 </tfoot>
-            </table>
-
-            <table v-if="shouldShowAuditRows()" class="mt-5 w-full border-collapse text-xs">
-                <thead>
-                    <tr>
-                        <th colspan="5" class="border border-black bg-white px-2 py-2 text-left text-[11px] font-black uppercase tracking-wider text-black">
-                            Audit Trail
-                        </th>
-                    </tr>
-                    <tr class="bg-white text-black">
-                        <th class="border border-black px-2 py-2 text-left uppercase">Date</th>
-                        <th class="border border-black px-2 py-2 text-left uppercase">User</th>
-                        <th class="border border-black px-2 py-2 text-left uppercase">Role</th>
-                        <th class="border border-black px-2 py-2 text-left uppercase">Action</th>
-                        <th class="border border-black px-2 py-2 text-left uppercase">Remarks</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="row in auditRows" :key="row.id">
-                        <td class="border border-black px-2 py-2">{{ row.created_at }}</td>
-                        <td class="border border-black px-2 py-2">{{ row.user_name }}</td>
-                        <td class="border border-black px-2 py-2">{{ row.user_role }}</td>
-                        <td class="border border-black px-2 py-2 uppercase">{{ row.action }}</td>
-                        <td class="border border-black px-2 py-2">{{ row.remarks }}</td>
-                    </tr>
-                    <tr v-if="!auditRows?.length"><td colspan="5" class="border border-black px-2 py-6 text-center text-slate-500">No audit records match the selected report filters.</td></tr>
-                </tbody>
             </table>
 
             <section class="mt-10 grid grid-cols-2 gap-12">
