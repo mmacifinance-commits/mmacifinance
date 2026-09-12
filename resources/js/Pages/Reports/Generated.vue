@@ -202,7 +202,7 @@ const disbursementTotal = computed(() => (props.disbursementRows || []).reduce((
                 <thead>
                     <tr>
                         <th colspan="6" class="border border-black bg-white px-2 py-2 text-left text-[11px] font-black uppercase tracking-wider text-slate-900">
-                            Schedule A - Budget Utilization
+                            Budget Utilization
                         </th>
                     </tr>
                     <tr class="bg-navy-dark text-white">
@@ -251,7 +251,7 @@ const disbursementTotal = computed(() => (props.disbursementRows || []).reduce((
                 <thead>
                     <tr>
                         <th colspan="6" class="border border-black bg-white px-2 py-2 text-left text-[11px] font-black uppercase tracking-wider text-slate-900">
-                            Schedule B - Cash Receipts
+                            Cash Receipts
                         </th>
                     </tr>
                     <tr class="bg-navy-dark text-white">
@@ -286,7 +286,7 @@ const disbursementTotal = computed(() => (props.disbursementRows || []).reduce((
                 <thead>
                     <tr>
                         <th colspan="8" class="border border-black bg-white px-2 py-2 text-left text-[11px] font-black uppercase tracking-wider text-slate-900">
-                            Schedule C - Disbursements
+                            Disbursement Details
                         </th>
                     </tr>
                     <tr class="bg-navy-dark text-white">
@@ -325,7 +325,7 @@ const disbursementTotal = computed(() => (props.disbursementRows || []).reduce((
                 <thead>
                     <tr>
                         <th colspan="5" class="border border-black bg-white px-2 py-2 text-left text-[11px] font-black uppercase tracking-wider text-slate-900">
-                            Schedule D - Audit Trail
+                            Audit Trail
                         </th>
                     </tr>
                     <tr class="bg-navy-dark text-white">
