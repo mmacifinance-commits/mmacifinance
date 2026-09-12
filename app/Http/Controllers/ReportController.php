@@ -268,15 +268,7 @@ class ReportController extends Controller
         BudgetItem::hydrateDerivedTotals($items);
 
         $cashSummary = $cashFlow->summary($selectedPeriod);
-        $budgetRows = [[
-            'allocation_month', 'monthly_ref_no', 'responsibility_center', 'category',
-            'account_title', 'appropriation', 'total_cost_incurred_to_date', 'balance', 'utilization_percent',
-        ]];
-        $budgetTotals = [
-            'appropriation' => 0.0,
-            'expenditure' => 0.0,
-            'balance' => 0.0,
-        ];
+        $budgetRows = [];
 
         foreach ($items as $item) {
             $posted = $selectedPeriod
@@ -291,10 +283,6 @@ class ReportController extends Controller
                 )->sum('amount')
                 : 0.0;
             $appropriation = (float) $item->appropriation;
-            $balance = $appropriation - $posted;
-            $budgetTotals['appropriation'] += $appropriation;
-            $budgetTotals['expenditure'] += $posted;
-            $budgetTotals['balance'] += $balance;
 
             $budgetRows[] = [
                 $item->allocation_month?->format('Y-m'),
@@ -304,21 +292,12 @@ class ReportController extends Controller
                 $item->particular?->particular,
                 $appropriation,
                 $posted,
-                $balance,
-                $appropriation > 0 ? round(($posted / $appropriation) * 100, 2) : 0,
+                null,
+                null,
             ];
         }
-        $budgetRows[] = [
-            'TOTAL', '', '', '', '',
-            $budgetTotals['appropriation'],
-            $budgetTotals['expenditure'],
-            $budgetTotals['balance'],
-            $budgetTotals['appropriation'] > 0 ? round(($budgetTotals['expenditure'] / $budgetTotals['appropriation']) * 100, 2) : 0,
-        ];
 
-        $receiptRows = [[
-            'receipt_no', 'income_no', 'receipt_type', 'source', 'description', 'receipt_date', 'amount',
-        ]];
+        $receiptRows = [];
         foreach ($this->receiptRows($selectedPeriod, $startDate, $endDate, null) as $receipt) {
             $receiptRows[] = [
                 $receipt['receipt_no'],
@@ -331,10 +310,7 @@ class ReportController extends Controller
             ];
         }
 
-        $disbursementRows = [[
-            'disbursement_no', 'expense_ref', 'allocation_month', 'expense_date',
-            'disbursement_date', 'payee', 'status', 'amount',
-        ]];
+        $disbursementRows = [];
         foreach ($this->disbursementRows($selectedPeriod, $startDate, $endDate, null) as $disbursement) {
             $disbursementRows[] = [
                 $disbursement['disbursement_no'],
@@ -348,49 +324,67 @@ class ReportController extends Controller
             ];
         }
 
-        $metadataRows = [
-            ['report_type', collect($this->reportTypes())->firstWhere('value', $reportType)['label'] ?? 'Financial Report'],
-            ['fiscal_year', $selectedPeriod?->fiscal_year_label ?? 'No fiscal year selected'],
-            ['fiscal_period', $selectedPeriod?->period_label ?? 'N/A'],
-            ['allocation_month', $allocationMonth ? Carbon::parse($allocationMonth)->format('F Y') : 'All Fiscal Months'],
-            ['date_range', $this->dateRangeLabel($startDate, $endDate)],
-            ['total_receipts', $cashSummary['receipts']],
-            ['available_cash', $cashSummary['cashOnHand']],
-            [],
+        $metadata = [
+            'report_label' => collect($this->reportTypes())->firstWhere('value', $reportType)['label'] ?? 'Financial Report',
+            'fiscal_year' => $selectedPeriod?->fiscal_year_label ?? 'No fiscal year selected',
+            'fiscal_period' => $selectedPeriod?->period_label ?? 'N/A',
+            'allocation_month' => $allocationMonth ? Carbon::parse($allocationMonth)->format('F Y') : 'All Fiscal Months',
+            'date_range' => $this->dateRangeLabel($startDate, $endDate),
+            'generated_by' => $request->user()?->name ?? 'System',
+            'generated_at' => now()->format('M d, Y h:i A'),
+            'total_receipts' => $cashSummary['receipts'],
+            'available_cash' => $cashSummary['cashOnHand'],
         ];
 
-        $rows = $metadataRows;
-        $appendSection = function (string $title, array $sectionRows) use (&$rows): void {
-            $rows[] = [$title];
-            foreach ($sectionRows as $sectionRow) {
-                $rows[] = $sectionRow;
-            }
-            $rows[] = [];
-        };
+        $budgetSection = [
+            'type' => 'budget',
+            'title' => 'Budget Utilization',
+            'headers' => [
+                'Allocation Month', 'Monthly Ref No.', 'Responsibility Center', 'Category',
+                'Account Title', 'Appropriation', 'Total Cost Incurred To Date', 'Balance', '% Utilization',
+            ],
+            'rows' => $budgetRows,
+        ];
+        $receiptSection = [
+            'type' => 'receipts',
+            'title' => 'Cash Receipts',
+            'headers' => ['Receipt No.', 'Income No.', 'Receipt Type', 'Source', 'Description', 'Receipt Date', 'Amount'],
+            'rows' => $receiptRows,
+        ];
+        $disbursementSection = [
+            'type' => 'disbursements',
+            'title' => 'Disbursement Details',
+            'headers' => [
+                'DSB No.', 'Expense Ref', 'Allocation Month', 'Expense Date',
+                'Disbursement Date', 'Payee', 'Status', 'Amount',
+            ],
+            'rows' => $disbursementRows,
+        ];
+
+        $sections = [];
 
         switch ($reportType) {
             case 'cash_receipts':
-                $appendSection('Cash Receipts', $receiptRows);
+                $sections[] = $receiptSection;
                 break;
             case 'disbursements':
-                $appendSection('Disbursement Details', $disbursementRows);
+                $sections[] = $disbursementSection;
                 break;
             case 'overall_financial':
             case 'income_vs_receipts':
             case 'fund_balance':
             case 'closing_report':
-                $appendSection('Budget Utilization', $budgetRows);
-                $appendSection('Cash Receipts', $receiptRows);
-                $appendSection('Disbursement Details', $disbursementRows);
+                $sections = [$budgetSection, $receiptSection, $disbursementSection];
                 break;
             default:
-                $appendSection('Budget Utilization', $budgetRows);
+                $sections[] = $budgetSection;
                 break;
         }
 
-        return SpreadsheetImportExport::downloadXlsx(
+        return SpreadsheetImportExport::downloadFinancialReportXlsx(
             str_replace('_', '-', $reportType).'-report-'.now()->format('Ymd-His'),
-            $rows
+            $metadata,
+            $sections
         );
     }
 
