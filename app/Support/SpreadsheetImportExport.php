@@ -142,7 +142,7 @@ class SpreadsheetImportExport
             $worksheet->getDefaultColumnDimension()->setWidth(14);
             $worksheet->getPageSetup()
                 ->setPaperSize(PageSetup::PAPERSIZE_A4)
-                ->setOrientation(PageSetup::ORIENTATION_LANDSCAPE)
+                ->setOrientation(PageSetup::ORIENTATION_PORTRAIT)
                 ->setFitToWidth(1)
                 ->setFitToHeight(0);
             $worksheet->getPageMargins()
@@ -363,15 +363,15 @@ class SpreadsheetImportExport
     private static function applyFinancialReportColumnWidths($worksheet): void
     {
         $widths = [
-            'A' => 18,
-            'B' => 18,
-            'C' => 20,
-            'D' => 24,
-            'E' => 34,
-            'F' => 18,
-            'G' => 18,
-            'H' => 18,
-            'I' => 14,
+            'A' => 14,
+            'B' => 14,
+            'C' => 15,
+            'D' => 18,
+            'E' => 25,
+            'F' => 14,
+            'G' => 15,
+            'H' => 14,
+            'I' => 12,
         ];
 
         foreach ($widths as $column => $width) {
