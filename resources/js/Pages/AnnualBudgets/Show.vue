@@ -253,10 +253,10 @@ function catBalancePercent(group) {
         </div>
         <div class="flex items-center gap-2">
             <button @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition shadow-sm">
-                Export CSV
+                Export XLSX
             </button>
             <button v-if="perms.canManageBudget && !isClosed" @click="showImportModal = true" class="rounded-lg bg-navy-dark px-4 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
-                Import CSV
+                Import XLSX
             </button>
             <button v-if="perms.canManageBudget && !isClosed" @click="closeBudget" :disabled="closeForm.processing" class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100 transition shadow-sm">
                 Close FY
@@ -449,7 +449,7 @@ function catBalancePercent(group) {
         </form>
     </Modal>
 
-    <Modal :show="showImportModal" title="Import Budget CSV" subtitle="Preview monthly budget allocation rows before saving." max-width="4xl" @close="showImportModal = false">
+    <Modal :show="showImportModal" title="Import Budget XLSX" subtitle="Preview monthly budget allocation rows before saving." max-width="4xl" @close="showImportModal = false">
         <ImportPreviewPanel
             module="annual-budget-items"
             :form="importForm"
@@ -461,3 +461,4 @@ function catBalancePercent(group) {
     </Modal>
 </AppLayout>
 </template>
+

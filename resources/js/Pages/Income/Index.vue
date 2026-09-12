@@ -110,8 +110,8 @@ function importCsv() {
             <p class="text-sm text-gray-500">Record collections and income entries</p>
         </div>
         <div v-if="perms.canManageIncome" class="flex flex-wrap gap-2">
-            <button @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">Export CSV</button>
-            <button @click="showImportModal = true" class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Import CSV</button>
+            <button @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">Export XLSX</button>
+            <button @click="showImportModal = true" class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Import XLSX</button>
             <button @click="openCreate" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
                 Add Income
             </button>
@@ -232,7 +232,7 @@ function importCsv() {
         </form>
     </Modal>
 
-    <Modal :show="showImportModal" title="Import Income CSV" subtitle="Preview the file before saving income records." max-width="4xl" @close="showImportModal = false">
+    <Modal :show="showImportModal" title="Import Income XLSX" subtitle="Preview the file before saving income records." max-width="4xl" @close="showImportModal = false">
         <ImportPreviewPanel
             module="income"
             :form="importForm"
@@ -244,3 +244,4 @@ function importCsv() {
     </Modal>
 </AppLayout>
 </template>
+

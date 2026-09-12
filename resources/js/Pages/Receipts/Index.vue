@@ -137,8 +137,8 @@ function deleteReceipt(item) {
         </div>
         <div class="flex flex-wrap gap-2">
             <button @click="openCreateReceipt" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-navy">Add Receipt</button>
-            <button @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">Export CSV</button>
-            <button @click="openImport" class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Import CSV</button>
+            <button @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">Export XLSX</button>
+            <button @click="openImport" class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Import XLSX</button>
         </div>
     </div>
 
@@ -346,7 +346,7 @@ function deleteReceipt(item) {
         </form>
     </Modal>
 
-    <Modal :show="showImportModal" title="Import Receipts CSV" subtitle="Preview the file before saving cash receipts." max-width="4xl" @close="showImportModal = false">
+    <Modal :show="showImportModal" title="Import Receipts XLSX" subtitle="Preview the file before saving cash receipts." max-width="4xl" @close="showImportModal = false">
         <ImportPreviewPanel
             module="receipts"
             :form="importForm"
@@ -358,3 +358,4 @@ function deleteReceipt(item) {
     </Modal>
 </AppLayout>
 </template>
+

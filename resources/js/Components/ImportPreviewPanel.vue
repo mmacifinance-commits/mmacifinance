@@ -91,7 +91,7 @@ function confirmImport() {
         </div>
 
         <div>
-            <label class="mb-1.5 block text-sm font-medium text-gray-700">CSV / Excel File</label>
+            <label class="mb-1.5 block text-sm font-medium text-gray-700">Excel File</label>
             <input
                 type="file"
                 accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -186,3 +186,4 @@ function confirmImport() {
         </div>
     </div>
 </template>
+

@@ -131,7 +131,7 @@ function importCsv() {
                     @click="exportCsv"
                     class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50"
                 >
-                    Export CSV
+                    Export XLSX
                 </button>
 
                 <button
@@ -139,7 +139,7 @@ function importCsv() {
                     @click="showImportModal = true"
                     class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100"
                 >
-                    Import CSV
+                    Import XLSX
                 </button>
 
                 <button
@@ -412,10 +412,10 @@ function importCsv() {
             </form>
         </Modal>
 
-        <!-- Import CSV Modal -->
+        <!-- Import XLSX Modal -->
         <Modal
             :show="showImportModal"
-            title="Import Responsibility Centers CSV"
+            title="Import Responsibility Centers XLSX"
             subtitle="Preview the file before saving responsibility centers."
             max-width="4xl"
             @close="showImportModal = false"
@@ -431,3 +431,4 @@ function importCsv() {
         </Modal>
     </AppLayout>
 </template>
+

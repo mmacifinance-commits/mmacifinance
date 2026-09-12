@@ -125,14 +125,14 @@ function importCsv() {
                     @click="exportCsv"
                     class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
                 >
-                    Export CSV
+                    Export XLSX
                 </button>
 
                 <button
                     @click="showImport = true"
                     class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-100"
                 >
-                    Import CSV
+                    Import XLSX
                 </button>
 
                 <button
@@ -348,10 +348,10 @@ function importCsv() {
             </form>
         </Modal>
 
-        <!-- CSV Import -->
+        <!-- Excel Import -->
         <Modal
             :show="showImport"
-            title="Import Budget Categories CSV"
+            title="Import Budget Categories XLSX"
             subtitle="Preview the file before saving budget categories."
             max-width="4xl"
             @close="showImport = false"
@@ -367,3 +367,4 @@ function importCsv() {
         </Modal>
     </AppLayout>
 </template>
+
