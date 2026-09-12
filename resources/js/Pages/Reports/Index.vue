@@ -5,9 +5,16 @@ import { Head, router } from '@inertiajs/vue3'
 import { computed, ref } from 'vue'
 
 const props = defineProps({
+    reportTypes: Array,
+    reportType: String,
     budgets: Array,
     categories: Array,
     departments: Array,
+    summaryCards: Object,
+    receiptRows: Array,
+    disbursementRows: Array,
+    auditRows: Array,
+    reconciliationWarnings: Array,
     selectedMonthPerformance: Object,
     budgetPerformanceByYear: Array,
     yearEndUnusedBalances: Array,
@@ -17,6 +24,7 @@ const props = defineProps({
     filters: Object,
 })
 
+const filterReportType = ref(props.filters.report_type || props.reportType || 'budget_utilization')
 const filterYear = ref(props.filters.fiscal_period_id || '')
 const filterMonth = ref(props.filters.allocation_month || '')
 const startDate = ref(props.filters.start_date || '')
@@ -176,6 +184,7 @@ function openBreakdown(year) {
 
 function applyFilters() {
     router.get('/reports', {
+        report_type: filterReportType.value,
         fiscal_period_id: filterYear.value,
         allocation_month: filterMonth.value,
         start_date: startDate.value,
@@ -199,6 +208,7 @@ function applyDateFilter() {
 
 function clearFilters() {
     filterYear.value = props.fiscalPeriods?.[0]?.id || ''
+    filterReportType.value = 'budget_utilization'
     filterMonth.value = ''
     startDate.value = ''
     endDate.value = ''
@@ -224,6 +234,7 @@ const yearEndSummaryTotals = computed(() => {
 
 const generatedReportUrl = computed(() => {
     const params = new URLSearchParams()
+    if (filterReportType.value) params.set('report_type', filterReportType.value)
     if (filterYear.value) params.set('fiscal_period_id', filterYear.value)
     if (filterMonth.value) params.set('allocation_month', filterMonth.value)
     if (startDate.value) params.set('start_date', startDate.value)
@@ -234,6 +245,14 @@ const generatedReportUrl = computed(() => {
 
     const query = params.toString()
     return `/reports/generate${query ? `?${query}` : ''}`
+})
+
+const exportReportUrl = computed(() => generatedReportUrl.value.replace('/reports/generate', '/reports/export'))
+
+const summary = computed(() => props.summaryCards || {})
+
+const activeReportLabel = computed(() => {
+    return asArray(props.reportTypes).find(type => type.value === filterReportType.value)?.label || 'Financial Report'
 })
 </script>
 
@@ -251,6 +270,12 @@ const generatedReportUrl = computed(() => {
     <div class="bg-white p-4 rounded-lg border border-gray-200 shadow-sm mb-6 space-y-3">
         <div class="text-xs font-bold uppercase tracking-wider text-gray-500">Report Filters & Date Range</div>
         <div class="grid gap-3 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6">
+            <div>
+                <label class="block text-[11px] font-semibold text-gray-600 mb-1">Report Type</label>
+                <select v-model="filterReportType" @change="applyFilters" class="w-full rounded-md border-gray-300 text-xs py-1.5 bg-white">
+                    <option v-for="type in asArray(reportTypes)" :key="type.value" :value="type.value">{{ type.label }}</option>
+                </select>
+            </div>
             <div>
                 <label class="block text-[11px] font-semibold text-gray-600 mb-1">Fiscal Year</label>
                 <select v-model="filterYear" @change="filterMonth = ''; applyFilters()" class="w-full rounded-md border-gray-300 text-xs py-1.5 bg-white">
@@ -290,6 +315,12 @@ const generatedReportUrl = computed(() => {
         <div class="flex justify-end gap-2 pt-2 border-t">
             <button @click="clearFilters" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-xs font-semibold">Reset Filters</button>
             <a
+                :href="exportReportUrl"
+                class="px-3 py-1 bg-white hover:bg-gray-100 text-navy-dark border border-gray-300 rounded text-xs font-semibold"
+            >
+                Export Current Report
+            </a>
+            <a
                 :href="generatedReportUrl"
                 target="_blank"
                 rel="noopener"
@@ -297,6 +328,83 @@ const generatedReportUrl = computed(() => {
             >
                 Generate Report
             </a>
+        </div>
+    </div>
+
+    <div class="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+        <div class="border border-gray-200 bg-white p-4 shadow-sm border-t-4 border-t-navy-dark">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Total Appropriation</p>
+            <p class="mt-1 text-xl font-extrabold text-navy-dark font-sans">{{ PESO }}{{ fmt(summary.totalAppropriation) }}</p>
+            <p class="mt-1 text-xs text-gray-500">Approved budget / planned spending</p>
+        </div>
+        <div class="border border-gray-200 bg-white p-4 shadow-sm border-t-4 border-t-emerald-500">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Total Receipts</p>
+            <p class="mt-1 text-xl font-extrabold text-emerald-700 font-sans">{{ PESO }}{{ fmt(summary.totalReceipts) }}</p>
+            <p class="mt-1 text-xs text-gray-500">Actual cash received</p>
+        </div>
+        <div class="border border-gray-200 bg-white p-4 shadow-sm border-t-4 border-t-rose-500">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Posted Disbursements</p>
+            <p class="mt-1 text-xl font-extrabold text-rose-700 font-sans">{{ PESO }}{{ fmt(summary.postedDisbursements) }}</p>
+            <p class="mt-1 text-xs text-gray-500">Actual cash released</p>
+        </div>
+        <div class="border border-gray-200 bg-white p-4 shadow-sm border-t-4 border-t-indigo-500">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Budget Balance</p>
+            <p class="mt-1 text-xl font-extrabold text-indigo-700 font-sans">{{ PESO }}{{ fmt(summary.budgetBalance) }}</p>
+            <p class="mt-1 text-xs text-gray-500">Appropriation less posted use</p>
+        </div>
+        <div class="border border-gray-200 bg-white p-4 shadow-sm border-t-4 border-t-teal-500">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Cash On Hand</p>
+            <p class="mt-1 text-xl font-extrabold text-teal-700 font-sans">{{ PESO }}{{ fmt(summary.cashOnHand) }}</p>
+            <p class="mt-1 text-xs text-gray-500">Receipts less posted releases</p>
+        </div>
+        <div class="border border-gray-200 bg-white p-4 shadow-sm border-t-4 border-t-amber-500">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Pending Commitments</p>
+            <p class="mt-1 text-xl font-extrabold text-amber-700 font-sans">{{ PESO }}{{ fmt(summary.pendingCommitments) }}</p>
+            <p class="mt-1 text-xs text-gray-500">Requested but not posted</p>
+        </div>
+    </div>
+
+    <div v-if="asArray(reconciliationWarnings).length" class="mb-6 border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <p class="font-bold uppercase tracking-wider">Reconciliation Warnings</p>
+        <ul class="mt-2 list-disc space-y-1 pl-5">
+            <li v-for="warning in asArray(reconciliationWarnings)" :key="warning">{{ warning }}</li>
+        </ul>
+    </div>
+
+    <div class="mb-6 rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-5 py-3 border-b bg-gray-50">
+            <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wider">{{ activeReportLabel }}</h3>
+            <p class="text-xs text-gray-500 mt-1">Drilldown rows for the selected report type and filters.</p>
+        </div>
+        <div v-if="filterReportType === 'cash_receipts' || filterReportType === 'income_vs_receipts'" class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead><tr class="bg-navy-dark text-white border-b-2 border-mustard"><th class="px-4 py-3 text-left">Receipt No.</th><th class="px-4 py-3 text-left">Income No.</th><th class="px-4 py-3 text-left">Type</th><th class="px-4 py-3 text-left">Source / Description</th><th class="px-4 py-3 text-left">Receipt Date</th><th class="px-4 py-3 text-right">Amount</th></tr></thead>
+                <tbody>
+                    <tr v-for="row in asArray(receiptRows)" :key="row.id" class="border-b"><td class="px-4 py-3 font-semibold">{{ row.receipt_no }}</td><td class="px-4 py-3">{{ row.income_no }}</td><td class="px-4 py-3">{{ row.receipt_type }}</td><td class="px-4 py-3"><b>{{ row.source }}</b><br><span class="text-xs text-gray-500">{{ row.description }}</span></td><td class="px-4 py-3">{{ row.receipt_date }}</td><td class="px-4 py-3 text-right font-sans">{{ PESO }}{{ fmt(row.amount) }}</td></tr>
+                    <tr v-if="!asArray(receiptRows).length"><td colspan="6" class="px-4 py-8 text-center text-gray-400">No receipt rows match the selected filters.</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div v-else-if="filterReportType === 'disbursements' || filterReportType === 'fund_balance'" class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead><tr class="bg-navy-dark text-white border-b-2 border-mustard"><th class="px-4 py-3 text-left">DSB No.</th><th class="px-4 py-3 text-left">Expense Ref</th><th class="px-4 py-3 text-left">Allocation Month</th><th class="px-4 py-3 text-left">Expense Date</th><th class="px-4 py-3 text-left">Disbursement Date</th><th class="px-4 py-3 text-left">Payee</th><th class="px-4 py-3 text-left">Status</th><th class="px-4 py-3 text-right">Amount</th></tr></thead>
+                <tbody>
+                    <tr v-for="row in asArray(disbursementRows)" :key="row.id" class="border-b"><td class="px-4 py-3 font-semibold">{{ row.disbursement_no }}</td><td class="px-4 py-3">{{ row.expense_ref }}</td><td class="px-4 py-3">{{ row.allocation_month }}</td><td class="px-4 py-3">{{ row.expense_date }}</td><td class="px-4 py-3">{{ row.disbursement_date }}</td><td class="px-4 py-3">{{ row.pay_to }}</td><td class="px-4 py-3 uppercase text-xs font-bold">{{ row.status }}</td><td class="px-4 py-3 text-right font-sans">{{ PESO }}{{ fmt(row.amount) }}</td></tr>
+                    <tr v-if="!asArray(disbursementRows).length"><td colspan="8" class="px-4 py-8 text-center text-gray-400">No disbursement rows match the selected filters.</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div v-else-if="filterReportType === 'audit_trail' || filterReportType === 'closing_report'" class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead><tr class="bg-navy-dark text-white border-b-2 border-mustard"><th class="px-4 py-3 text-left">Date</th><th class="px-4 py-3 text-left">User</th><th class="px-4 py-3 text-left">Role</th><th class="px-4 py-3 text-left">Action</th><th class="px-4 py-3 text-left">Remarks</th></tr></thead>
+                <tbody>
+                    <tr v-for="row in asArray(auditRows)" :key="row.id" class="border-b"><td class="px-4 py-3">{{ row.created_at }}</td><td class="px-4 py-3">{{ row.user_name }}</td><td class="px-4 py-3">{{ row.user_role }}</td><td class="px-4 py-3 uppercase text-xs font-bold">{{ row.action }}</td><td class="px-4 py-3">{{ row.remarks }}</td></tr>
+                    <tr v-if="!asArray(auditRows).length"><td colspan="5" class="px-4 py-8 text-center text-gray-400">No audit rows match the selected filters.</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div v-else class="px-5 py-4 text-sm text-gray-600">
+            This report type uses the budget utilization and monthly reconciliation sections below. Click fiscal year totals or use Generate Report for a printable layout.
         </div>
     </div>
 

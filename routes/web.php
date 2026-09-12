@@ -49,6 +49,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
     Route::get('/reports/generate', [ReportController::class, 'generate'])->name('reports.generate');
+    Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
     Route::get('/income', [IncomeController::class, 'index'])->name('income.index');
     Route::get('/iaeo', [RevenueController::class, 'index'])->name('iaeo.index');
     Route::get('/receipts', [ReceiptController::class, 'index'])
