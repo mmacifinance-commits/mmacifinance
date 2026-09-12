@@ -125,7 +125,7 @@ const printReport = async () => {
             </button>
         </div>
 
-        <main class="mx-auto my-6 min-h-[297mm] w-[210mm] bg-white p-[14mm] shadow-2xl print:m-0 print:min-h-0 print:w-auto print:p-0 print:shadow-none">
+        <main class="report-sheet mx-auto my-6 min-h-[297mm] w-[210mm] bg-white p-[14mm] shadow-2xl print:m-0 print:min-h-0 print:w-auto print:shadow-none">
             <header class="grid grid-cols-[110px_1fr_150px] items-center gap-4 border-b-[3px] border-black pb-2">
                 <div>
                     <img src="/images/logo.png" alt="MMACI Logo" class="h-[92px] w-[92px] object-contain" />
@@ -156,7 +156,6 @@ const printReport = async () => {
 
             <section class="my-4 text-center">
                 <h2 class="text-lg font-black uppercase tracking-[0.08em]">{{ reportLabel || 'Overall Financial Report' }}</h2>
-                <p class="mt-1 text-xs text-slate-600">Formal generated report based on the selected fiscal period, dates, and filters</p>
             </section>
 
             <section class="grid grid-cols-4 gap-2">
@@ -201,7 +200,15 @@ const printReport = async () => {
                 </ul>
             </section>
 
-            <table v-if="shouldShowBudgetRows()" class="mt-5 w-full border-collapse text-xs">
+            <table v-if="shouldShowBudgetRows()" class="report-table mt-5 w-full table-fixed border-collapse text-[11px]">
+                <colgroup>
+                    <col class="w-[24%]" />
+                    <col class="w-[16%]" />
+                    <col class="w-[25%]" />
+                    <col class="w-[12%]" />
+                    <col class="w-[14%]" />
+                    <col class="w-[9%]" />
+                </colgroup>
                 <thead>
                     <tr>
                         <th colspan="6" class="border border-black bg-white px-2 py-2 text-left text-[11px] font-black uppercase tracking-wider text-black">
@@ -250,7 +257,15 @@ const printReport = async () => {
                 </tfoot>
             </table>
 
-            <table v-if="shouldShowReceiptRows()" class="mt-5 w-full border-collapse text-xs">
+            <table v-if="shouldShowReceiptRows()" class="report-table mt-5 w-full table-fixed border-collapse text-[11px]">
+                <colgroup>
+                    <col class="w-[15%]" />
+                    <col class="w-[15%]" />
+                    <col class="w-[16%]" />
+                    <col class="w-[28%]" />
+                    <col class="w-[16%]" />
+                    <col class="w-[10%]" />
+                </colgroup>
                 <thead>
                     <tr>
                         <th colspan="6" class="border border-black bg-white px-2 py-2 text-left text-[11px] font-black uppercase tracking-wider text-black">
@@ -285,7 +300,17 @@ const printReport = async () => {
                 </tfoot>
             </table>
 
-            <table v-if="shouldShowDisbursementRows()" class="mt-5 w-full border-collapse text-xs">
+            <table v-if="shouldShowDisbursementRows()" class="report-table mt-5 w-full table-fixed border-collapse text-[10px]">
+                <colgroup>
+                    <col class="w-[10%]" />
+                    <col class="w-[13%]" />
+                    <col class="w-[15%]" />
+                    <col class="w-[13%]" />
+                    <col class="w-[15%]" />
+                    <col class="w-[12%]" />
+                    <col class="w-[10%]" />
+                    <col class="w-[12%]" />
+                </colgroup>
                 <thead>
                     <tr>
                         <th colspan="8" class="border border-black bg-white px-2 py-2 text-left text-[11px] font-black uppercase tracking-wider text-black">
@@ -333,16 +358,49 @@ const printReport = async () => {
 </template>
 
 <style>
+.report-table {
+    inline-size: 100%;
+}
+
+.report-table th,
+.report-table td {
+    overflow-wrap: anywhere;
+    vertical-align: top;
+}
+
 @media print {
     @page {
         size: A4 portrait;
-        margin: 12mm;
+        margin: 0;
     }
 
     html,
     body {
         background: #fff !important;
         overflow: visible !important;
+    }
+
+    .report-sheet {
+        box-sizing: border-box !important;
+        min-height: 297mm !important;
+        padding: 10mm !important;
+        width: 210mm !important;
+    }
+
+    .report-table {
+        font-size: 9px !important;
+        page-break-inside: auto;
+    }
+
+    .report-table tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    .report-table th,
+    .report-table td {
+        padding: 5px !important;
+        line-height: 1.2 !important;
     }
 
     body * {
