@@ -29,7 +29,9 @@ class BudgetParticularController extends Controller
                     $inner->where('particular', 'like', "%{$search}%")
                         ->orWhere('account_code', 'like', "%{$search}%")
                         ->orWhere('account_name', 'like', "%{$search}%")
-                        ->orWhere('description', 'like', "%{$search}%");
+                        ->orWhere('description', 'like', "%{$search}%")
+                        ->orWhereHas('department', fn ($department) => $department->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
+                        ->orWhereHas('category', fn ($category) => $category->where('name', 'like', "%{$search}%"));
                 });
             })
             ->latest()
