@@ -1,5 +1,6 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3'
+import { computed } from 'vue'
 
 const props = defineProps({
     reportType: String,
@@ -72,6 +73,36 @@ const shouldShowAuditRows = () => [
     'audit_trail',
     'closing_report',
 ].includes(props.reportType || 'overall_financial')
+
+const budgetScheduleRows = computed(() => {
+    const groups = new Map()
+
+    ;(props.rows || []).forEach((row) => {
+        const key = row.category || 'Uncategorized'
+        if (!groups.has(key)) {
+            groups.set(key, {
+                type: 'group',
+                key,
+                label: key,
+                appropriation: 0,
+                expenditure: 0,
+                balance: 0,
+                children: [],
+            })
+        }
+
+        const group = groups.get(key)
+        group.appropriation += Number(row.appropriation || 0)
+        group.expenditure += Number(row.expenditure || 0)
+        group.balance += Number(row.balance || 0)
+        group.children.push({ type: 'item', ...row })
+    })
+
+    return Array.from(groups.values()).flatMap((group) => [group, ...group.children])
+})
+
+const receiptTotal = computed(() => (props.receiptRows || []).reduce((sum, row) => sum + Number(row.amount || 0), 0))
+const disbursementTotal = computed(() => (props.disbursementRows || []).reduce((sum, row) => sum + Number(row.amount || 0), 0))
 </script>
 
 <template>
@@ -160,46 +191,6 @@ const shouldShowAuditRows = () => [
                 </div>
             </section>
 
-            <section class="my-4 flex justify-end">
-                <div class="w-full max-w-[560px] border border-slate-300">
-                    <div class="border-b border-slate-300 bg-slate-50 px-3 py-2 text-center text-[11px] font-black uppercase tracking-[0.08em] text-slate-700">
-                        Report Totals
-                    </div>
-                    <table class="w-full border-collapse text-xs">
-                        <tbody>
-                            <tr>
-                                <td class="w-2/3 border-b border-r border-slate-200 px-3 py-2">Total Appropriation</td>
-                                <td class="border-b border-slate-200 px-3 py-2 text-right font-mono">{{ PESO }}{{ fmt(totals?.appropriation) }}</td>
-                            </tr>
-                            <tr>
-                                <td class="border-b border-r border-slate-200 px-3 py-2">Total Receipts</td>
-                                <td class="border-b border-slate-200 px-3 py-2 text-right font-mono">{{ PESO }}{{ fmt(totals?.receipts) }}</td>
-                            </tr>
-                            <tr>
-                                <td class="border-b border-r border-slate-200 px-3 py-2">Posted Disbursements</td>
-                                <td class="border-b border-slate-200 px-3 py-2 text-right font-mono">{{ PESO }}{{ fmt(totals?.expenditure) }}</td>
-                            </tr>
-                            <tr>
-                                <td class="border-b border-r border-slate-200 px-3 py-2">Remaining Budget Balance</td>
-                                <td class="border-b border-slate-200 px-3 py-2 text-right font-mono">{{ PESO }}{{ fmt(totals?.balance) }}</td>
-                            </tr>
-                            <tr>
-                                <td class="border-b border-r border-slate-200 px-3 py-2 font-semibold">Available Cash</td>
-                                <td class="border-b border-slate-200 px-3 py-2 text-right font-mono">{{ PESO }}{{ fmt(totals?.cashOnHand) }}</td>
-                            </tr>
-                            <tr>
-                                <td class="border-b border-r border-slate-200 px-3 py-2 text-[11px] text-slate-600">Less: Pending Commitments</td>
-                                <td class="border-b border-slate-200 px-3 py-2 text-right font-mono">{{ PESO }}{{ fmt(totals?.pendingCommitments) }}</td>
-                            </tr>
-                            <tr>
-                                <td class="border-r border-slate-200 px-3 py-2 font-black">Uncommitted Available Cash</td>
-                                <td class="px-3 py-2 text-right font-mono font-black">{{ PESO }}{{ fmt(totals?.availableForDisbursement) }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
             <section v-if="reconciliationWarnings?.length" class="my-4 border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
                 <p class="font-black uppercase tracking-wider">Reconciliation Warnings</p>
                 <ul class="mt-2 list-disc space-y-1 pl-5">
@@ -207,51 +198,62 @@ const shouldShowAuditRows = () => [
                 </ul>
             </section>
 
-            <table v-if="shouldShowBudgetRows()" class="mt-3 w-full border-collapse text-xs">
+            <table v-if="shouldShowBudgetRows()" class="mt-5 w-full border-collapse text-xs">
                 <thead>
+                    <tr>
+                        <th colspan="6" class="border border-black bg-white px-2 py-2 text-left text-[11px] font-black uppercase tracking-wider text-slate-900">
+                            Schedule A - Budget Utilization
+                        </th>
+                    </tr>
                     <tr class="bg-navy-dark text-white">
-                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Monthly Ref No.</th>
-                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Allocation Month</th>
-                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Responsibility Center</th>
-                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Category</th>
-                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Account Title</th>
+                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Programs / Projects</th>
                         <th class="border border-navy-dark px-2 py-2 text-right uppercase">Appropriation</th>
-                        <th class="border border-navy-dark px-2 py-2 text-right uppercase">Posted Expenditure</th>
+                        <th class="border border-navy-dark px-2 py-2 text-right uppercase">Total Cost Incurred to Date</th>
                         <th class="border border-navy-dark px-2 py-2 text-right uppercase">Balance</th>
-                        <th class="border border-navy-dark px-2 py-2 text-right uppercase">Utilization</th>
+                        <th class="border border-navy-dark px-2 py-2 text-right uppercase">% Utilization</th>
+                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Remarks</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="row in rows" :key="`${row.ref_no}-${row.account_title}`">
-                        <td class="border border-slate-200 px-2 py-2 align-top">{{ row.ref_no }}</td>
-                        <td class="border border-slate-200 px-2 py-2 align-top">{{ row.allocation_month }}</td>
-                        <td class="border border-slate-200 px-2 py-2 align-top">{{ row.responsibility_center }}</td>
-                        <td class="border border-slate-200 px-2 py-2 align-top">{{ row.category }}</td>
-                        <td class="border border-slate-200 px-2 py-2 align-top">{{ row.account_title }}</td>
-                        <td class="border border-slate-200 px-2 py-2 text-right align-top">{{ PESO }}{{ fmt(row.appropriation) }}</td>
-                        <td class="border border-slate-200 px-2 py-2 text-right align-top">{{ PESO }}{{ fmt(row.expenditure) }}</td>
-                        <td class="border border-slate-200 px-2 py-2 text-right align-top">{{ PESO }}{{ fmt(row.balance) }}</td>
-                        <td class="border border-slate-200 px-2 py-2 text-right align-top">{{ fmt(row.utilization_rate) }}%</td>
+                    <tr v-for="row in budgetScheduleRows" :key="row.type === 'group' ? `group-${row.key}` : `${row.ref_no}-${row.account_title}`" :class="row.type === 'group' ? 'bg-slate-100 font-black uppercase' : ''">
+                        <td class="border border-slate-300 px-2 py-1.5 align-top" :class="row.type === 'item' ? 'pl-6' : ''">
+                            <template v-if="row.type === 'group'">{{ row.label }}</template>
+                            <template v-else>
+                                {{ row.account_title }}<br />
+                                <span class="text-[10px] text-slate-600">{{ row.responsibility_center }} · {{ row.allocation_month }} · {{ row.ref_no }}</span>
+                            </template>
+                        </td>
+                        <td class="border border-slate-300 px-2 py-1.5 text-right align-top">{{ PESO }}{{ fmt(row.appropriation) }}</td>
+                        <td class="border border-slate-300 px-2 py-1.5 text-right align-top">{{ PESO }}{{ fmt(row.expenditure) }}</td>
+                        <td class="border border-slate-300 px-2 py-1.5 text-right align-top">{{ PESO }}{{ fmt(row.balance) }}</td>
+                        <td class="border border-slate-300 px-2 py-1.5 text-right align-top">{{ utilization(row.appropriation, row.expenditure) }}%</td>
+                        <td class="border border-slate-300 px-2 py-1.5 align-top">{{ row.type === 'group' ? '' : 'Posted disbursements only' }}</td>
                     </tr>
-                    <tr v-if="!rows?.length">
-                        <td colspan="9" class="border border-slate-200 px-2 py-6 text-center text-slate-500">
+                    <tr v-if="!budgetScheduleRows.length">
+                        <td colspan="6" class="border border-slate-300 px-2 py-6 text-center text-slate-500">
                             No records match the selected report filters.
                         </td>
                     </tr>
                 </tbody>
                 <tfoot>
                     <tr class="bg-slate-50 font-black">
-                        <td colspan="5" class="border border-slate-200 px-2 py-2">Grand Total</td>
-                        <td class="border border-slate-200 px-2 py-2 text-right">{{ PESO }}{{ fmt(totals?.appropriation) }}</td>
-                        <td class="border border-slate-200 px-2 py-2 text-right">{{ PESO }}{{ fmt(totals?.expenditure) }}</td>
-                        <td class="border border-slate-200 px-2 py-2 text-right">{{ PESO }}{{ fmt(totals?.balance) }}</td>
-                        <td class="border border-slate-200 px-2 py-2 text-right">{{ utilization(totals?.appropriation, totals?.expenditure) }}%</td>
+                        <td class="border border-slate-300 px-2 py-2">TOTAL</td>
+                        <td class="border border-slate-300 px-2 py-2 text-right">{{ PESO }}{{ fmt(totals?.appropriation) }}</td>
+                        <td class="border border-slate-300 px-2 py-2 text-right">{{ PESO }}{{ fmt(totals?.expenditure) }}</td>
+                        <td class="border border-slate-300 px-2 py-2 text-right">{{ PESO }}{{ fmt(totals?.balance) }}</td>
+                        <td class="border border-slate-300 px-2 py-2 text-right">{{ utilization(totals?.appropriation, totals?.expenditure) }}%</td>
+                        <td class="border border-slate-300 px-2 py-2"></td>
                     </tr>
                 </tfoot>
             </table>
 
             <table v-if="shouldShowReceiptRows()" class="mt-5 w-full border-collapse text-xs">
                 <thead>
+                    <tr>
+                        <th colspan="6" class="border border-black bg-white px-2 py-2 text-left text-[11px] font-black uppercase tracking-wider text-slate-900">
+                            Schedule B - Cash Receipts
+                        </th>
+                    </tr>
                     <tr class="bg-navy-dark text-white">
                         <th class="border border-navy-dark px-2 py-2 text-left uppercase">Receipt No.</th>
                         <th class="border border-navy-dark px-2 py-2 text-left uppercase">Income No.</th>
@@ -272,10 +274,21 @@ const shouldShowAuditRows = () => [
                     </tr>
                     <tr v-if="!receiptRows?.length"><td colspan="6" class="border border-slate-200 px-2 py-6 text-center text-slate-500">No receipt records match the selected report filters.</td></tr>
                 </tbody>
+                <tfoot>
+                    <tr class="bg-slate-50 font-black">
+                        <td colspan="5" class="border border-slate-300 px-2 py-2">TOTAL CASH RECEIPTS</td>
+                        <td class="border border-slate-300 px-2 py-2 text-right">{{ PESO }}{{ fmt(receiptTotal) }}</td>
+                    </tr>
+                </tfoot>
             </table>
 
             <table v-if="shouldShowDisbursementRows()" class="mt-5 w-full border-collapse text-xs">
                 <thead>
+                    <tr>
+                        <th colspan="8" class="border border-black bg-white px-2 py-2 text-left text-[11px] font-black uppercase tracking-wider text-slate-900">
+                            Schedule C - Disbursements
+                        </th>
+                    </tr>
                     <tr class="bg-navy-dark text-white">
                         <th class="border border-navy-dark px-2 py-2 text-left uppercase">DSB No.</th>
                         <th class="border border-navy-dark px-2 py-2 text-left uppercase">Expense Ref</th>
@@ -300,10 +313,21 @@ const shouldShowAuditRows = () => [
                     </tr>
                     <tr v-if="!disbursementRows?.length"><td colspan="8" class="border border-slate-200 px-2 py-6 text-center text-slate-500">No disbursement records match the selected report filters.</td></tr>
                 </tbody>
+                <tfoot>
+                    <tr class="bg-slate-50 font-black">
+                        <td colspan="7" class="border border-slate-300 px-2 py-2">TOTAL DISBURSEMENTS</td>
+                        <td class="border border-slate-300 px-2 py-2 text-right">{{ PESO }}{{ fmt(disbursementTotal) }}</td>
+                    </tr>
+                </tfoot>
             </table>
 
             <table v-if="shouldShowAuditRows()" class="mt-5 w-full border-collapse text-xs">
                 <thead>
+                    <tr>
+                        <th colspan="5" class="border border-black bg-white px-2 py-2 text-left text-[11px] font-black uppercase tracking-wider text-slate-900">
+                            Schedule D - Audit Trail
+                        </th>
+                    </tr>
                     <tr class="bg-navy-dark text-white">
                         <th class="border border-navy-dark px-2 py-2 text-left uppercase">Date</th>
                         <th class="border border-navy-dark px-2 py-2 text-left uppercase">User</th>
