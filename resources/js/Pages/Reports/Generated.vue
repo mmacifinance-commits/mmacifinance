@@ -360,11 +360,15 @@ const printReport = async () => {
 <style>
 .report-table {
     inline-size: 100%;
+    max-inline-size: 100%;
+    table-layout: fixed;
 }
 
 .report-table th,
 .report-table td {
     overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
     vertical-align: top;
 }
 
@@ -378,18 +382,33 @@ const printReport = async () => {
     body {
         background: #fff !important;
         overflow: visible !important;
+        width: 210mm !important;
     }
 
     .report-sheet {
         box-sizing: border-box !important;
         min-height: 297mm !important;
-        padding: 10mm !important;
+        overflow: visible !important;
+        padding: 8mm !important;
         width: 210mm !important;
     }
 
     .report-table {
-        font-size: 9px !important;
+        border-collapse: collapse !important;
+        font-size: 8.25px !important;
+        inline-size: 100% !important;
+        max-inline-size: 100% !important;
         page-break-inside: auto;
+        table-layout: fixed !important;
+        width: 100% !important;
+    }
+
+    .report-table thead {
+        display: table-header-group;
+    }
+
+    .report-table tfoot {
+        display: table-row-group;
     }
 
     .report-table tr {
@@ -399,8 +418,27 @@ const printReport = async () => {
 
     .report-table th,
     .report-table td {
-        padding: 5px !important;
-        line-height: 1.2 !important;
+        box-sizing: border-box !important;
+        line-height: 1.15 !important;
+        max-width: 0 !important;
+        overflow-wrap: anywhere !important;
+        padding: 3.5px !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+    }
+
+    .report-table .text-right {
+        text-align: right;
+    }
+
+    .report-table + .report-table {
+        margin-top: 7mm !important;
+    }
+
+    .report-sheet section,
+    .report-sheet header,
+    .report-sheet table {
+        max-width: 100% !important;
     }
 
     body * {
