@@ -6,7 +6,7 @@ import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
 
 const props = defineProps({
-    categories: { type: Array, default: () => [] }
+    categories: { type: [Array, Object], default: () => ({}) }
 })
 
 const page = usePage()
@@ -16,6 +16,14 @@ const showForm = ref(false)
 const showImport = ref(false)
 const editing = ref(null)
 const MAX_TITLES = 5
+const paginatedCategories = computed(() => props.categories || {})
+const categoryItems = computed(() => {
+    const source = paginatedCategories.value
+    return Array.isArray(source) ? source : (source.data || [])
+})
+const categoryTotalRecords = computed(() => Array.isArray(paginatedCategories.value) ? categoryItems.value.length : (paginatedCategories.value.total || 0))
+const categoryFirstRecord = computed(() => Array.isArray(paginatedCategories.value) ? (categoryItems.value.length ? 1 : 0) : (paginatedCategories.value.from || 0))
+const categoryLastRecord = computed(() => Array.isArray(paginatedCategories.value) ? categoryItems.value.length : (paginatedCategories.value.to || 0))
 
 const form = useForm({ name: '', description: '' })
 const importForm = useForm({ csv_file: null })
@@ -62,7 +70,7 @@ function save() {
         return form.setError('name', 'Budget category name is required.')
 
     if (
-        props.categories.some(c =>
+        categoryItems.value.some(c =>
             normalize(c.name) === normalize(name) &&
             Number(c.id) !== Number(editing.value)
         )
@@ -177,7 +185,7 @@ function importCsv() {
 
                     <tbody>
                         <tr
-                            v-for="category in categories"
+                            v-for="category in categoryItems"
                             :key="category.id"
                             class="border-b border-gray-100 hover:bg-gray-50/50"
                         >
@@ -234,7 +242,7 @@ function importCsv() {
                             </td>
                         </tr>
 
-                        <tr v-if="!categories.length">
+                        <tr v-if="!categoryItems.length">
                             <td
                                 :colspan="canManage ? 4 : 3"
                                 class="px-5 py-10 text-center text-gray-500"
@@ -246,8 +254,19 @@ function importCsv() {
                 </table>
             </div>
 
-            <div class="border-t bg-gray-50 px-5 py-2.5 text-xs text-gray-500">
-                Total Records: {{ categories.length }}
+            <div class="flex flex-col gap-3 border-t bg-gray-50 px-5 py-2.5 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between">
+                <span>Showing {{ categoryFirstRecord }}-{{ categoryLastRecord }} of {{ categoryTotalRecords }} budget categor{{ categoryTotalRecords === 1 ? 'y' : 'ies' }}</span>
+                <div v-if="paginatedCategories?.links?.length" class="flex flex-wrap gap-2">
+                    <button
+                        v-for="link in paginatedCategories.links"
+                        :key="link.label"
+                        :disabled="!link.url"
+                        @click="link.url && router.visit(link.url, { preserveState: true, preserveScroll: true })"
+                        v-html="link.label"
+                        class="rounded-md border px-3 py-1.5 text-xs font-semibold transition"
+                        :class="link.active ? 'border-navy-dark bg-navy-dark text-white' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50'"
+                    />
+                </div>
             </div>
         </div>
 

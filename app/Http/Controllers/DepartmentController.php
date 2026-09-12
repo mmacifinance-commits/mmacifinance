@@ -14,7 +14,11 @@ class DepartmentController extends Controller
     public function index(Request $request)
     {
         return Inertia::render('Departments/Index', [
-            'departments' => Department::with('particulars')->withCount('particulars')->orderBy('name')->get(),
+            'departments' => Department::with('particulars')
+                ->withCount('particulars')
+                ->orderBy('name')
+                ->paginate(25)
+                ->withQueryString(),
             'canManageResponsibilityCenters' => $request->user()?->isSuperAdmin() ?? false,
         ]);
     }

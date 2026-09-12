@@ -20,7 +20,8 @@ class BudgetCategoryController extends Controller
             'categories' => BudgetCategory::with('particulars')
                 ->withCount('particulars', 'budgetItems')
                 ->latest()
-                ->get(),
+                ->paginate(25)
+                ->withQueryString(),
         ]);
     }
 

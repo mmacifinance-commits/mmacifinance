@@ -9,8 +9,8 @@ const perms = computed(() => usePage().props.permissions || {})
 
 const props = defineProps({
     departments: {
-        type: Array,
-        default: () => [],
+        type: [Array, Object],
+        default: () => ({}),
     },
 
     canManageResponsibilityCenters: {
@@ -24,6 +24,14 @@ const canManage = computed(
         props.canManageResponsibilityCenters ||
         perms.value.isSuperAdmin
 )
+const paginatedDepartments = computed(() => props.departments || {})
+const departmentItems = computed(() => {
+    const source = paginatedDepartments.value
+    return Array.isArray(source) ? source : (source.data || [])
+})
+const departmentTotalRecords = computed(() => Array.isArray(paginatedDepartments.value) ? departmentItems.value.length : (paginatedDepartments.value.total || 0))
+const departmentFirstRecord = computed(() => Array.isArray(paginatedDepartments.value) ? (departmentItems.value.length ? 1 : 0) : (paginatedDepartments.value.from || 0))
+const departmentLastRecord = computed(() => Array.isArray(paginatedDepartments.value) ? departmentItems.value.length : (paginatedDepartments.value.to || 0))
 
 const showModal = ref(false)
 const showImportModal = ref(false)
@@ -211,7 +219,7 @@ function importCsv() {
 
                     <tbody>
                         <tr
-                            v-for="department in departments"
+                            v-for="department in departmentItems"
                             :key="department.id"
                             class="border-b border-gray-100 transition-colors hover:bg-gray-50/50"
                         >
@@ -301,7 +309,7 @@ function importCsv() {
                         </tr>
 
                         <!-- Empty State -->
-                        <tr v-if="departments.length === 0">
+                        <tr v-if="departmentItems.length === 0">
                             <td
                                 :colspan="canManage ? 4 : 3"
                                 class="px-5 py-10 text-center text-gray-500"
@@ -315,9 +323,20 @@ function importCsv() {
 
             <!-- Footer -->
             <div
-                class="border-t bg-gray-50 px-5 py-2.5 text-xs text-gray-500"
+                class="flex flex-col gap-3 border-t bg-gray-50 px-5 py-2.5 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between"
             >
-                Total Records: {{ departments.length }}
+                <span>Showing {{ departmentFirstRecord }}-{{ departmentLastRecord }} of {{ departmentTotalRecords }} responsibility center(s)</span>
+                <div v-if="paginatedDepartments?.links?.length" class="flex flex-wrap gap-2">
+                    <button
+                        v-for="link in paginatedDepartments.links"
+                        :key="link.label"
+                        :disabled="!link.url"
+                        @click="link.url && router.visit(link.url, { preserveState: true, preserveScroll: true })"
+                        v-html="link.label"
+                        class="rounded-md border px-3 py-1.5 text-xs font-semibold transition"
+                        :class="link.active ? 'border-navy-dark bg-navy-dark text-white' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50'"
+                    />
+                </div>
             </div>
         </div>
 
