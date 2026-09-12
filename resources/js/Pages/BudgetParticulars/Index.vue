@@ -4,18 +4,23 @@ import Modal from '@/Components/Modal.vue'
 import SystemAlert from '@/Components/SystemAlert.vue'
 import ImportPreviewPanel from '@/Components/ImportPreviewPanel.vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 const perms = computed(() => usePage().props.permissions || {})
 
 const props = defineProps({
-    particulars: Array,
-    accountTitles: Array,
+    particulars: [Array, Object],
+    accountTitles: [Array, Object],
     categories: Array,
-    departments: Array
+    departments: Array,
+    filters: Object
 })
 
-const listData = computed(() => props.accountTitles || props.particulars || [])
+const paginatedAccountTitles = computed(() => props.accountTitles || props.particulars || {})
+const listData = computed(() => {
+    const source = paginatedAccountTitles.value
+    return Array.isArray(source) ? source : (source.data || [])
+})
 const showModal = ref(false)
 const showImportModal = ref(false)
 const editing = ref(null)
@@ -24,20 +29,28 @@ const importForm = useForm({ csv_file: null })
 const formErrorMessages = computed(() => Object.values(form.errors || {}).flat().filter(Boolean))
 const importErrorMessages = computed(() => Object.values(importForm.errors || {}).flat().filter(Boolean))
 
-const filterCategory = ref('')
-const filterDepartment = ref('')
-const searchQuery = ref('')
+const filterCategory = ref(props.filters?.category_id || '')
+const filterDepartment = ref(props.filters?.department_id || '')
+const searchQuery = ref(props.filters?.search || '')
+const filteredParticulars = computed(() => listData.value)
+const totalRecords = computed(() => Array.isArray(paginatedAccountTitles.value) ? listData.value.length : (paginatedAccountTitles.value.total || 0))
+const firstRecord = computed(() => Array.isArray(paginatedAccountTitles.value) ? (listData.value.length ? 1 : 0) : (paginatedAccountTitles.value.from || 0))
+const lastRecord = computed(() => Array.isArray(paginatedAccountTitles.value) ? listData.value.length : (paginatedAccountTitles.value.to || 0))
+let filterTimer = null
 
-const filteredParticulars = computed(() => {
-    return listData.value.filter(p => {
-        const matchCategory = filterCategory.value ? p.category_id === filterCategory.value : true
-        const matchDepartment = filterDepartment.value ? p.department_id === filterDepartment.value : true
-        const matchSearch = searchQuery.value ?
-            (p.particular.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-             p.account_code.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-             p.account_name.toLowerCase().includes(searchQuery.value.toLowerCase())) : true
-        return matchCategory && matchDepartment && matchSearch
-    })
+watch([filterCategory, filterDepartment, searchQuery], () => {
+    clearTimeout(filterTimer)
+    filterTimer = setTimeout(() => {
+        router.get('/budget-particulars', {
+            category_id: filterCategory.value || undefined,
+            department_id: filterDepartment.value || undefined,
+            search: searchQuery.value || undefined,
+        }, {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+        })
+    }, 300)
 })
 
 function openCreate() { form.reset(); form.clearErrors(); editing.value = null; showModal.value = true }
@@ -132,7 +145,20 @@ function importCsv() {
                 </tbody>
             </table>
         </div>
-        <div class="px-6 py-3 bg-gray-50 text-xs text-gray-500 border-t">Total Records: {{ filteredParticulars.length }}</div>
+        <div class="flex flex-col gap-3 border-t bg-gray-50 px-6 py-3 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between">
+            <span>Showing {{ firstRecord }}-{{ lastRecord }} of {{ totalRecords }} account title(s)</span>
+            <div v-if="paginatedAccountTitles?.links?.length" class="flex flex-wrap gap-2">
+                <button
+                    v-for="link in paginatedAccountTitles.links"
+                    :key="link.label"
+                    :disabled="!link.url"
+                    @click="link.url && router.visit(link.url, { preserveState: true, preserveScroll: true })"
+                    v-html="link.label"
+                    class="rounded-md border px-3 py-1.5 text-xs font-semibold transition"
+                    :class="link.active ? 'border-navy-dark bg-navy-dark text-white' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50'"
+                />
+            </div>
+        </div>
     </div>
 
     <Modal :show="showModal" :title="editing ? 'Edit Account Title' : 'Add Account Title'" :subtitle="editing ? 'Update account title details.' : 'Create a new account title line item.'" max-width="lg" @close="showModal = false">

@@ -13,15 +13,39 @@ use App\Support\SpreadsheetImportExport;
 
 class BudgetParticularController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $particulars = BudgetParticular::with('category', 'department')->latest()->get();
+        $validated = $request->validate([
+            'category_id' => ['nullable', 'integer', 'exists:budget_categories,id'],
+            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
+            'search' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $particulars = BudgetParticular::with('category', 'department')
+            ->when($validated['category_id'] ?? null, fn ($query, $categoryId) => $query->where('category_id', $categoryId))
+            ->when($validated['department_id'] ?? null, fn ($query, $departmentId) => $query->where('department_id', $departmentId))
+            ->when($validated['search'] ?? null, function ($query, string $search) {
+                $query->where(function ($inner) use ($search) {
+                    $inner->where('particular', 'like', "%{$search}%")
+                        ->orWhere('account_code', 'like', "%{$search}%")
+                        ->orWhere('account_name', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%");
+                });
+            })
+            ->latest()
+            ->paginate(50)
+            ->withQueryString();
 
         return Inertia::render('BudgetParticulars/Index', [
             'particulars' => $particulars,
             'accountTitles' => $particulars,
             'categories' => BudgetCategory::all(),
             'departments' => Department::all(),
+            'filters' => [
+                'category_id' => $validated['category_id'] ?? '',
+                'department_id' => $validated['department_id'] ?? '',
+                'search' => $validated['search'] ?? '',
+            ],
         ]);
     }
 
