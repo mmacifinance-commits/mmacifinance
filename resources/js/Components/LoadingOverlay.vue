@@ -47,7 +47,9 @@ defineProps({
                     <img src="/images/logo.png" alt="MMACI Logo" class="h-14 w-14 animate-[loading-pulse_1.4s_ease-in-out_infinite] object-contain" />
                 </div>
 
-                <div class="mx-auto mt-5 h-9 w-9 animate-spin rounded-full border-4 border-slate-200 border-t-mustard"></div>
+                <div class="mx-auto mt-5 flex h-10 w-10 items-center justify-center">
+                    <div class="h-8 w-8 animate-spin border-4 border-mustard bg-mustard/10 shadow-[0_0_18px_rgba(212,168,67,0.35)]"></div>
+                </div>
 
                 <p class="mt-4 text-sm font-bold uppercase tracking-[0.22em] text-navy-dark">{{ text }}</p>
                 <p class="mt-2 text-xs leading-5 text-slate-500">{{ subtext }}</p>
