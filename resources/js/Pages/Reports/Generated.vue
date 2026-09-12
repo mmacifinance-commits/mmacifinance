@@ -2,12 +2,18 @@
 import { Head, Link } from '@inertiajs/vue3'
 
 const props = defineProps({
+    reportType: String,
+    reportLabel: String,
     period: Object,
     monthLabel: String,
     dateRangeLabel: String,
     departmentLabel: String,
     categoryLabel: String,
     rows: Array,
+    receiptRows: Array,
+    disbursementRows: Array,
+    auditRows: Array,
+    reconciliationWarnings: Array,
     totals: Object,
     generatedAt: String,
     generatedBy: Object,
@@ -35,6 +41,37 @@ const generatedDate = () => {
         minute: '2-digit',
     })
 }
+
+const shouldShowBudgetRows = () => [
+    'overall_financial',
+    'budget_utilization',
+    'income_vs_receipts',
+    'fund_balance',
+    'responsibility_center',
+    'account_title_ledger',
+    'closing_report',
+].includes(props.reportType || 'overall_financial')
+
+const shouldShowReceiptRows = () => [
+    'overall_financial',
+    'cash_receipts',
+    'income_vs_receipts',
+    'fund_balance',
+    'closing_report',
+].includes(props.reportType || 'overall_financial')
+
+const shouldShowDisbursementRows = () => [
+    'overall_financial',
+    'disbursements',
+    'fund_balance',
+    'closing_report',
+].includes(props.reportType || 'overall_financial')
+
+const shouldShowAuditRows = () => [
+    'overall_financial',
+    'audit_trail',
+    'closing_report',
+].includes(props.reportType || 'overall_financial')
 </script>
 
 <template>
@@ -84,8 +121,8 @@ const generatedDate = () => {
             </header>
 
             <section class="my-4 text-center">
-                <h2 class="text-lg font-black uppercase tracking-[0.08em]">Financial Report</h2>
-                <p class="mt-1 text-xs text-slate-600">Budget utilization, posted expenditure, and remaining balance summary</p>
+                <h2 class="text-lg font-black uppercase tracking-[0.08em]">{{ reportLabel || 'Overall Financial Report' }}</h2>
+                <p class="mt-1 text-xs text-slate-600">Formal generated report based on the selected fiscal period, dates, and filters</p>
             </section>
 
             <section class="grid grid-cols-4 gap-2">
@@ -123,7 +160,7 @@ const generatedDate = () => {
                 </div>
             </section>
 
-            <section class="my-4 grid grid-cols-3 gap-3">
+            <section class="my-4 grid grid-cols-4 gap-3">
                 <div class="border border-slate-200 border-t-4 border-t-navy p-3">
                     <span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Total Appropriation</span>
                     <strong class="mt-1 block text-xl">{{ PESO }}{{ fmt(totals?.appropriation) }}</strong>
@@ -133,12 +170,35 @@ const generatedDate = () => {
                     <strong class="mt-1 block text-xl">{{ PESO }}{{ fmt(totals?.expenditure) }}</strong>
                 </div>
                 <div class="border border-slate-200 border-t-4 border-t-emerald-500 p-3">
+                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Total Receipts</span>
+                    <strong class="mt-1 block text-xl">{{ PESO }}{{ fmt(totals?.receipts) }}</strong>
+                </div>
+                <div class="border border-slate-200 border-t-4 border-t-emerald-500 p-3">
                     <span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Remaining Balance</span>
                     <strong class="mt-1 block text-xl">{{ PESO }}{{ fmt(totals?.balance) }}</strong>
                 </div>
+                <div class="border border-slate-200 border-t-4 border-t-teal-500 p-3">
+                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Cash On Hand</span>
+                    <strong class="mt-1 block text-xl">{{ PESO }}{{ fmt(totals?.cashOnHand) }}</strong>
+                </div>
+                <div class="border border-slate-200 border-t-4 border-t-amber-500 p-3">
+                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Pending Commitments</span>
+                    <strong class="mt-1 block text-xl">{{ PESO }}{{ fmt(totals?.pendingCommitments) }}</strong>
+                </div>
+                <div class="border border-slate-200 border-t-4 border-t-indigo-500 p-3">
+                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Available Cash</span>
+                    <strong class="mt-1 block text-xl">{{ PESO }}{{ fmt(totals?.availableForDisbursement) }}</strong>
+                </div>
             </section>
 
-            <table class="mt-3 w-full border-collapse text-xs">
+            <section v-if="reconciliationWarnings?.length" class="my-4 border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                <p class="font-black uppercase tracking-wider">Reconciliation Warnings</p>
+                <ul class="mt-2 list-disc space-y-1 pl-5">
+                    <li v-for="warning in reconciliationWarnings" :key="warning">{{ warning }}</li>
+                </ul>
+            </section>
+
+            <table v-if="shouldShowBudgetRows()" class="mt-3 w-full border-collapse text-xs">
                 <thead>
                     <tr class="bg-navy-dark text-white">
                         <th class="border border-navy-dark px-2 py-2 text-left uppercase">Monthly Ref No.</th>
@@ -179,6 +239,80 @@ const generatedDate = () => {
                         <td class="border border-slate-200 px-2 py-2 text-right">{{ utilization(totals?.appropriation, totals?.expenditure) }}%</td>
                     </tr>
                 </tfoot>
+            </table>
+
+            <table v-if="shouldShowReceiptRows()" class="mt-5 w-full border-collapse text-xs">
+                <thead>
+                    <tr class="bg-navy-dark text-white">
+                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Receipt No.</th>
+                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Income No.</th>
+                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Receipt Type</th>
+                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Source / Description</th>
+                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Receipt Date</th>
+                        <th class="border border-navy-dark px-2 py-2 text-right uppercase">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="row in receiptRows" :key="row.id">
+                        <td class="border border-slate-200 px-2 py-2">{{ row.receipt_no }}</td>
+                        <td class="border border-slate-200 px-2 py-2">{{ row.income_no }}</td>
+                        <td class="border border-slate-200 px-2 py-2">{{ row.receipt_type }}</td>
+                        <td class="border border-slate-200 px-2 py-2"><strong>{{ row.source }}</strong><br>{{ row.description }}</td>
+                        <td class="border border-slate-200 px-2 py-2">{{ row.receipt_date }}</td>
+                        <td class="border border-slate-200 px-2 py-2 text-right">{{ PESO }}{{ fmt(row.amount) }}</td>
+                    </tr>
+                    <tr v-if="!receiptRows?.length"><td colspan="6" class="border border-slate-200 px-2 py-6 text-center text-slate-500">No receipt records match the selected report filters.</td></tr>
+                </tbody>
+            </table>
+
+            <table v-if="shouldShowDisbursementRows()" class="mt-5 w-full border-collapse text-xs">
+                <thead>
+                    <tr class="bg-navy-dark text-white">
+                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">DSB No.</th>
+                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Expense Ref</th>
+                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Allocation Month</th>
+                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Expense Date</th>
+                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Disbursement Date</th>
+                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Payee</th>
+                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Status</th>
+                        <th class="border border-navy-dark px-2 py-2 text-right uppercase">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="row in disbursementRows" :key="row.id">
+                        <td class="border border-slate-200 px-2 py-2">{{ row.disbursement_no }}</td>
+                        <td class="border border-slate-200 px-2 py-2">{{ row.expense_ref }}</td>
+                        <td class="border border-slate-200 px-2 py-2">{{ row.allocation_month }}</td>
+                        <td class="border border-slate-200 px-2 py-2">{{ row.expense_date }}</td>
+                        <td class="border border-slate-200 px-2 py-2">{{ row.disbursement_date }}</td>
+                        <td class="border border-slate-200 px-2 py-2">{{ row.pay_to }}</td>
+                        <td class="border border-slate-200 px-2 py-2 uppercase">{{ row.status }}</td>
+                        <td class="border border-slate-200 px-2 py-2 text-right">{{ PESO }}{{ fmt(row.amount) }}</td>
+                    </tr>
+                    <tr v-if="!disbursementRows?.length"><td colspan="8" class="border border-slate-200 px-2 py-6 text-center text-slate-500">No disbursement records match the selected report filters.</td></tr>
+                </tbody>
+            </table>
+
+            <table v-if="shouldShowAuditRows()" class="mt-5 w-full border-collapse text-xs">
+                <thead>
+                    <tr class="bg-navy-dark text-white">
+                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Date</th>
+                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">User</th>
+                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Role</th>
+                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Action</th>
+                        <th class="border border-navy-dark px-2 py-2 text-left uppercase">Remarks</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="row in auditRows" :key="row.id">
+                        <td class="border border-slate-200 px-2 py-2">{{ row.created_at }}</td>
+                        <td class="border border-slate-200 px-2 py-2">{{ row.user_name }}</td>
+                        <td class="border border-slate-200 px-2 py-2">{{ row.user_role }}</td>
+                        <td class="border border-slate-200 px-2 py-2 uppercase">{{ row.action }}</td>
+                        <td class="border border-slate-200 px-2 py-2">{{ row.remarks }}</td>
+                    </tr>
+                    <tr v-if="!auditRows?.length"><td colspan="5" class="border border-slate-200 px-2 py-6 text-center text-slate-500">No audit records match the selected report filters.</td></tr>
+                </tbody>
             </table>
 
             <section class="mt-10 grid grid-cols-2 gap-12">

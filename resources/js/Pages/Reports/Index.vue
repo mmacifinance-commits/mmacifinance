@@ -24,7 +24,7 @@ const props = defineProps({
     filters: Object,
 })
 
-const filterReportType = ref(props.filters.report_type || props.reportType || 'budget_utilization')
+const filterReportType = ref(props.filters.report_type || props.reportType || 'overall_financial')
 const filterYear = ref(props.filters.fiscal_period_id || '')
 const filterMonth = ref(props.filters.allocation_month || '')
 const startDate = ref(props.filters.start_date || '')
@@ -208,7 +208,7 @@ function applyDateFilter() {
 
 function clearFilters() {
     filterYear.value = props.fiscalPeriods?.[0]?.id || ''
-    filterReportType.value = 'budget_utilization'
+    filterReportType.value = 'overall_financial'
     filterMonth.value = ''
     startDate.value = ''
     endDate.value = ''

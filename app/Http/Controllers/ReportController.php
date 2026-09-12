@@ -27,7 +27,7 @@ class ReportController extends Controller
         CashFlowService $cashFlow
     ) {
         $validated = $request->validate([
-            'report_type' => ['nullable', 'string', 'in:budget_utilization,cash_receipts,disbursements,income_vs_receipts,fund_balance,responsibility_center,account_title_ledger,audit_trail,closing_report'],
+            'report_type' => ['nullable', 'string', 'in:overall_financial,budget_utilization,cash_receipts,disbursements,income_vs_receipts,fund_balance,responsibility_center,account_title_ledger,audit_trail,closing_report'],
             'fiscal_period_id' => ['nullable', 'integer', 'exists:annual_budgets,id'],
             'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
             'allocation_month' => ['nullable', 'date_format:Y-m-d'],
@@ -39,7 +39,7 @@ class ReportController extends Controller
             'account_title_id' => ['nullable', 'integer', 'exists:budget_particulars,id'],
         ]);
 
-        $reportType = $validated['report_type'] ?? 'budget_utilization';
+        $reportType = $validated['report_type'] ?? 'overall_financial';
         $periods = $fiscalPeriods->all();
         $selectedPeriod = $fiscalPeriods->resolve(
             isset($validated['fiscal_period_id']) ? (int) $validated['fiscal_period_id'] : null,
@@ -234,7 +234,7 @@ class ReportController extends Controller
         CashFlowService $cashFlow
     ) {
         $validated = $request->validate([
-            'report_type' => ['nullable', 'string'],
+            'report_type' => ['nullable', 'string', 'in:overall_financial,budget_utilization,cash_receipts,disbursements,income_vs_receipts,fund_balance,responsibility_center,account_title_ledger,audit_trail,closing_report'],
             'fiscal_period_id' => ['nullable', 'integer', 'exists:annual_budgets,id'],
             'allocation_month' => ['nullable', 'date_format:Y-m-d'],
             'start_date' => ['nullable', 'date'],
@@ -307,9 +307,11 @@ class ReportController extends Controller
     public function generate(
         Request $request,
         BudgetUtilizationService $utilization,
-        FiscalPeriodService $fiscalPeriods
+        FiscalPeriodService $fiscalPeriods,
+        CashFlowService $cashFlow
     ) {
         $validated = $request->validate([
+            'report_type' => ['nullable', 'string', 'in:overall_financial,budget_utilization,cash_receipts,disbursements,income_vs_receipts,fund_balance,responsibility_center,account_title_ledger,audit_trail,closing_report'],
             'fiscal_period_id' => ['nullable', 'integer', 'exists:annual_budgets,id'],
             'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
             'allocation_month' => ['nullable', 'date_format:Y-m-d'],
@@ -321,6 +323,7 @@ class ReportController extends Controller
             'account_title_id' => ['nullable', 'integer', 'exists:budget_particulars,id'],
         ]);
 
+        $reportType = $validated['report_type'] ?? 'overall_financial';
         $selectedPeriod = $fiscalPeriods->resolve(
             isset($validated['fiscal_period_id']) ? (int) $validated['fiscal_period_id'] : null,
             isset($validated['year']) ? (int) $validated['year'] : null
@@ -393,19 +396,41 @@ class ReportController extends Controller
         $department = $departmentId ? Department::find($departmentId) : null;
         $category = $categoryId ? BudgetCategory::find($categoryId) : null;
         $monthLabel = $allocationMonth ? Carbon::parse($allocationMonth)->format('F Y') : 'All Fiscal Months';
+        $cashSummary = $cashFlow->summary($selectedPeriod);
+        $pendingCommitments = $selectedPeriod
+            ? (float) Disbursement::query()
+                ->whereIn('status', ['draft', 'for_release', 'for_approval', 'approved', 'returned_for_revision'])
+                ->whereHas('expense.budgetItem', fn ($query) => $query->where('budget_id', $selectedPeriod->id))
+                ->sum('amount')
+            : 0.0;
+        $totals = [
+            'appropriation' => (float) $rows->sum('appropriation'),
+            'expenditure' => (float) $rows->sum('expenditure'),
+            'balance' => (float) $rows->sum('balance'),
+            'receipts' => round($cashSummary['receipts'], 2),
+            'postedDisbursements' => round($cashSummary['postedDisbursements'], 2),
+            'cashOnHand' => round($cashSummary['cashOnHand'], 2),
+            'pendingCommitments' => round($pendingCommitments, 2),
+            'availableForDisbursement' => round($cashSummary['availableForDisbursement'], 2),
+        ];
 
         return Inertia::render('Reports/Generated', [
+            'reportType' => $reportType,
+            'reportLabel' => collect($this->reportTypes())->firstWhere('value', $reportType)['label'] ?? 'Financial Report',
             'period' => $selectedPeriod,
             'monthLabel' => $monthLabel,
             'dateRangeLabel' => $this->dateRangeLabel($startDate, $endDate),
             'departmentLabel' => $department?->name ?? 'All Responsibility Centers',
             'categoryLabel' => $category?->name ?? 'All Categories',
             'rows' => $rows,
-            'totals' => [
-                'appropriation' => (float) $rows->sum('appropriation'),
-                'expenditure' => (float) $rows->sum('expenditure'),
-                'balance' => (float) $rows->sum('balance'),
-            ],
+            'receiptRows' => $this->receiptRows($selectedPeriod, $startDate, $endDate),
+            'disbursementRows' => $this->disbursementRows($selectedPeriod, $startDate, $endDate),
+            'auditRows' => $this->auditRows($selectedPeriod, $startDate, $endDate),
+            'reconciliationWarnings' => $this->reportWarnings($selectedPeriod, [
+                'cashOnHand' => $totals['cashOnHand'],
+                'budgetBalance' => $totals['balance'],
+            ]),
+            'totals' => $totals,
             'generatedAt' => now(),
             'generatedBy' => auth()->user(),
         ]);
@@ -425,6 +450,7 @@ class ReportController extends Controller
     private function reportTypes(): array
     {
         return [
+            ['value' => 'overall_financial', 'label' => 'Overall Financial Report'],
             ['value' => 'budget_utilization', 'label' => 'Budget Utilization Report'],
             ['value' => 'cash_receipts', 'label' => 'Cash Receipts Report'],
             ['value' => 'disbursements', 'label' => 'Disbursement Report'],
