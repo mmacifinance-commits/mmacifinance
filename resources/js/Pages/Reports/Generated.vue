@@ -1,6 +1,6 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3'
-import { computed } from 'vue'
+import { computed, nextTick } from 'vue'
 
 const props = defineProps({
     reportType: String,
@@ -96,6 +96,15 @@ const budgetScheduleRows = computed(() => {
 
 const receiptTotal = computed(() => (props.receiptRows || []).reduce((sum, row) => sum + Number(row.amount || 0), 0))
 const disbursementTotal = computed(() => (props.disbursementRows || []).reduce((sum, row) => sum + Number(row.amount || 0), 0))
+
+const printReport = async () => {
+    await nextTick()
+
+    requestAnimationFrame(() => {
+        window.focus()
+        window.print()
+    })
+}
 </script>
 
 <template>
@@ -108,7 +117,7 @@ const disbursementTotal = computed(() => (props.disbursementRows || []).reduce((
             </Link>
             <button
                 type="button"
-                @click="window.print()"
+                @click="printReport"
                 class="border border-mustard bg-mustard px-4 py-2 text-sm font-bold text-navy-dark hover:bg-[#c99a2c]"
             >
                 Print / Save PDF
@@ -327,6 +336,17 @@ const disbursementTotal = computed(() => (props.disbursementRows || []).reduce((
     @page {
         size: landscape;
         margin: 0.35in;
+    }
+
+    html,
+    body {
+        background: #fff !important;
+        overflow: visible !important;
+    }
+
+    body * {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
     }
 }
 </style>
