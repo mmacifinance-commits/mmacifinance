@@ -132,7 +132,7 @@ const printReport = async () => {
                 </div>
 
                 <div class="text-center leading-tight">
-                    <h1 class="m-0 text-[22px] font-extrabold tracking-wide text-[#17456e] underline">
+                    <h1 class="m-0 text-[22px] font-extrabold tracking-wide text-[#17456e]">
                         MERCHANT MARINE ACADEMY OF CARAGA, INC.
                     </h1>
                     <p class="mt-1 text-[13px]">North Montilla Boulevard, Brgy. Ong-Yiu, Butuan City, 8600</p>
