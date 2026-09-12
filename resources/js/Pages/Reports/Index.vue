@@ -221,6 +221,20 @@ const yearEndSummaryTotals = computed(() => {
         expenditure: items.reduce((sum, item) => sum + Number(item.expenditure || 0), 0),
     }
 })
+
+const generatedReportUrl = computed(() => {
+    const params = new URLSearchParams()
+    if (filterYear.value) params.set('fiscal_period_id', filterYear.value)
+    if (filterMonth.value) params.set('allocation_month', filterMonth.value)
+    if (startDate.value) params.set('start_date', startDate.value)
+    if (endDate.value) params.set('end_date', endDate.value)
+    if (filterDepartment.value) params.set('department_id', filterDepartment.value)
+    if (filterCategory.value) params.set('category_id', filterCategory.value)
+    if (filterAccountTitle.value) params.set('account_title_id', filterAccountTitle.value)
+
+    const query = params.toString()
+    return `/reports/generate${query ? `?${query}` : ''}`
+})
 </script>
 
 <template>
@@ -275,6 +289,14 @@ const yearEndSummaryTotals = computed(() => {
         </div>
         <div class="flex justify-end gap-2 pt-2 border-t">
             <button @click="clearFilters" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-xs font-semibold">Reset Filters</button>
+            <a
+                :href="generatedReportUrl"
+                target="_blank"
+                rel="noopener"
+                class="px-3 py-1 bg-navy-dark hover:bg-navy text-white rounded text-xs font-semibold"
+            >
+                Generate Report
+            </a>
         </div>
     </div>
 
