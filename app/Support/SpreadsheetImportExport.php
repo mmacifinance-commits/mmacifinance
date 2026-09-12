@@ -140,16 +140,28 @@ class SpreadsheetImportExport
             $worksheet->setShowGridlines(false);
             $worksheet->getDefaultRowDimension()->setRowHeight(20);
             $worksheet->getDefaultColumnDimension()->setWidth(14);
+
+            // Landscape + fit-to-page-width scaling makes the 9-column table
+            // print/preview cleanly whether the physical sheet fed at print
+            // time is A4 or Letter/"Short" bond — Excel recalculates the
+            // scale against whatever paper is actually selected, so we don't
+            // need to branch on paper size here. setFitToPage(true) is what
+            // actually turns the FitToWidth/FitToHeight numbers on; without
+            // it PhpSpreadsheet writes them but Excel ignores them and prints
+            // at 100%, which is why the report was spilling across pages and
+            // looking cut off.
             $worksheet->getPageSetup()
                 ->setPaperSize(PageSetup::PAPERSIZE_A4)
-                ->setOrientation(PageSetup::ORIENTATION_PORTRAIT)
+                ->setOrientation(PageSetup::ORIENTATION_LANDSCAPE)
+                ->setFitToPage(true)
                 ->setFitToWidth(1)
-                ->setFitToHeight(0);
+                ->setFitToHeight(0)
+                ->setHorizontalCentered(true);
             $worksheet->getPageMargins()
-                ->setTop(0.35)
-                ->setRight(0.25)
-                ->setBottom(0.35)
-                ->setLeft(0.25);
+                ->setTop(0.4)
+                ->setRight(0.3)
+                ->setBottom(0.4)
+                ->setLeft(0.3);
 
             $lastColumn = 'I';
             $row = 1;
@@ -202,14 +214,23 @@ class SpreadsheetImportExport
             }
             $row += 2;
 
+            // Freeze/repeat exactly where the metadata block actually ends,
+            // instead of a hardcoded row number that silently drifts out of
+            // sync (and freezes/repeats the wrong rows) if $pairs above ever
+            // gains or loses an entry.
+            $metadataEndRow = $row - 1;
+
             foreach ($sections as $section) {
                 $row = self::writeReportSection($worksheet, $row, $section);
                 $row += 2;
             }
+            $lastRow = max(1, $row - 1);
 
-            $worksheet->freezePane('A9');
+            $worksheet->freezePane('A'.($metadataEndRow + 1));
+            $worksheet->getPageSetup()->setRowsToRepeatAtTopByStartAndEnd(1, $metadataEndRow);
+            $worksheet->getPageSetup()->setPrintArea("A1:{$lastColumn}{$lastRow}");
             self::applyFinancialReportColumnWidths($worksheet);
-            $worksheet->getStyle("A1:{$lastColumn}".max(1, $row))->getAlignment()->setVertical(Alignment::VERTICAL_TOP);
+            $worksheet->getStyle("A1:{$lastColumn}{$lastRow}")->getAlignment()->setVertical(Alignment::VERTICAL_TOP);
         });
     }
 
