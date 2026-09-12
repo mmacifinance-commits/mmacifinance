@@ -160,34 +160,43 @@ const shouldShowAuditRows = () => [
                 </div>
             </section>
 
-            <section class="my-4 grid grid-cols-4 gap-3">
-                <div class="border border-slate-200 border-t-4 border-t-navy p-3">
-                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Total Appropriation</span>
-                    <strong class="mt-1 block text-xl">{{ PESO }}{{ fmt(totals?.appropriation) }}</strong>
-                </div>
-                <div class="border border-slate-200 border-t-4 border-t-rose-500 p-3">
-                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Posted Expenditure</span>
-                    <strong class="mt-1 block text-xl">{{ PESO }}{{ fmt(totals?.expenditure) }}</strong>
-                </div>
-                <div class="border border-slate-200 border-t-4 border-t-emerald-500 p-3">
-                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Total Receipts</span>
-                    <strong class="mt-1 block text-xl">{{ PESO }}{{ fmt(totals?.receipts) }}</strong>
-                </div>
-                <div class="border border-slate-200 border-t-4 border-t-emerald-500 p-3">
-                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Remaining Balance</span>
-                    <strong class="mt-1 block text-xl">{{ PESO }}{{ fmt(totals?.balance) }}</strong>
-                </div>
-                <div class="border border-slate-200 border-t-4 border-t-teal-500 p-3">
-                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Cash On Hand</span>
-                    <strong class="mt-1 block text-xl">{{ PESO }}{{ fmt(totals?.cashOnHand) }}</strong>
-                </div>
-                <div class="border border-slate-200 border-t-4 border-t-amber-500 p-3">
-                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Pending Commitments</span>
-                    <strong class="mt-1 block text-xl">{{ PESO }}{{ fmt(totals?.pendingCommitments) }}</strong>
-                </div>
-                <div class="border border-slate-200 border-t-4 border-t-indigo-500 p-3">
-                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Available Cash</span>
-                    <strong class="mt-1 block text-xl">{{ PESO }}{{ fmt(totals?.availableForDisbursement) }}</strong>
+            <section class="my-4">
+                <div class="border border-slate-300">
+                    <div class="border-b border-slate-300 bg-slate-50 px-3 py-2 text-[11px] font-black uppercase tracking-[0.08em] text-slate-700">
+                        Statement Summary
+                    </div>
+                    <table class="w-full border-collapse text-xs">
+                        <tbody>
+                            <tr>
+                                <td class="w-1/2 border-b border-r border-slate-200 px-3 py-2 font-semibold">Approved Budget / Total Appropriation</td>
+                                <td class="border-b border-slate-200 px-3 py-2 text-right font-mono">{{ PESO }}{{ fmt(totals?.appropriation) }}</td>
+                            </tr>
+                            <tr>
+                                <td class="border-b border-r border-slate-200 px-3 py-2 font-semibold">Actual Receipts / Cash Received</td>
+                                <td class="border-b border-slate-200 px-3 py-2 text-right font-mono">{{ PESO }}{{ fmt(totals?.receipts) }}</td>
+                            </tr>
+                            <tr>
+                                <td class="border-b border-r border-slate-200 px-3 py-2 font-semibold">Actual Posted Disbursements</td>
+                                <td class="border-b border-slate-200 px-3 py-2 text-right font-mono">{{ PESO }}{{ fmt(totals?.expenditure) }}</td>
+                            </tr>
+                            <tr>
+                                <td class="border-b border-r border-slate-200 px-3 py-2 font-semibold">Remaining Budget Balance</td>
+                                <td class="border-b border-slate-200 px-3 py-2 text-right font-mono">{{ PESO }}{{ fmt(totals?.balance) }}</td>
+                            </tr>
+                            <tr>
+                                <td class="border-b border-r border-slate-200 px-3 py-2 font-semibold">Actual Cash On Hand</td>
+                                <td class="border-b border-slate-200 px-3 py-2 text-right font-mono">{{ PESO }}{{ fmt(totals?.cashOnHand) }}</td>
+                            </tr>
+                            <tr>
+                                <td class="border-b border-r border-slate-200 px-3 py-2 font-semibold">Pending / Approved Commitments Not Yet Posted</td>
+                                <td class="border-b border-slate-200 px-3 py-2 text-right font-mono">{{ PESO }}{{ fmt(totals?.pendingCommitments) }}</td>
+                            </tr>
+                            <tr>
+                                <td class="border-r border-slate-200 px-3 py-2 font-black">Available Cash After Commitments</td>
+                                <td class="px-3 py-2 text-right font-mono font-black">{{ PESO }}{{ fmt(totals?.availableForDisbursement) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </section>
 
