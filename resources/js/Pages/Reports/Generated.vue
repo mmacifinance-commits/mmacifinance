@@ -160,39 +160,39 @@ const shouldShowAuditRows = () => [
                 </div>
             </section>
 
-            <section class="my-4">
-                <div class="border border-slate-300">
-                    <div class="border-b border-slate-300 bg-slate-50 px-3 py-2 text-[11px] font-black uppercase tracking-[0.08em] text-slate-700">
-                        Statement Summary
+            <section class="my-4 flex justify-end">
+                <div class="w-full max-w-[560px] border border-slate-300">
+                    <div class="border-b border-slate-300 bg-slate-50 px-3 py-2 text-center text-[11px] font-black uppercase tracking-[0.08em] text-slate-700">
+                        Report Totals
                     </div>
                     <table class="w-full border-collapse text-xs">
                         <tbody>
                             <tr>
-                                <td class="w-1/2 border-b border-r border-slate-200 px-3 py-2 font-semibold">Approved Budget / Total Appropriation</td>
+                                <td class="w-2/3 border-b border-r border-slate-200 px-3 py-2">Total Appropriation</td>
                                 <td class="border-b border-slate-200 px-3 py-2 text-right font-mono">{{ PESO }}{{ fmt(totals?.appropriation) }}</td>
                             </tr>
                             <tr>
-                                <td class="border-b border-r border-slate-200 px-3 py-2 font-semibold">Actual Receipts / Cash Received</td>
+                                <td class="border-b border-r border-slate-200 px-3 py-2">Total Receipts</td>
                                 <td class="border-b border-slate-200 px-3 py-2 text-right font-mono">{{ PESO }}{{ fmt(totals?.receipts) }}</td>
                             </tr>
                             <tr>
-                                <td class="border-b border-r border-slate-200 px-3 py-2 font-semibold">Actual Posted Disbursements</td>
+                                <td class="border-b border-r border-slate-200 px-3 py-2">Posted Disbursements</td>
                                 <td class="border-b border-slate-200 px-3 py-2 text-right font-mono">{{ PESO }}{{ fmt(totals?.expenditure) }}</td>
                             </tr>
                             <tr>
-                                <td class="border-b border-r border-slate-200 px-3 py-2 font-semibold">Remaining Budget Balance</td>
+                                <td class="border-b border-r border-slate-200 px-3 py-2">Remaining Budget Balance</td>
                                 <td class="border-b border-slate-200 px-3 py-2 text-right font-mono">{{ PESO }}{{ fmt(totals?.balance) }}</td>
                             </tr>
                             <tr>
-                                <td class="border-b border-r border-slate-200 px-3 py-2 font-semibold">Actual Cash On Hand</td>
+                                <td class="border-b border-r border-slate-200 px-3 py-2 font-semibold">Available Cash</td>
                                 <td class="border-b border-slate-200 px-3 py-2 text-right font-mono">{{ PESO }}{{ fmt(totals?.cashOnHand) }}</td>
                             </tr>
                             <tr>
-                                <td class="border-b border-r border-slate-200 px-3 py-2 font-semibold">Pending / Approved Commitments Not Yet Posted</td>
+                                <td class="border-b border-r border-slate-200 px-3 py-2 text-[11px] text-slate-600">Less: Pending Commitments</td>
                                 <td class="border-b border-slate-200 px-3 py-2 text-right font-mono">{{ PESO }}{{ fmt(totals?.pendingCommitments) }}</td>
                             </tr>
                             <tr>
-                                <td class="border-r border-slate-200 px-3 py-2 font-black">Available Cash After Commitments</td>
+                                <td class="border-r border-slate-200 px-3 py-2 font-black">Uncommitted Available Cash</td>
                                 <td class="px-3 py-2 text-right font-mono font-black">{{ PESO }}{{ fmt(totals?.availableForDisbursement) }}</td>
                             </tr>
                         </tbody>
