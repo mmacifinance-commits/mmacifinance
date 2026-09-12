@@ -40,15 +40,15 @@ defineProps({
         >
             <div class="relative w-full max-w-xs overflow-hidden border border-white/70 bg-white p-6 text-center shadow-2xl">
                 <div class="pointer-events-none absolute inset-x-0 top-0 h-1 overflow-hidden bg-slate-100">
-                    <div class="h-full w-2/5 animate-[loading-flow_1.1s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-mustard to-transparent"></div>
+                    <div class="loading-flow-bar h-full w-2/5 bg-gradient-to-r from-transparent via-mustard to-transparent"></div>
                 </div>
 
                 <div class="mx-auto flex h-20 w-20 items-center justify-center border border-mustard/40 bg-navy-dark shadow-lg shadow-navy-dark/20">
-                    <img src="/images/logo.png" alt="MMACI Logo" class="h-14 w-14 animate-[loading-pulse_1.4s_ease-in-out_infinite] object-contain" />
+                    <img src="/images/logo.png" alt="MMACI Logo" class="loading-logo h-14 w-14 object-contain" />
                 </div>
 
                 <div class="mx-auto mt-5 flex h-10 w-10 items-center justify-center">
-                    <div class="h-8 w-8 animate-spin border-4 border-mustard bg-mustard/10 shadow-[0_0_18px_rgba(212,168,67,0.35)]"></div>
+                    <div class="loading-spinner h-8 w-8 border-4 border-slate-200 border-r-mustard border-t-mustard bg-mustard/10 shadow-[0_0_18px_rgba(212,168,67,0.35)]"></div>
                 </div>
 
                 <p class="mt-4 text-sm font-bold uppercase tracking-[0.22em] text-navy-dark">{{ text }}</p>
