@@ -21,6 +21,7 @@ class ImportPreviewService
         $validCount = 0;
         $invalidCount = count($missing);
         $duplicateCount = 0;
+        $totalAmount = 0.0;
 
         foreach ($rows as $row) {
             $line++;
@@ -50,6 +51,7 @@ class ImportPreviewService
 
             if (($result['valid'] ?? false)) {
                 $validCount++;
+                $totalAmount += (float) ($data['amount'] ?? $data['appropriation'] ?? 0);
                 if (count($valid) < $limit) {
                     $valid[] = ['line' => $line, 'row' => $data, 'message' => $result['message'] ?? 'Ready to import.'];
                 }
@@ -65,6 +67,7 @@ class ImportPreviewService
             'headers' => $header,
             'missing_columns' => $missing,
             'valid_count' => $validCount,
+            'total_amount' => round($totalAmount, 2),
             'invalid_count' => $invalidCount,
             'duplicate_count' => $duplicateCount,
             'valid_rows' => $valid,

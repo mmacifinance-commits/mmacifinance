@@ -16,6 +16,7 @@ const previewError = ref('')
 const previewFileName = computed(() => props.form.csv_file?.name || '')
 const canConfirm = computed(() => preview.value && !preview.value.missing_columns?.length && !preview.value.invalid_count && !preview.value.duplicate_count)
 const amountImpact = computed(() => {
+    if (preview.value?.total_amount != null) return Number(preview.value.total_amount)
     const rows = preview.value?.valid_rows || []
     return rows.reduce((sum, item) => {
         const row = item.row || {}

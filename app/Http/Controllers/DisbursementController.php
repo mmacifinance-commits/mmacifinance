@@ -298,6 +298,9 @@ class DisbursementController extends Controller
 
     public function submitForApproval(Request $request, Disbursement $disbursement)
     {
+        if (!in_array($disbursement->status, ['draft', 'for_release', 'returned_for_revision'], true)) {
+            throw ValidationException::withMessages(['status' => 'Only draft, for-release or returned disbursements can be submitted.']);
+        }
         $this->ensureLinkedFiscalPeriodOpen($disbursement->expense);
 
         $request->validate([
@@ -322,6 +325,9 @@ class DisbursementController extends Controller
 
     public function approve(Request $request, Disbursement $disbursement)
     {
+        if ($disbursement->status !== 'for_approval') {
+            throw ValidationException::withMessages(['status' => 'Only disbursements awaiting approval can be approved.']);
+        }
         $this->ensureLinkedFiscalPeriodOpen($disbursement->expense);
 
         $request->validate([
@@ -394,6 +400,9 @@ class DisbursementController extends Controller
 
     public function reject(Request $request, Disbursement $disbursement)
     {
+        if ($disbursement->status !== 'for_approval') {
+            throw ValidationException::withMessages(['status' => 'Only disbursements awaiting approval can be rejected.']);
+        }
         $this->ensureLinkedFiscalPeriodOpen($disbursement->expense);
 
         $request->validate([
@@ -419,6 +428,9 @@ class DisbursementController extends Controller
 
     public function returnForRevision(Request $request, Disbursement $disbursement)
     {
+        if ($disbursement->status !== 'for_approval') {
+            throw ValidationException::withMessages(['status' => 'Only disbursements awaiting approval can be returned.']);
+        }
         $this->ensureLinkedFiscalPeriodOpen($disbursement->expense);
 
         $request->validate([

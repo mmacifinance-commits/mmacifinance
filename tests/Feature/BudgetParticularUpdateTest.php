@@ -6,7 +6,7 @@ use App\Models\BudgetCategory;
 use App\Models\BudgetParticular;
 use App\Models\Department;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\SafeRefreshDatabase as RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;

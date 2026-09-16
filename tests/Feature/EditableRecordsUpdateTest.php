@@ -11,7 +11,7 @@ use App\Models\Disbursement;
 use App\Models\Expense;
 use App\Models\Income;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\SafeRefreshDatabase as RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 

@@ -26,6 +26,10 @@ router.on('success', () => { requestError.value = '' })
 let pendingVisits = 0
 let loadingTimer = null
 
+router.on('before', (event) => {
+    event.detail.visit.headers['X-Offline-Owner'] = String(window.__BUDGET_TRACKER_USER_ID__ || '')
+})
+
 function setGlobalLoading(active) {
     window.dispatchEvent(new CustomEvent('app:loading', { detail: { active } }))
 }

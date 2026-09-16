@@ -11,7 +11,7 @@ use App\Models\Department;
 use App\Models\AnnualBudget;
 use App\Models\BudgetItem;
 use App\Models\Income;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\SafeRefreshDatabase as RefreshDatabase;
 use Tests\TestCase;
 
 class DisbursementExpenseRelationTest extends TestCase

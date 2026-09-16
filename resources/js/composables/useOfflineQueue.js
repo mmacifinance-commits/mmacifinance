@@ -53,7 +53,8 @@ function dbPut(item) {
   return openDB().then((db) => new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite')
     const req = tx.objectStore(STORE_NAME).put(item)
-    req.onsuccess = () => resolve()
+    tx.oncomplete = () => resolve()
+    tx.onabort = () => reject(tx.error || new Error('Offline storage could not commit the change.'))
     req.onerror = (e) => reject(e.target.error)
   }))
 }
@@ -62,7 +63,8 @@ function dbDelete(id) {
   return openDB().then((db) => new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite')
     const req = tx.objectStore(STORE_NAME).delete(id)
-    req.onsuccess = () => resolve()
+    tx.oncomplete = () => resolve()
+    tx.onabort = () => reject(tx.error || new Error('Offline storage could not commit the change.'))
     req.onerror = (e) => reject(e.target.error)
   }))
 }
@@ -71,7 +73,8 @@ function dbClearAll() {
   return openDB().then((db) => new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite')
     const req = tx.objectStore(STORE_NAME).clear()
-    req.onsuccess = () => resolve()
+    tx.oncomplete = () => resolve()
+    tx.onabort = () => reject(tx.error || new Error('Offline storage could not commit the change.'))
     req.onerror = (e) => reject(e.target.error)
   }))
 }
@@ -80,7 +83,8 @@ function snapshotPut(snapshot) {
   return openDB().then((db) => new Promise((resolve, reject) => {
     const tx = db.transaction(SNAPSHOT_STORE, 'readwrite')
     const req = tx.objectStore(SNAPSHOT_STORE).put(snapshot)
-    req.onsuccess = () => resolve(snapshot)
+    tx.oncomplete = () => resolve(snapshot)
+    tx.onabort = () => reject(tx.error || new Error('Offline snapshot could not be saved.'))
     req.onerror = (e) => reject(e.target.error)
   }))
 }
@@ -168,7 +172,7 @@ export async function queueOfflineAction(method, url, data = {}, label = '', met
 //
 async function sendAction(item) {
   const activeUserId = window.__BUDGET_TRACKER_USER_ID__ || null
-  if (item.ownerId && String(item.ownerId) !== String(activeUserId)) {
+  if (!item.ownerId || !activeUserId || String(item.ownerId) !== String(activeUserId)) {
     throw new Error('Queued by another account. Log in with the original account to sync this action.')
   }
 
@@ -178,6 +182,7 @@ async function sendAction(item) {
     'X-CSRF-TOKEN': getCsrf(),
     'X-Requested-With': 'XMLHttpRequest',
     'X-Offline-Sync': 'true',
+    'X-Offline-Action-Id': item.id,
   }
   if (item.baseVersion) headers['X-Offline-Base-Version'] = item.baseVersion
 
@@ -214,7 +219,7 @@ async function sendAction(item) {
       else if (json.message) msg += `: ${json.message}`
       else if (json.error) msg += `: ${json.error}`
     } catch {
-      if (text) msg += `: ${text.slice(0, 150)}`
+      msg += ': Unable to sync. Please reconnect and try again.'
     }
     throw new Error(msg)
   }
@@ -328,6 +333,9 @@ export function useOfflineQueue() {
               dependent.status = dependent.status === 'error' ? 'pending' : dependent.status
               dependent.lastError = null
               await dbPut(dependent)
+              // The loop holds its own copy; update it as well as durable storage.
+              const pending = items.find((entry) => entry.id === dependent.id)
+              if (pending) Object.assign(pending, dependent)
             }
           }
           await dbDelete(item.id)
@@ -450,8 +458,7 @@ export async function savePageSnapshot(page) {
 export async function getPageSnapshot(url) {
   const parsed = new URL(url, window.location.origin)
   const exactKey = `${parsed.pathname}${parsed.search}`
-  const pathKey = parsed.pathname
-  const snapshot = (await snapshotGet(exactKey)) || (await snapshotGet(pathKey))
+  const snapshot = await snapshotGet(exactKey)
   const ownerId = window.__BUDGET_TRACKER_USER_ID__ || null
   if (snapshot && String(snapshot.ownerId || '') !== String(ownerId || '')) return null
   if (snapshot?.cachedAt) lastSnapshotAt.value = snapshot.cachedAt

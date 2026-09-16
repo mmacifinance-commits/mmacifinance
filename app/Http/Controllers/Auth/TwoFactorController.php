@@ -149,7 +149,7 @@ class TwoFactorController extends Controller
             $user->otp_sent_at = now();
             $user->save();
 
-            Log::info("2FA OTP Verification Code for {$user->email}: {$otp}");
+            Log::info('2FA code regenerated.', ['user_id' => $user->id]);
 
             try {
                 // Send new OTP Email

@@ -7,7 +7,7 @@
  *  - Never intercept POST/PUT/DELETE (those go through the offline queue)
  */
 
-const CACHE_NAME = 'budget-tracker-v8'
+const CACHE_NAME = 'budget-tracker-v9'
 
 function normalizePageUrl(url) {
   const parsed = new URL(url, self.location.origin)
@@ -33,23 +33,28 @@ async function matchPageResponse(url) {
   return cache.match(cacheKey(url, 'page'))
 }
 
-async function cacheInertiaResponse(url, response) {
+async function cacheInertiaResponse(url, response, owner) {
+  if (!owner || !response.headers.get('X-Inertia')) return response
   if (!response || !response.ok) return response
   const contentType = response.headers.get('content-type') || ''
   if (!contentType.includes('application/json')) return response
   const cache = await caches.open(CACHE_NAME)
-  await cache.put(cacheKey(url, 'inertia'), response.clone())
+  const page = await response.clone().json().catch(() => null)
+  if (String(page?.props?.auth?.user?.id || '') !== owner) return response
+  // Partial reloads are not complete page snapshots.
+  if (!page?.component || !page?.props) return response
+  await cache.put(cacheKey(url, `inertia-${owner}`), response.clone())
   return response
 }
 
-async function matchInertiaResponse(url) {
+async function matchInertiaResponse(url, owner) {
+  if (!owner) return null
   const cache = await caches.open(CACHE_NAME)
-  return cache.match(cacheKey(url, 'inertia'))
+  return cache.match(cacheKey(url, `inertia-${owner}`))
 }
 
 // Assets to pre-cache on install
 const PRECACHE_URLS = [
-  '/',
   '/offline.html',
 ]
 
@@ -71,7 +76,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) =>
       Promise.all(
         keys
-          .filter((key) => key !== CACHE_NAME)
+          .filter((key) => key.startsWith('budget-tracker-') && key !== CACHE_NAME)
           .map((key) => caches.delete(key))
       )
     ).then(() => self.clients.claim())
@@ -113,10 +118,11 @@ self.addEventListener('fetch', (event) => {
 
   // Inertia page data -> network-first, then the last successful page snapshot.
   if (request.headers.get('X-Inertia')) {
+    const owner = request.headers.get('X-Offline-Owner') || ''
     event.respondWith(
       fetch(request)
-        .then((response) => cacheInertiaResponse(request.url, response))
-        .catch(() => matchInertiaResponse(request.url).then((cached) => cached || new Response(JSON.stringify({
+        .then((response) => request.headers.get('X-Inertia-Partial-Data') ? response : cacheInertiaResponse(request.url, response, owner))
+        .catch(() => matchInertiaResponse(request.url, owner).then((cached) => cached || new Response(JSON.stringify({
           message: 'This page has not been cached for offline use yet.'
         }), {
           status: 503,
@@ -151,15 +157,12 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
-        .then((response) => cachePageResponse(request.url, response))
         .catch(() =>
-          matchPageResponse(request.url).then(
-            (cached) => cached || caches.match('/offline.html').then((offline) => offline || new Response('Offline', {
+          caches.match('/offline.html').then((offline) => offline || new Response('Offline', {
               status: 503,
               statusText: 'Service Unavailable',
               headers: { 'Content-Type': 'text/html' }
             }))
-          )
         )
     )
     return

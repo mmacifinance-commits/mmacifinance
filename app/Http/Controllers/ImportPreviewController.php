@@ -117,6 +117,12 @@ class ImportPreviewController extends Controller
             return ['valid' => false, 'key' => $key, 'message' => "Line {$line} must have a positive {$amountColumn}."];
         }
 
+        foreach (['date_encoded', 'allocation_month'] as $dateColumn) {
+            if (isset($row[$dateColumn]) && \Illuminate\Support\Facades\Validator::make([$dateColumn => $row[$dateColumn]], [$dateColumn => 'required|date'])->fails()) {
+                return ['valid' => false, 'key' => $key, 'message' => "Line {$line} has an invalid {$dateColumn}."];
+            }
+        }
+
         return ['valid' => true, 'key' => (string) $key, 'message' => 'Ready to import.'];
     }
 

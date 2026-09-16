@@ -75,7 +75,7 @@ class LoginController extends Controller
             $user->otp_sent_at = now();
             $user->save();
 
-            \Illuminate\Support\Facades\Log::info("2FA OTP generated for {$user->email}: {$otp}");
+            \Illuminate\Support\Facades\Log::info('2FA code generated.', ['user_id' => $user->id]);
 
             try {
                 // Send OTP Email

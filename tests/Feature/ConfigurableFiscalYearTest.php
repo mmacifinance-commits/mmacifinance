@@ -12,7 +12,7 @@ use App\Models\Expense;
 use App\Models\Income;
 use App\Models\User;
 use App\Services\BudgetUtilizationService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\SafeRefreshDatabase as RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;

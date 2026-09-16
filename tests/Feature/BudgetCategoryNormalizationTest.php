@@ -8,7 +8,7 @@ use App\Models\BudgetItem;
 use App\Models\BudgetParticular;
 use App\Models\Department;
 use App\Models\Expense;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\SafeRefreshDatabase as RefreshDatabase;
 use Tests\TestCase;
 
 class BudgetCategoryNormalizationTest extends TestCase

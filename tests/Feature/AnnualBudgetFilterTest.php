@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AnnualBudget;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\SafeRefreshDatabase as RefreshDatabase;
 use Tests\TestCase;
 
 class AnnualBudgetFilterTest extends TestCase

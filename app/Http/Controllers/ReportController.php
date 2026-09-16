@@ -182,7 +182,7 @@ class ReportController extends Controller
         ];
 
         $receiptRows = $this->receiptRows($selectedPeriod, $startDate, $endDate);
-        $disbursementRows = $this->disbursementRows($selectedPeriod, $startDate, $endDate);
+        $disbursementRows = $this->disbursementRows($selectedPeriod, $startDate, $endDate, 25, compact('departmentId', 'categoryId', 'accountTitleId', 'allocationMonth'));
         $auditRows = $this->auditRows($selectedPeriod, $startDate, $endDate);
         $warnings = $this->reportWarnings($selectedPeriod, $summaryCards);
 
@@ -311,7 +311,7 @@ class ReportController extends Controller
         }
 
         $disbursementRows = [];
-        foreach ($this->disbursementRows($selectedPeriod, $startDate, $endDate, null) as $disbursement) {
+        foreach ($this->disbursementRows($selectedPeriod, $startDate, $endDate, null, compact('departmentId', 'categoryId', 'accountTitleId', 'allocationMonth')) as $disbursement) {
             $disbursementRows[] = [
                 $disbursement['disbursement_no'],
                 $disbursement['expense_ref'],
@@ -507,8 +507,8 @@ class ReportController extends Controller
             'departmentLabel' => $department?->name ?? 'All Responsibility Centers',
             'categoryLabel' => $category?->name ?? 'All Categories',
             'rows' => $rows,
-            'receiptRows' => $this->receiptRows($selectedPeriod, $startDate, $endDate),
-            'disbursementRows' => $this->disbursementRows($selectedPeriod, $startDate, $endDate),
+            'receiptRows' => $this->receiptRows($selectedPeriod, $startDate, $endDate, null),
+            'disbursementRows' => $this->disbursementRows($selectedPeriod, $startDate, $endDate, null, compact('departmentId', 'categoryId', 'accountTitleId', 'allocationMonth')),
             'reconciliationWarnings' => $this->reportWarnings($selectedPeriod, [
                 'cashOnHand' => $totals['cashOnHand'],
                 'budgetBalance' => $totals['balance'],
@@ -572,10 +572,14 @@ class ReportController extends Controller
             ->all();
     }
 
-    private function disbursementRows(?AnnualBudget $period, ?string $startDate, ?string $endDate, ?int $limit = 25): array
+    private function disbursementRows(?AnnualBudget $period, ?string $startDate, ?string $endDate, ?int $limit = 25, array $dimensions = []): array
     {
         return Disbursement::query()
             ->with(['expense.budgetItem.category', 'expense.budgetItem.particular.department'])
+            ->when(array_filter($dimensions), fn ($query) => $query->whereHas('expense.budgetItem', function ($query) use ($dimensions) {
+                $this->applyItemDimensions($query, $dimensions['departmentId'] ?? null, $dimensions['categoryId'] ?? null, $dimensions['accountTitleId'] ?? null);
+                $query->when($dimensions['allocationMonth'] ?? null, fn ($query, $month) => $query->whereDate('allocation_month', $month));
+            }))
             ->when($period, fn ($query) => $query->whereHas(
                 'expense.budgetItem',
                 fn ($itemQuery) => $itemQuery->where('budget_id', $period->id)

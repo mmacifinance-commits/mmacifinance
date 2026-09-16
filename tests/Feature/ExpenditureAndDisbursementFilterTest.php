@@ -8,7 +8,7 @@ use App\Models\Disbursement;
 use App\Models\BudgetCategory;
 use App\Models\BudgetParticular;
 use App\Models\Department;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\SafeRefreshDatabase as RefreshDatabase;
 use Tests\TestCase;
 
 class ExpenditureAndDisbursementFilterTest extends TestCase

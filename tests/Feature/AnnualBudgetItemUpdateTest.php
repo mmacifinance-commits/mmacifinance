@@ -9,7 +9,7 @@ use App\Models\BudgetParticular;
 use App\Models\Department;
 use App\Models\Income;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\SafeRefreshDatabase as RefreshDatabase;
 use Tests\TestCase;
 
 class AnnualBudgetItemUpdateTest extends TestCase
