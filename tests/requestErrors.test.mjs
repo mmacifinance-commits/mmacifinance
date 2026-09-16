@@ -1,6 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { requestError, requestErrorMessage, showRequestError } from '../resources/js/support/requestErrors.js'
+import { requestError, requestErrorMessage, showRequestError, pageFailureMessage } from '../resources/js/support/requestErrors.js'
+
+test('online page failures distinguish stale assets from offline connectivity', () => {
+    assert.match(pageFailureMessage(new Error('Failed to fetch dynamically imported module'), true), /latest application version/)
+    assert.match(pageFailureMessage(new Error('Network Error'), true), /even though your device is online/)
+    assert.match(pageFailureMessage(new Error('Network Error'), false), /not available offline/)
+})
 
 test('offline cache misses explain how to recover', () => {
     assert.match(requestErrorMessage(503, true), /not available offline/)

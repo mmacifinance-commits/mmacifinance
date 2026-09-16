@@ -2,6 +2,14 @@ import { ref } from 'vue'
 
 export const requestError = ref('')
 
+export function pageFailureMessage(error, online = true) {
+    if (!online) return requestErrorMessage(503, true)
+    if (/dynamically imported module|loading chunk|module script|importing a module/i.test(String(error?.message || error || ''))) {
+        return 'An updated page could not load. Refresh the page to load the latest application version. Keep a copy of any unsaved entries first.'
+    }
+    return 'The page request failed even though your device is online. Try opening the page again. If you were saving, check your records before retrying.'
+}
+
 export function requestErrorMessage(status, offline = false) {
     if (offline) return 'This page is not available offline yet. Reconnect to the internet, then open it again.'
     return ({

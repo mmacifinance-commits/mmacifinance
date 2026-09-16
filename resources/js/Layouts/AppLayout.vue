@@ -73,6 +73,10 @@ function logout() {
 
 function handleGlobalLoading(event) {
     clearTimeout(loadingHideTimer)
+    if (event.detail?.immediate) {
+        pageLoading.value = false
+        return
+    }
     if (event.detail?.active) {
         loadingStartedAt = Date.now()
         pageLoading.value = true

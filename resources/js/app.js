@@ -4,10 +4,11 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { queueOfflineAction, savePageSnapshot } from '@/composables/useOfflineQueue';
 import { findRecordVersion, offlinePolicy } from '@/offlinePolicy';
 import RequestErrorAlert from '@/Components/RequestErrorAlert.vue';
-import { requestError, requestErrorMessage, showRequestError } from '@/support/requestErrors';
+import { requestError, requestErrorMessage, showRequestError, pageFailureMessage } from '@/support/requestErrors';
 
 router.on('invalid', (event) => {
     event.preventDefault()
+    stopFailedLoading()
     const response = event.detail.response
     const offline = !navigator.onLine || response.data?.message === 'This page has not been cached for offline use yet.'
     showRequestError(requestErrorMessage(response.status, offline))
@@ -15,16 +16,27 @@ router.on('invalid', (event) => {
 
 router.on('exception', (event) => {
     event.preventDefault()
+    stopFailedLoading()
     console.error('Page request failed:', event.detail.exception)
-    showRequestError(navigator.onLine
-        ? 'The connection was interrupted or the page could not load. Check your connection. If you were saving, check the records before retrying.'
-        : requestErrorMessage(503, true))
+    showRequestError(pageFailureMessage(event.detail.exception, navigator.onLine))
+})
+
+window.addEventListener('vite:preloadError', (event) => {
+    // Do not swallow the failed import: Inertia must finish the failed visit.
+    stopFailedLoading()
+    showRequestError(pageFailureMessage(event.payload, navigator.onLine))
 })
 
 router.on('success', () => { requestError.value = '' })
 
 let pendingVisits = 0
 let loadingTimer = null
+
+function stopFailedLoading() {
+    pendingVisits = 0
+    clearTimeout(loadingTimer)
+    window.dispatchEvent(new CustomEvent('app:loading', { detail: { active: false, immediate: true } }))
+}
 
 router.on('before', (event) => {
     event.detail.visit.headers['X-Offline-Owner'] = String(window.__BUDGET_TRACKER_USER_ID__ || '')
@@ -192,6 +204,7 @@ createInertiaApp({
         savePageSnapshot(props.initialPage).catch(() => null)
         const app = createApp({ render: () => [h(App, props), h(RequestErrorAlert)] })
         app.config.errorHandler = (error) => {
+            stopFailedLoading()
             console.error('Page error:', error)
             showRequestError('Part of this page could not load. Refresh the page. If the problem continues, contact your administrator.')
         }
