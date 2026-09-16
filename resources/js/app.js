@@ -122,8 +122,8 @@ async function queueMutation(method, url, data, options = {}) {
     } catch (error) {
         console.error('Offline save failed:', error)
         const message = 'This change could not be saved offline. Keep your entries and reconnect before trying again.'
-        if (options.onError) options.onError({ offline: message })
-        else showRequestError(message)
+        if (options.onError) options.onError(error.validationErrors || { offline: message })
+        else showRequestError(error.validationErrors ? Object.values(error.validationErrors).join(' ') : message)
         options.onFinish?.()
     }
 }

@@ -9,10 +9,17 @@ globalThis.document = { querySelector: () => ({ getAttribute: () => 'test-csrf' 
 Object.defineProperty(globalThis, 'navigator', { value: { onLine: true }, configurable: true })
 const { queueOfflineAction, useOfflineQueue, savePageSnapshot, getPageSnapshot } = await import('../resources/js/composables/useOfflineQueue.js')
 const { syncQueue, getQueue, clearQueue } = useOfflineQueue()
+const valid = { source: 'Collections', description: 'Test', amount: 50, date_encoded: '2026-09-16' }
+
+test('invalid forms never reach offline storage', async () => {
+    await clearQueue()
+    await assert.rejects(queueOfflineAction('POST', '/income', { ...valid, receipt_no: '123' }), /Receipt type is required/)
+    assert.equal((await getQueue()).length, 0)
+})
 
 test('failed saves stay recoverable and retry with the same action ID', async () => {
     await clearQueue()
-    const item = await queueOfflineAction('POST', '/income', { amount: 50 })
+    const item = await queueOfflineAction('POST', '/income', valid)
     let sentId
     globalThis.fetch = async (_url, options) => { sentId = options.headers['X-Offline-Action-Id']; throw new Error('Connection lost') }
     assert.equal((await syncQueue()).failed, 1)
@@ -28,8 +35,8 @@ test('failed saves stay recoverable and retry with the same action ID', async ()
 
 test('dependent record mapping survives a failed sync and restart', async () => {
     await clearQueue()
-    await queueOfflineAction('POST', '/expenses', {}, '', { tempId: 'offline-expense-parent', rank: 30 })
-    await queueOfflineAction('POST', '/disbursements', { expense_id: 'offline-expense-parent' }, '', { dependsOn: 'offline-expense-parent', rank: 40 })
+    await queueOfflineAction('POST', '/expenses', { ...valid, category_id: 1, particular_id: 1, budget_item_id: 1 }, '', { tempId: 'offline-expense-parent', rank: 30 })
+    await queueOfflineAction('POST', '/disbursements', { ...valid, pay_to: 'Supplier', method: 'cash', expense_id: 'offline-expense-parent' }, '', { dependsOn: 'offline-expense-parent', rank: 40 })
     globalThis.fetch = async (url) => {
         if (url === '/expenses') return Response.json({ id: 100 })
         throw new Error('Connection lost')
@@ -49,7 +56,7 @@ test('dependent record mapping survives a failed sync and restart', async () => 
 
 test('another account cannot send an existing offline action', async () => {
     await clearQueue()
-    await queueOfflineAction('POST', '/income', {})
+    await queueOfflineAction('POST', '/income', valid)
     window.__BUDGET_TRACKER_USER_ID__ = 2
     globalThis.fetch = async () => { assert.fail('Must not send another account action') }
     assert.equal((await syncQueue()).failed, 1)

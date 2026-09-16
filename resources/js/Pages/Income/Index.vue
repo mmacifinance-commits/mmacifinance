@@ -22,7 +22,7 @@ const incomeItems = computed(() => props.incomeRecords?.data || props.incomeReco
 const showModal = ref(false)
 const showImportModal = ref(false)
 const editing = ref(null)
-const form = useForm({ receipt_no: '', source: '', description: '', amount: 0, date_encoded: '', notes: '' })
+const form = useForm({ receipt_no: '', receipt_type: '', source: '', description: '', amount: 0, date_encoded: '', notes: '' })
 const importForm = useForm({ csv_file: null })
 const formErrorMessages = computed(() => Object.values(form.errors || {}).flat().filter(Boolean))
 const importErrorMessages = computed(() => Object.values(importForm.errors || {}).flat().filter(Boolean))
@@ -67,6 +67,7 @@ function openCreate() {
 function openEdit(item) {
     form.clearErrors()
     form.receipt_no = item.receipt_no || ''
+    form.receipt_type = item.receipt_type || ''
     form.source = item.source
     form.description = item.description
     form.amount = item.amount
@@ -219,6 +220,7 @@ function importCsv() {
             <SystemAlert v-if="formErrorMessages.length" class="mb-4" tone="error" title="The income record could not be saved" :messages="formErrorMessages" />
             <div class="grid gap-4 sm:grid-cols-2">
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Receipt No.</label><input v-model="form.receipt_no" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" placeholder="Official receipt or collection ref" /></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Receipt Type</label><input v-model="form.receipt_type" :required="Boolean(form.receipt_no?.trim())" maxlength="100" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" placeholder="Required when a receipt number is entered" /></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Source</label><input v-model="form.source" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Amount</label><input v-model.number="form.amount" type="number" step="0.01" min="0" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Date</label><input v-model="form.date_encoded" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>

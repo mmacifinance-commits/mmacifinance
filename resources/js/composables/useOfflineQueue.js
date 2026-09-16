@@ -11,6 +11,7 @@
  */
 
 import { ref, onMounted, onUnmounted } from 'vue'
+import { offlineValidation } from '../support/offlineValidation.js'
 
 // ─── IndexedDB helpers ────────────────────────────────────────────────────────
 
@@ -134,6 +135,12 @@ function notifyQueueChanged() {
 }
 
 export async function queueOfflineAction(method, url, data = {}, label = '', metadata = {}) {
+  const errors = offlineValidation(url, data)
+  if (Object.keys(errors).length) {
+    const error = new Error(Object.values(errors).join(' '))
+    error.validationErrors = errors
+    throw error
+  }
   const item = {
     id: uuid(),
     method: method.toUpperCase(),
@@ -272,6 +279,7 @@ export function useOfflineQueue() {
     if (isOnline.value) {
       return { queued: false }
     }
+    if (Object.keys(offlineValidation(url, data)).length) return { queued: false }
     const item = await enqueue('POST', url, data, label, metadata)
     return { queued: true, item }
   }
@@ -283,6 +291,7 @@ export function useOfflineQueue() {
     if (isOnline.value) {
       return { queued: false }
     }
+    if (Object.keys(offlineValidation(url, data)).length) return { queued: false }
     const item = await enqueue('PUT', url, data, label, metadata)
     return { queued: true, item }
   }
