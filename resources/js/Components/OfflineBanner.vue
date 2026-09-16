@@ -2,6 +2,7 @@
 import { ref, watch, computed } from 'vue'
 import { router } from '@inertiajs/vue3'
 import { getPageSnapshot, useOfflineQueue } from '@/composables/useOfflineQueue'
+import { queueTitle, queueDetails } from '@/support/offlineQueueDetails'
 
 const {
   isOnline,
@@ -112,7 +113,7 @@ function fmtTime(ts) {
 }
 
 function prerequisite(item) {
-  return item.dependsOn ? `Waiting for ${item.dependsOn}` : 'None'
+  return item.dependsOn ? 'Waiting for the linked record to finish syncing.' : ''
 }
 </script>
 
@@ -247,21 +248,24 @@ function prerequisite(item) {
                 <span v-else-if="item.method === 'DELETE'">🗑️</span>
               </div>
               <div class="queue-item__info">
-                <div class="queue-item__label">{{ item.label }}</div>
+                <div class="queue-item__label">{{ queueTitle(item) }}</div>
+                <p class="mt-1 text-xs text-amber-200">Saved on this device. Not yet confirmed on the server.</p>
+                <dl class="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+                  <div v-for="detail in queueDetails(item.data)" :key="detail.key" class="min-w-0">
+                    <dt class="text-xs font-semibold text-slate-400">{{ detail.label }}</dt>
+                    <dd class="whitespace-pre-wrap break-words text-sm text-slate-100">{{ detail.text }}</dd>
+                  </div>
+                </dl>
+                <p v-if="!queueDetails(item.data).length" class="mt-2 text-sm text-slate-300">No additional details were saved with this action.</p>
                 <div class="queue-item__meta">
-                  <span class="queue-item__method" :class="`method--${item.method.toLowerCase()}`">
-                    {{ item.method }}
-                  </span>
-                  <span class="queue-item__url">{{ item.url }}</span>
                   <span class="queue-item__time">{{ fmtTime(item.timestamp) }}</span>
                   <span>By: {{ item.ownerName || 'Current user' }}</span>
-                  <span>Type: {{ item.resource || 'record' }}</span>
-                  <span>Prerequisite: {{ prerequisite(item) }}</span>
+                  <span v-if="item.dependsOn">{{ prerequisite(item) }}</span>
                   <span v-if="item.status === 'error'" class="queue-item__error">
-                    Validation error: {{ item.lastError }}
+                    Could not sync: {{ item.lastError }}
                   </span>
                   <span v-if="item.serverRecord" class="queue-item__error">
-                    Conflict detected. Server record: {{ JSON.stringify(item.serverRecord) }}
+                    This record changed on the server. Review the current record online before retrying.
                   </span>
                 </div>
               </div>
