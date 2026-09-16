@@ -3,6 +3,25 @@ import { createInertiaApp, router } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { queueOfflineAction, savePageSnapshot } from '@/composables/useOfflineQueue';
 import { findRecordVersion, offlinePolicy } from '@/offlinePolicy';
+import RequestErrorAlert from '@/Components/RequestErrorAlert.vue';
+import { requestError, requestErrorMessage, showRequestError } from '@/support/requestErrors';
+
+router.on('invalid', (event) => {
+    event.preventDefault()
+    const response = event.detail.response
+    const offline = !navigator.onLine || response.data?.message === 'This page has not been cached for offline use yet.'
+    showRequestError(requestErrorMessage(response.status, offline))
+})
+
+router.on('exception', (event) => {
+    event.preventDefault()
+    console.error('Page request failed:', event.detail.exception)
+    showRequestError(navigator.onLine
+        ? 'The connection was interrupted or the page could not load. Check your connection. If you were saving, check the records before retrying.'
+        : requestErrorMessage(503, true))
+})
+
+router.on('success', () => { requestError.value = '' })
 
 let pendingVisits = 0
 let loadingTimer = null
@@ -43,7 +62,7 @@ async function queueMutation(method, url, data, options = {}) {
         const message = policy.reason
         options.onError?.({ offline: message })
         options.onFinish?.()
-        window.alert(message)
+        if (!options.onError) showRequestError(message)
         return
     }
 
@@ -51,7 +70,7 @@ async function queueMutation(method, url, data, options = {}) {
         const message = 'File uploads cannot be queued offline. Reconnect before uploading this file.'
         options.onError?.({ offline: message })
         options.onFinish?.()
-        window.alert(message)
+        if (!options.onError) showRequestError(message)
         return
     }
 
@@ -74,6 +93,7 @@ async function queueMutation(method, url, data, options = {}) {
         policy.pathname,
     )
 
+    try {
     await queueOfflineAction(method, url, queuedData, offlineLabel(method, url), {
         resource: policy.resource,
         rank: policy.rank,
@@ -83,6 +103,13 @@ async function queueMutation(method, url, data, options = {}) {
     })
     options.onSuccess?.({})
     options.onFinish?.()
+    } catch (error) {
+        console.error('Offline save failed:', error)
+        const message = 'This change could not be saved offline. Keep your entries and reconnect before trying again.'
+        if (options.onError) options.onError({ offline: message })
+        else showRequestError(message)
+        options.onFinish?.()
+    }
 }
 
 function installOfflineMutationGuard() {
@@ -114,7 +141,7 @@ document.addEventListener('click', (event) => {
     const pathname = new URL(link.href, window.location.origin).pathname
     if (!pathname.includes('/export-csv')) return
     event.preventDefault()
-    window.alert('CSV export requires an internet connection.')
+    showRequestError('Export requires an internet connection. Reconnect and try again.')
 }, true)
 
 document.addEventListener('click', (event) => {
@@ -135,7 +162,7 @@ document.addEventListener('click', (event) => {
         pathname.startsWith('/reset-password')
     ) {
         event.preventDefault()
-        window.alert('Authentication pages require an internet connection.')
+        showRequestError('Authentication requires an internet connection. Reconnect and try again.')
         return
     }
 
@@ -159,9 +186,12 @@ createInertiaApp({
         window.__BUDGET_TRACKER_USER_NAME__ = props.initialPage?.props?.auth?.user?.name || 'Current user'
         window.__BUDGET_TRACKER_PAGE_PROPS__ = props.initialPage?.props || {}
         savePageSnapshot(props.initialPage).catch(() => null)
-        createApp({ render: () => h(App, props) })
-            .use(plugin)
-            .mount(el);
+        const app = createApp({ render: () => [h(App, props), h(RequestErrorAlert)] })
+        app.config.errorHandler = (error) => {
+            console.error('Page error:', error)
+            showRequestError('Part of this page could not load. Refresh the page. If the problem continues, contact your administrator.')
+        }
+        app.use(plugin).mount(el);
     },
     progress: {
         color: '#d4a843',
