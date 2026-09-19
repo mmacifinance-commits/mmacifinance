@@ -1,4 +1,5 @@
 <script setup>
+import { summaryMessages } from '@/support/validationMessages'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import BulkDeleteRecords from '@/Components/BulkDeleteRecords.vue'
 import Modal from '@/Components/Modal.vue'
@@ -34,7 +35,7 @@ const receiptForm = useForm({
 })
 const receiptItems = computed(() => props.receipts?.data || [])
 const importErrorMessages = computed(() => Object.values(importForm.errors || {}).flat().filter(Boolean))
-const receiptErrorMessages = computed(() => Object.values(receiptForm.errors || {}).flat().filter(Boolean))
+const receiptErrorMessages = computed(() => summaryMessages(receiptForm.errors, ['receipt_no', 'receipt_type', 'date_encoded', 'source', 'description', 'amount', 'notes']))
 
 function fmt(value) {
     return new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(value || 0)

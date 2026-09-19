@@ -1,4 +1,5 @@
 <script setup>
+import { summaryMessages } from '@/support/validationMessages'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
 import ImportPreviewPanel from '@/Components/ImportPreviewPanel.vue'
@@ -29,7 +30,7 @@ const form = useForm({ name: '', description: '' })
 const importForm = useForm({ csv_file: null })
 
 const errors = computed(() =>
-    Object.values(form.errors || {}).flat().filter(Boolean)
+    summaryMessages(form.errors, ['name', 'description'])
 )
 
 const clean = value => String(value || '').trim().replace(/\s+/g, ' ')

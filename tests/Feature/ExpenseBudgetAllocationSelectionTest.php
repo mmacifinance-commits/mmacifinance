@@ -128,6 +128,37 @@ class ExpenseBudgetAllocationSelectionTest extends TestCase
         $this->assertDatabaseMissing('expenses', ['description' => 'Expense above remaining allocation']);
     }
 
+    public function test_index_batches_allocation_totals_instead_of_querying_during_serialization(): void
+    {
+        [$user, $category, $particular, $item] = $this->fixtures();
+        Expense::create([
+            'ref_no' => 'EXP-PERFORMANCE',
+            'description' => 'Allocation serialization',
+            'category_id' => $category->id,
+            'particular_id' => $particular->id,
+            'budget_item_id' => $item->id,
+            'amount' => 100,
+            'date_encoded' => '2026-08-15',
+            'status' => 'pending',
+        ]);
+
+        $queries = [];
+        \Illuminate\Support\Facades\DB::listen(function ($query) use (&$queries) {
+            $queries[] = strtolower($query->sql);
+        });
+        $this->withoutVite();
+        $this->actingAs($user)->get('/expenses')
+            ->assertOk()
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+                ->component('Expenses/Index')
+                ->where('expenses.data.0.budget_item.balance', 30000));
+
+        $individualTotals = array_filter($queries, fn ($sql) =>
+            str_contains($sql, 'sum(') && str_contains($sql, 'disbursements')
+            && ! str_contains($sql, 'group by'));
+        $this->assertCount(0, $individualTotals, 'Serialization must not query totals per allocation.');
+    }
+
     private function fixtures(): array
     {
         $user = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);

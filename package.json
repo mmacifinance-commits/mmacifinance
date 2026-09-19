@@ -5,7 +5,7 @@
     "scripts": {
         "build": "vite build",
         "dev": "vite",
-        "test:offline": "node --test tests/requestErrors.test.mjs tests/offlineQueue.test.mjs tests/serviceWorker.test.mjs",
+        "test:offline": "node --test tests/requestErrors.test.mjs tests/validationMessages.test.mjs tests/offlineQueue.test.mjs tests/serviceWorker.test.mjs",
         "test:browser": "node tests/browser-workflow.mjs"
     },
     "devDependencies": {

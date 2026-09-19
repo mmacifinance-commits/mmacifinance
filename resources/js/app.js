@@ -1,4 +1,5 @@
-import { createApp, h } from 'vue';
+import { createApp, h, nextTick } from 'vue';
+import { unhandledMessages } from '@/support/validationMessages';
 import { createInertiaApp, router } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { queueOfflineAction, savePageSnapshot } from '@/composables/useOfflineQueue';
@@ -29,9 +30,14 @@ window.addEventListener('vite:preloadError', (event) => {
 })
 
 router.on('success', () => { requestError.value = '' })
-router.on('error', (event) => {
+router.on('error', async (event) => {
     stopFailedLoading()
-    const messages = Object.values(event.detail.errors || {}).flat().filter(value => typeof value === 'string')
+    requestError.value = ''
+    // Inertia assigns useForm errors after this event. Wait for the form and
+    // its local error display before using the global fallback for actions.
+    await nextTick()
+    await nextTick()
+    const messages = unhandledMessages(event.detail.errors || {}, document)
     if (messages.length) showRequestError(messages.join(' '))
 })
 
@@ -45,6 +51,7 @@ function stopFailedLoading() {
 }
 
 router.on('before', (event) => {
+    requestError.value = ''
     event.detail.visit.headers['X-Offline-Owner'] = String(window.__BUDGET_TRACKER_USER_ID__ || '')
 })
 

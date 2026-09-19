@@ -1,4 +1,5 @@
 <script setup>
+import { summaryMessages } from '@/support/validationMessages'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import BulkDeleteRecords from '@/Components/BulkDeleteRecords.vue'
 import Modal from '@/Components/Modal.vue'
@@ -33,7 +34,7 @@ const form = useForm({ description: '', category_id: '', particular_id: '', budg
 const importForm = useForm({ csv_file: null })
 const saveError = ref('')
 
-const expenseErrorMessages = computed(() => Object.values(form.errors || {}).flat().filter(Boolean))
+const expenseErrorMessages = computed(() => summaryMessages(form.errors, ['description', 'category_id', 'particular_id', 'budget_item_id', 'amount', 'status', 'date_encoded']))
 const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December',
@@ -255,7 +256,7 @@ async function save() {
                 preserveScroll: true,
                 onSuccess: () => { showModal.value = false },
                 onError: (errors) => {
-                    saveError.value = Object.values(errors || {}).flat().join(' ')
+                    saveError.value = ''
                         || 'The expense could not be updated. Please review the form and try again.'
                 },
             })
@@ -294,7 +295,7 @@ async function save() {
                 preserveScroll: true,
                 onSuccess: () => { showModal.value = false },
                 onError: (errors) => {
-                    saveError.value = Object.values(errors || {}).flat().join(' ')
+                    saveError.value = ''
                         || 'The expense could not be created. Please review the form and try again.'
                 },
             })

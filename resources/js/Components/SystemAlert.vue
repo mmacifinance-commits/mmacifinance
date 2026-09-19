@@ -1,4 +1,5 @@
 <script setup>
+import { uniqueMessages } from '@/support/validationMessages'
 const props = defineProps({
     title: {
         type: String,
@@ -21,11 +22,7 @@ const props = defineProps({
 const emit = defineEmits(['dismiss'])
 
 function normalizeMessages(value) {
-    if (!value) return []
-    if (typeof value === 'string') return [value]
-    if (Array.isArray(value)) return value.flatMap(normalizeMessages)
-    if (typeof value === 'object') return Object.values(value).flatMap(normalizeMessages)
-    return [String(value)]
+    return uniqueMessages(value)
 }
 </script>
 

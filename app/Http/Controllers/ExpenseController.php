@@ -71,7 +71,17 @@ class ExpenseController extends Controller
             ->get();
 
         $budgetItems = $budgetedCategories->flatMap(fn (BudgetCategory $category) => $category->budgetItems);
-        BudgetItem::hydrateDerivedTotals($budgetItems);
+        // Include row allocations too: their appended totals otherwise execute
+        // three aggregate queries per allocation during Inertia serialization.
+        $rowBudgetItems = $expenses->getCollection()->pluck('budgetItem')->filter();
+        BudgetItem::hydrateDerivedTotals($budgetItems->concat($rowBudgetItems));
+        $rowBudgetItems->each(fn (BudgetItem $item) => $item->makeHidden('derived_expenditure'));
+
+        // The page only needs fiscal labels on nested budgets, not a repeated
+        // twelve-month calendar for every allocation option and expense row.
+        $budgetItems->concat($rowBudgetItems)->each(function (BudgetItem $item) {
+            $item->budget?->makeHidden('fiscal_months');
+        });
 
         // Totals are hydrated in one aggregate query. Disable accessors afterward
         // so serialization cannot trigger one query per allocation option.

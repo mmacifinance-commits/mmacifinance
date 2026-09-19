@@ -1,4 +1,5 @@
 <script setup>
+import { summaryMessages } from '@/support/validationMessages'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
 import ImportPreviewPanel from '@/Components/ImportPreviewPanel.vue'
@@ -43,7 +44,7 @@ const itemForm = useForm({
     appropriation: 0,
 })
 
-const itemErrorMessages = computed(() => [...new Set(Object.values(itemForm.errors).filter(Boolean))])
+const itemErrorMessages = computed(() => summaryMessages(itemForm.errors, ['allocation_month', 'category_id', 'department_id', 'particular_id', 'appropriation']))
 const isClosed = computed(() => Boolean(props.budget?.is_closed || props.budget?.closed_at))
 
 const availableDepartments = computed(() => {
