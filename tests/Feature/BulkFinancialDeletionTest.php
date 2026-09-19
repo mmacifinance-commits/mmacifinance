@@ -48,7 +48,8 @@ class BulkFinancialDeletionTest extends TestCase
     {
         $this->actingAs(User::factory()->create(['role' => 'super_admin']));
         $keep = $this->income('KEEP');
-        for ($i = 0; $i < 26; $i++) $this->income('R'.$i, true);
+        // Cross multiple server batches as well as UI pages.
+        for ($i = 0; $i < 405; $i++) $this->income('R'.$i, true);
         $token = $this->preview('receipts', ['scope' => 'all']);
         $this->postJson('/financial-records/receipts/bulk-delete', ['scope' => 'all', 'token' => $token, 'confirmation' => 'DELETE'])->assertOk();
         $this->assertDatabaseCount('incomes', 1);

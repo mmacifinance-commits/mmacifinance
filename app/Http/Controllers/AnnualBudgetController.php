@@ -513,14 +513,32 @@ class AnnualBudgetController extends Controller
             }
         }
         BudgetItem::hydrateDerivedTotals($budget->items);
+        // Keep the parent available to accessors, but do not repeat its fiscal
+        // calendar in every allocation serialized for the page.
+        $budget->items->each(fn ($item) => $item->makeHidden('budget'));
+
+        // Select only fields used by the account selector, without hydrating thousands
+        // of Eloquent models and loading the same lookup collection twice.
+        $accountTitles = DB::table('budget_particulars as titles')
+            ->leftJoin('departments', 'departments.id', '=', 'titles.department_id')
+            ->select('titles.id', 'titles.category_id', 'titles.department_id', 'titles.account_code', 'titles.account_name', 'titles.particular', 'departments.name as department_name', 'departments.code as department_code')
+            ->orderBy('titles.id')->get()->map(function ($title) {
+                return [
+                    'id' => $title->id, 'category_id' => $title->category_id,
+                    'department_id' => $title->department_id, 'account_code' => $title->account_code,
+                    'account_name' => $title->account_name, 'particular' => $title->particular,
+                    'department' => $title->department_name === null ? null : [
+                        'id' => $title->department_id, 'name' => $title->department_name, 'code' => $title->department_code,
+                    ],
+                ];
+            });
 
         return Inertia::render('AnnualBudgets/Show', [
             'budget' => $budget,
             'setupWarning' => Income::whereBetween('date_encoded', [$annualBudget->fiscalStart()->toDateString(), $annualBudget->fiscalEnd()->toDateString()])->exists()
                 ? null : 'No income records are available for this fiscal period. You can review existing items, but add income dated within this period before funding new allocations.',
             'categories' => BudgetCategory::all(),
-            'particulars' => BudgetParticular::with('category', 'department')->get(),
-            'accountTitles' => BudgetParticular::with('category', 'department')->get(),
+            'accountTitles' => $accountTitles,
             'availableYears' => AnnualBudget::distinct()->orderByDesc('year')->pluck('year'),
             'allBudgets' => AnnualBudget::select('id', 'year', 'start_date', 'end_date', 'ref_no', 'semester')->orderByDesc('start_date')->get(),
         ]);

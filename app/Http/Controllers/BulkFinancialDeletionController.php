@@ -45,16 +45,26 @@ class BulkFinancialDeletionController extends Controller
             if ($data['scope'] === 'selected') {
                 $query->whereKey($data['ids']);
             }
-            $records = $query->lockForUpdate()->get();
-            if ($records->isEmpty() || ($data['scope'] === 'selected' && $records->count() !== count($data['ids']))) {
+            // Freeze the upper bound so a new record cannot enter the second (delete) pass.
+            $lastId = (clone $query)->max('id');
+            $query->where('id', '<=', $lastId ?? 0)->lockForUpdate();
+            $hash = hash_init('sha256');
+            $count = 0;
+            $amount = 0;
+            foreach ((clone $query)->lazyById(200) as $record) {
+                hash_update($hash, json_encode($record->getAttributes(), JSON_THROW_ON_ERROR)."\n");
+                $count++;
+                $amount += (float) $record->amount;
+            }
+            if ($count === 0 || ($data['scope'] === 'selected' && $count !== count($data['ids']))) {
                 throw ValidationException::withMessages(['deletion' => 'No records were deleted. The selection is empty or a record is no longer available. Refresh the list.']);
             }
             // Bind confirmation to the exact records and values reviewed, not a changing "all" query.
-            $snapshot = hash('sha256', $records->map(fn ($row) => $row->getAttributes())->toJson());
+            $snapshot = hash_final($hash);
             if (empty($data['token'])) {
                 return response()->json([
-                    'count' => $records->count(),
-                    'amount' => round((float) $records->sum('amount'), 2),
+                    'count' => $count,
+                    'amount' => round($amount, 2),
                     'token' => Crypt::encryptString(json_encode([
                         'user' => $request->user()->id, 'module' => $module,
                         'snapshot' => $snapshot, 'expires' => now()->addMinutes(5)->timestamp,
@@ -73,11 +83,11 @@ class BulkFinancialDeletionController extends Controller
             if (($data['confirmation'] ?? '') !== 'DELETE') {
                 throw ValidationException::withMessages(['confirmation' => 'Type DELETE to confirm permanent deletion.']);
             }
-            foreach ($records as $record) {
+            foreach ((clone $query)->lazyById(200) as $record) {
                 // Reuse single-record authorization, fiscal locks, audit logs and paid-total updates.
                 app($controller)->destroy($record, true);
             }
-            return response()->json(['message' => $records->count().' record(s) deleted successfully.']);
+            return response()->json(['message' => $count.' record(s) deleted successfully.']);
         });
     }
 }
