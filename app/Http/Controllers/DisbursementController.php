@@ -451,8 +451,9 @@ class DisbursementController extends Controller
         return redirect()->route('disbursements.index')->with('success', 'Disbursement returned for revision.');
     }
 
-    public function destroy(Disbursement $disbursement)
+    public function destroy(Disbursement $disbursement, bool $bulk = false)
     {
+        app(\App\Services\FinancialDeletionGuard::class)->check($disbursement);
         $this->ensureLinkedFiscalPeriodOpen($disbursement->expense);
 
         // Deleting a finalized disbursement reverses official expenditure — Head of Finance only.
@@ -469,7 +470,7 @@ class DisbursementController extends Controller
             $this->syncExpensePaidAmount($expenseId);
         }
 
-        return redirect()->route('disbursements.index')->with('success', 'Disbursement deleted.');
+        return $bulk ? response()->noContent() : redirect()->route('disbursements.index')->with('success', 'Disbursement deleted.');
     }
 
     public function exportCsv()

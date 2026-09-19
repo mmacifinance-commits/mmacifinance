@@ -1,5 +1,6 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
+import BulkDeleteRecords from '@/Components/BulkDeleteRecords.vue'
 import Modal from '@/Components/Modal.vue'
 import SystemAlert from '@/Components/SystemAlert.vue'
 import ImportPreviewPanel from '@/Components/ImportPreviewPanel.vue'
@@ -432,6 +433,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
             <p class="text-sm text-gray-500">Manage payment release, approval, and posting of linked expenses to General Ledger</p>
         </div>
         <div v-if="perms.canManageDisbursements || perms.isCashier || perms.isSuperAdmin" class="flex flex-wrap gap-2">
+            <BulkDeleteRecords module="disbursements" :records="disbursementItems" />
             <button @click="exportCsv" :disabled="isExporting" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60">{{ isExporting ? 'Exporting...' : 'Export XLSX' }}</button>
             <button @click="showImportModal = true" class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Import XLSX</button>
             <button @click="openCreate" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">

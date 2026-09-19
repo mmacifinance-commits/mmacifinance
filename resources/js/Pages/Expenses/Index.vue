@@ -1,5 +1,6 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
+import BulkDeleteRecords from '@/Components/BulkDeleteRecords.vue'
 import Modal from '@/Components/Modal.vue'
 import ImportPreviewPanel from '@/Components/ImportPreviewPanel.vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
@@ -394,6 +395,7 @@ function splitDate(d) {
     <div class="flex items-center justify-between mb-6">
         <div><h2 class="text-xl font-bold text-gray-900">Expenditures</h2><p class="text-sm text-gray-500">Track and manage official expenditures</p></div>
         <div v-if="perms.canManageExpenses" class="flex flex-wrap gap-2">
+            <BulkDeleteRecords module="expenses" :records="expenseItems" />
             <button @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">Export XLSX</button>
             <button @click="showImportModal = true" class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Import XLSX</button>
             <button @click="openCreate" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">Add Expense</button>

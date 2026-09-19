@@ -258,15 +258,16 @@ class ReceiptController extends Controller
         return redirect()->route('receipts.index')->with('success', 'Receipt updated successfully.');
     }
 
-    public function destroy(Income $receipt)
+    public function destroy(Income $receipt, bool $bulk = false)
     {
+        app(\App\Services\FinancialDeletionGuard::class)->check($receipt);
         abort_if(blank($receipt->receipt_no), 404);
 
         app(FiscalPeriodLockService::class)->ensureDateOpen($receipt->date_encoded);
         AuditTrail::log($receipt, 'deleted', auth()->user(), 'Receipt deleted.');
         $receipt->delete();
 
-        return redirect()->route('receipts.index')->with('success', 'Receipt deleted successfully.');
+        return $bulk ? response()->noContent() : redirect()->route('receipts.index')->with('success', 'Receipt deleted successfully.');
     }
 
     private function receiptType(Income $income): string

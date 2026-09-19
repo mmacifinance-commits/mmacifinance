@@ -9,6 +9,7 @@ const perms = computed(() => usePage().props.permissions || {})
 
 const props = defineProps({
     budget: Object,
+    setupWarning: String,
     categories: Array,
     particulars: Array,
     accountTitles: Array,
@@ -231,6 +232,7 @@ function catBalancePercent(group) {
 <template>
 <Head :title="`${budget.fiscal_year_label} Budget Allocations`" />
 <AppLayout>
+    <div v-if="setupWarning" role="alert" class="mb-4 border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{{ setupWarning }}</div>
     <!-- Back + Title -->
     <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">

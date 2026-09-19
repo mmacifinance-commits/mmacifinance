@@ -42,9 +42,15 @@ return Application::configure(basePath: dirname(__DIR__))
             };
 
             $headers = array_intersect_key($response->headers->all(), array_flip(['retry-after', 'allow']));
+            if ($status === 403 && (($request->isMethod('delete') && $request->is('disbursements/*')) || $request->is('financial-records/disbursements/bulk-delete'))) {
+                $message = 'You do not have permission for this disbursement action. Only the Head of Finance can delete approved or posted disbursements.';
+            }
+            if ($status >= 500 && $request->isMethod('get') && $request->is('annual-budgets/*')) {
+                $message = 'Budget items could not be loaded because of a server error. Ask the administrator to check the error log, then retry.';
+            }
             $headers['Cache-Control'] = 'no-store';
             if ($request->header('X-Inertia') || $request->expectsJson()) {
-                return response()->json(['message' => $message], $status, $headers);
+                return response()->json(['message' => $message, 'safe_message' => true], $status, $headers);
             }
 
             return response()->view('errors.friendly', compact('status', 'message'), $status, $headers);

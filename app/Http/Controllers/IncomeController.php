@@ -168,13 +168,14 @@ class IncomeController extends Controller
         return redirect()->back()->with('success', 'Income item updated successfully.');
     }
 
-    public function destroy(Income $income)
+    public function destroy(Income $income, bool $bulk = false)
     {
+        app(\App\Services\FinancialDeletionGuard::class)->check($income);
         app(FiscalPeriodLockService::class)->ensureDateOpen($income->date_encoded);
         AuditTrail::log($income, 'deleted', auth()->user(), 'Income record deleted.');
         $income->delete();
 
-        return redirect()->back()->with('success', 'Income item deleted successfully.');
+        return $bulk ? response()->noContent() : redirect()->back()->with('success', 'Income item deleted successfully.');
     }
 
     public function exportCsv()

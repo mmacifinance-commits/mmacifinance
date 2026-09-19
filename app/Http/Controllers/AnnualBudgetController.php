@@ -516,6 +516,8 @@ class AnnualBudgetController extends Controller
 
         return Inertia::render('AnnualBudgets/Show', [
             'budget' => $budget,
+            'setupWarning' => Income::whereBetween('date_encoded', [$annualBudget->fiscalStart()->toDateString(), $annualBudget->fiscalEnd()->toDateString()])->exists()
+                ? null : 'No income records are available for this fiscal period. You can review existing items, but add income dated within this period before funding new allocations.',
             'categories' => BudgetCategory::all(),
             'particulars' => BudgetParticular::with('category', 'department')->get(),
             'accountTitles' => BudgetParticular::with('category', 'department')->get(),

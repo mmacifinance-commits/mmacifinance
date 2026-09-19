@@ -11,7 +11,8 @@ router.on('invalid', (event) => {
     stopFailedLoading()
     const response = event.detail.response
     const offline = !navigator.onLine || response.data?.message === 'This page has not been cached for offline use yet.'
-    showRequestError(requestErrorMessage(response.status, offline))
+    showRequestError(!offline && response.data?.safe_message === true && typeof response.data.message === 'string'
+        ? response.data.message : requestErrorMessage(response.status, offline))
 })
 
 router.on('exception', (event) => {
@@ -28,6 +29,11 @@ window.addEventListener('vite:preloadError', (event) => {
 })
 
 router.on('success', () => { requestError.value = '' })
+router.on('error', (event) => {
+    stopFailedLoading()
+    const messages = Object.values(event.detail.errors || {}).flat().filter(value => typeof value === 'string')
+    if (messages.length) showRequestError(messages.join(' '))
+})
 
 let pendingVisits = 0
 let loadingTimer = null

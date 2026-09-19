@@ -329,14 +329,15 @@ class ExpenseController extends Controller
         return redirect()->route('expenses.index')->with('success', 'Expense rejected.');
     }
 
-    public function destroy(Expense $expense)
+    public function destroy(Expense $expense, bool $bulk = false)
     {
+        app(\App\Services\FinancialDeletionGuard::class)->check($expense);
         app(FiscalPeriodLockService::class)->ensureExpenseOpen($expense);
 
         $expense->delete();
         AuditTrail::log($expense, 'deleted', auth()->user(), 'Expense record deleted.');
 
-        return redirect()->route('expenses.index')->with('success', 'Expense deleted.');
+        return $bulk ? response()->noContent() : redirect()->route('expenses.index')->with('success', 'Expense deleted.');
     }
 
     public function exportCsv()

@@ -42,6 +42,8 @@ Route::middleware('guest')->group(function () {
 
 // --- Authenticated Routes ---
 Route::middleware('auth')->group(function () {
+    Route::post('/financial-records/{module}/bulk-delete', \App\Http\Controllers\BulkFinancialDeletionController::class)
+        ->whereIn('module', ['income', 'receipts', 'expenses', 'disbursements']);
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
     Route::post('/imports/{module}/preview', ImportPreviewController::class)->name('imports.preview');
 
