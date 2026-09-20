@@ -5,7 +5,7 @@ import BulkDeleteRecords from '@/Components/BulkDeleteRecords.vue'
 import Modal from '@/Components/Modal.vue'
 import ImportPreviewPanel from '@/Components/ImportPreviewPanel.vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useOfflineQueue } from '@/composables/useOfflineQueue'
 
 const perms = computed(() => usePage().props.permissions || {})
@@ -22,6 +22,7 @@ const props = defineProps({
     availableYears: Array,
     defaultYear: [Number, String],
     defaultFiscalPeriodId: [Number, String],
+    filters: Object,
 })
 
 const showModal = ref(false)
@@ -51,10 +52,46 @@ const expenseTotalRecords = computed(() => Array.isArray(paginatedExpenses.value
 const expenseFirstRecord = computed(() => Array.isArray(paginatedExpenses.value) ? (expenseItems.value.length ? 1 : 0) : (paginatedExpenses.value.from || 0))
 const expenseLastRecord = computed(() => Array.isArray(paginatedExpenses.value) ? expenseItems.value.length : (paginatedExpenses.value.to || 0))
 
-const filterSearch = ref('')
-const filterCategory = ref('')
-const filterStatus = ref('')
-const filterYear = ref(props.defaultFiscalPeriodId ? String(props.defaultFiscalPeriodId) : 'all')
+const filterSearch = ref(props.filters?.search || '')
+const filterCategory = ref(props.filters?.category_id || '')
+const filterStatus = ref(props.filters?.status || '')
+const filterYear = ref(props.filters?.fiscal_period_id || 'all')
+let filterTimer
+watch([filterSearch, filterCategory, filterStatus, filterYear], () => {
+    clearTimeout(filterTimer)
+    if (!isOnline.value) return
+    filterTimer = setTimeout(() => router.get('/expenses', {
+        search: filterSearch.value || undefined,
+        category_id: filterCategory.value || undefined,
+        status: filterStatus.value || undefined,
+        fiscal_period_id: filterYear.value === 'all' ? undefined : filterYear.value,
+    }, { only: ['expenses', 'filters'], preserveState: true, preserveScroll: true, replace: true }), 300)
+})
+onBeforeUnmount(() => clearTimeout(filterTimer))
+const loadingOptions = ref(false)
+const optionsError = ref('')
+async function loadExpenseOptions() {
+    if (loadingOptions.value) return false
+    optionsError.value = ''
+    if (!isOnline.value) {
+        if (props.budgetedCategories && props.particulars) return true
+        optionsError.value = 'Connect to the internet and open the expense form once to load allocation options before using it offline.'
+        return false
+    }
+    loadingOptions.value = true
+    return new Promise(resolve => {
+        let loaded = false
+        router.reload({
+            only: ['budgetedCategories', 'particulars'],
+            onSuccess: () => { loaded = true },
+            onFinish: () => {
+                loadingOptions.value = false
+                if (!loaded) optionsError.value = 'Could not load expense allocations. Please check your connection and try again.'
+                resolve(loaded)
+            },
+        })
+    })
+}
 const selectedFiscalPeriod = computed(() => {
     const date = String(form.date_encoded || '').slice(0, 10)
     return (props.fiscalPeriods || []).find(period => date && date >= String(period.start_date).slice(0, 10) && date <= String(period.end_date).slice(0, 10)) || null
@@ -75,7 +112,10 @@ const selectedCategoryId = computed(() => form.category_id ? String(form.categor
 const accountTitleOptions = computed(() => {
     const items = (props.accountTitles || props.particulars || [])
     if (!selectedCategoryId.value) return []
-    return items.filter((item) => String(item.category_id ?? item.budget_category_id ?? '') === selectedCategoryId.value && matchingAllocations(item.id).length > 0)
+    const allocatedIds = new Set((categoryOptions.value.find(c => String(c.id) === selectedCategoryId.value)?.budget_items || [])
+        .filter(item => String(item.budget_id) === String(selectedFiscalPeriod.value?.id))
+        .map(item => String(item.particular_id)))
+    return items.filter((item) => String(item.category_id ?? item.budget_category_id ?? '') === selectedCategoryId.value && allocatedIds.has(String(item.id)))
 })
 
 function matchingAllocations(particularId) {
@@ -131,8 +171,8 @@ function expenseAllocationLabel(expense) {
 }
 
 const filteredExpenses = computed(() => {
-    const all = [...expenseItems.value, ...offlineRows.value]
-    return all.filter(e => {
+    const all = isOnline.value ? offlineRows.value : [...expenseItems.value, ...offlineRows.value]
+    const local = all.filter(e => {
         const matchSearch = filterSearch.value ?
             ((e.ref_no || '').toLowerCase().includes(filterSearch.value.toLowerCase()) ||
              (e.description || '').toLowerCase().includes(filterSearch.value.toLowerCase())) : true
@@ -146,13 +186,14 @@ const filteredExpenses = computed(() => {
 
         return matchSearch && matchCategory && matchStatus && matchYear
     })
+    return isOnline.value ? [...expenseItems.value, ...local] : local
 })
 
 function clearFilters() {
     filterSearch.value = ''
     filterCategory.value = ''
     filterStatus.value = ''
-    filterYear.value = props.defaultFiscalPeriodId ? String(props.defaultFiscalPeriodId) : 'all'
+    filterYear.value = 'all'
 }
 
 watch([selectedFiscalPeriod, categoryOptions], ([period, options]) => {
@@ -195,7 +236,8 @@ function expenseAuditLogs(expense) {
     showAuditModal.value = true
 }
 
-function openCreate() {
+async function openCreate() {
+    if (!await loadExpenseOptions()) return
     form.reset()
     form.clearErrors()
     saveError.value = ''
@@ -204,7 +246,8 @@ function openCreate() {
     editingHasDisbursements.value = false
     showModal.value = true
 }
-function openEdit(e) {
+async function openEdit(e) {
+    if (!await loadExpenseOptions()) return
     Object.assign(form, { description: e.description, category_id: e.category_id, particular_id: e.particular_id, budget_item_id: e.budget_item_id || '', amount: e.amount, status: e.status, notes: e.notes||'', date_encoded: e.date_encoded?.slice(0,10)||'' })
     form.clearErrors()
     saveError.value = ''
@@ -399,9 +442,11 @@ function splitDate(d) {
             <BulkDeleteRecords module="expenses" :records="expenseItems" />
             <button @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">Export XLSX</button>
             <button @click="showImportModal = true" class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Import XLSX</button>
-            <button @click="openCreate" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">Add Expense</button>
+            <button @click="openCreate" :disabled="loadingOptions" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy transition shadow-sm disabled:opacity-50">{{ loadingOptions ? 'Loading allocations...' : 'Add Expense' }}</button>
         </div>
     </div>
+    <p v-if="optionsError" role="alert" class="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ optionsError }}</p>
+    <p v-if="!isOnline" class="mb-4 text-sm text-gray-500">Offline search only includes records already loaded on this device.</p>
     <div class="flex flex-col sm:flex-row gap-4 mb-6">
         <input v-model="filterSearch" type="text" placeholder="Search by ref no or description..." class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm w-full max-w-sm shadow-sm" />
         <select v-model="filterYear" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 min-w-[150px] shadow-sm">
@@ -530,7 +575,7 @@ function splitDate(d) {
                     v-for="link in (paginatedExpenses.links || [])"
                     :key="link.label"
                     :disabled="!link.url"
-                    @click="link.url && router.visit(link.url, { preserveState: true, preserveScroll: true })"
+                    @click="link.url && router.visit(link.url, { only: ['expenses', 'filters'], preserveState: true, preserveScroll: true })"
                     v-html="link.label"
                     class="rounded-md border px-3 py-1.5 text-xs font-semibold transition"
                     :class="link.active ? 'border-navy-dark bg-navy-dark text-white' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50'"

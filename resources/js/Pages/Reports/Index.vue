@@ -1,4 +1,5 @@
 <script setup>
+import FinancialReportTables from '@/Components/FinancialReportTables.vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
 import { Head, router } from '@inertiajs/vue3'
@@ -6,6 +7,8 @@ import { computed, ref } from 'vue'
 
 const props = defineProps({
     reportTypes: Array,
+    sections: Array,
+    reportNotes: Array,
     reportType: String,
     budgets: Array,
     categories: Array,
@@ -340,7 +343,7 @@ const activeReportLabel = computed(() => {
         <div class="border border-gray-200 bg-white p-4 shadow-sm border-t-4 border-t-emerald-500">
             <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Total Receipts</p>
             <p class="mt-1 text-xl font-extrabold text-emerald-700 font-sans">{{ PESO }}{{ fmt(summary.totalReceipts) }}</p>
-            <p class="mt-1 text-xs text-gray-500">Actual cash received</p>
+            <p class="mt-1 text-xs text-gray-500">Institution-wide receipts in date range</p>
         </div>
         <div class="border border-gray-200 bg-white p-4 shadow-sm border-t-4 border-t-rose-500">
             <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Posted Disbursements</p>
@@ -353,9 +356,9 @@ const activeReportLabel = computed(() => {
             <p class="mt-1 text-xs text-gray-500">Appropriation less posted use</p>
         </div>
         <div class="border border-gray-200 bg-white p-4 shadow-sm border-t-4 border-t-teal-500">
-            <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Cash On Hand</p>
+            <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Recorded Available Cash</p>
             <p class="mt-1 text-xl font-extrabold text-teal-700 font-sans">{{ PESO }}{{ fmt(summary.cashOnHand) }}</p>
-            <p class="mt-1 text-xs text-gray-500">Receipts less posted releases</p>
+            <p class="mt-1 text-xs text-gray-500">Institution-wide opening cash + receipts - posted payments</p>
         </div>
         <div class="border border-gray-200 bg-white p-4 shadow-sm border-t-4 border-t-amber-500">
             <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Pending Commitments</p>
@@ -376,27 +379,8 @@ const activeReportLabel = computed(() => {
             <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wider">{{ activeReportLabel }}</h3>
             <p class="text-xs text-gray-500 mt-1">Drilldown rows for the selected report type and filters.</p>
         </div>
-        <div v-if="filterReportType === 'cash_receipts' || filterReportType === 'income_vs_receipts'" class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead><tr class="bg-navy-dark text-white border-b-2 border-mustard"><th class="px-4 py-3 text-left">Receipt No.</th><th class="px-4 py-3 text-left">Income No.</th><th class="px-4 py-3 text-left">Type</th><th class="px-4 py-3 text-left">Source / Description</th><th class="px-4 py-3 text-left">Receipt Date</th><th class="px-4 py-3 text-right">Amount</th></tr></thead>
-                <tbody>
-                    <tr v-for="row in asArray(receiptRows)" :key="row.id" class="border-b"><td class="px-4 py-3 font-semibold">{{ row.receipt_no }}</td><td class="px-4 py-3">{{ row.income_no }}</td><td class="px-4 py-3">{{ row.receipt_type }}</td><td class="px-4 py-3"><b>{{ row.source }}</b><br><span class="text-xs text-gray-500">{{ row.description }}</span></td><td class="px-4 py-3">{{ row.receipt_date }}</td><td class="px-4 py-3 text-right font-sans">{{ PESO }}{{ fmt(row.amount) }}</td></tr>
-                    <tr v-if="!asArray(receiptRows).length"><td colspan="6" class="px-4 py-8 text-center text-gray-400">No receipt rows match the selected filters.</td></tr>
-                </tbody>
-            </table>
-        </div>
-        <div v-else-if="filterReportType === 'disbursements' || filterReportType === 'fund_balance'" class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead><tr class="bg-navy-dark text-white border-b-2 border-mustard"><th class="px-4 py-3 text-left">DSB No.</th><th class="px-4 py-3 text-left">Expense Ref</th><th class="px-4 py-3 text-left">Allocation Month</th><th class="px-4 py-3 text-left">Expense Date</th><th class="px-4 py-3 text-left">Disbursement Date</th><th class="px-4 py-3 text-left">Payee</th><th class="px-4 py-3 text-left">Status</th><th class="px-4 py-3 text-right">Amount</th></tr></thead>
-                <tbody>
-                    <tr v-for="row in asArray(disbursementRows)" :key="row.id" class="border-b"><td class="px-4 py-3 font-semibold">{{ row.disbursement_no }}</td><td class="px-4 py-3">{{ row.expense_ref }}</td><td class="px-4 py-3">{{ row.allocation_month }}</td><td class="px-4 py-3">{{ row.expense_date }}</td><td class="px-4 py-3">{{ row.disbursement_date }}</td><td class="px-4 py-3">{{ row.pay_to }}</td><td class="px-4 py-3 uppercase text-xs font-bold">{{ row.status }}</td><td class="px-4 py-3 text-right font-sans">{{ PESO }}{{ fmt(row.amount) }}</td></tr>
-                    <tr v-if="!asArray(disbursementRows).length"><td colspan="8" class="px-4 py-8 text-center text-gray-400">No disbursement rows match the selected filters.</td></tr>
-                </tbody>
-            </table>
-        </div>
-        <div v-else class="px-5 py-4 text-sm text-gray-600">
-            This report type uses the budget utilization and monthly reconciliation sections below. Click fiscal year totals or use Generate Report for a printable layout.
-        </div>
+        <div class="overflow-x-auto p-4"><FinancialReportTables :sections="sections" /></div>
+        <div class="px-5 pb-4 text-xs text-gray-500"><p v-for="note in reportNotes" :key="note" class="mt-1">{{ note }}</p></div>
     </div>
 
     <div class="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden mb-6">

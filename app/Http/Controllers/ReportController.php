@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\AnnualBudget;
-use App\Models\AuditTrail;
 use App\Models\BudgetCategory;
 use App\Models\BudgetItem;
 use App\Models\Department;
@@ -11,7 +10,6 @@ use App\Models\Disbursement;
 use App\Models\Expense;
 use App\Models\Income;
 use App\Services\BudgetUtilizationService;
-use App\Services\CashFlowService;
 use App\Services\FiscalPeriodService;
 use App\Support\SpreadsheetImportExport;
 use Carbon\Carbon;
@@ -23,9 +21,9 @@ class ReportController extends Controller
     public function index(
         Request $request,
         BudgetUtilizationService $utilization,
-        FiscalPeriodService $fiscalPeriods,
-        CashFlowService $cashFlow
+        FiscalPeriodService $fiscalPeriods
     ) {
+        $report = app(\App\Services\FinancialReportService::class)->build($request);
         $validated = $request->validate([
             'report_type' => ['nullable', 'string', 'in:overall_financial,budget_utilization,cash_receipts,disbursements,income_vs_receipts,fund_balance,responsibility_center,account_title_ledger,closing_report'],
             'fiscal_period_id' => ['nullable', 'integer', 'exists:annual_budgets,id'],
@@ -109,7 +107,7 @@ class ReportController extends Controller
             $categoryId,
             $accountTitleId
         ) {
-            $periodMonth = $allocationMonth && $period->containsDate($allocationMonth) ? $allocationMonth : null;
+            $periodMonth = null; // The comparison table is explicitly full fiscal years.
             $itemsQuery = BudgetItem::query()
                 ->where('budget_id', $period->id)
                 ->when($periodMonth, fn ($query) => $query->whereDate('allocation_month', $periodMonth));
@@ -164,26 +162,18 @@ class ReportController extends Controller
             ->sortBy('allocation_month')
             ->values();
 
-        $cashSummary = $cashFlow->summary($selectedPeriod);
-        $pendingCommitments = $selectedPeriod
-            ? (float) Disbursement::query()
-                ->whereIn('status', ['draft', 'for_release', 'for_approval', 'approved', 'returned_for_revision'])
-                ->whereHas('expense.budgetItem', fn ($query) => $query->where('budget_id', $selectedPeriod->id))
-                ->sum('amount')
-            : 0.0;
-
         $summaryCards = [
             'totalAppropriation' => round($appropriation, 2),
-            'totalReceipts' => round($cashSummary['receipts'], 2),
-            'postedDisbursements' => round($cashSummary['postedDisbursements'], 2),
+            'totalReceipts' => $report['totals']['receipts'],
+            'postedDisbursements' => $report['totals']['postedDisbursements'],
             'budgetBalance' => round($appropriation - $expenditure, 2),
-            'cashOnHand' => round($cashSummary['cashOnHand'], 2),
-            'pendingCommitments' => round($pendingCommitments, 2),
+            'cashOnHand' => $report['totals']['cashOnHand'],
+            'pendingCommitments' => $report['totals']['pendingCommitments'],
         ];
 
-        $receiptRows = $this->receiptRows($selectedPeriod, $startDate, $endDate);
-        $disbursementRows = $this->disbursementRows($selectedPeriod, $startDate, $endDate, 25, compact('departmentId', 'categoryId', 'accountTitleId', 'allocationMonth'));
-        $auditRows = $this->auditRows($selectedPeriod, $startDate, $endDate);
+        $receiptRows = $report['receiptRows'];
+        $disbursementRows = $report['disbursementRows'];
+        $auditRows = [];
         $warnings = $this->reportWarnings($selectedPeriod, $summaryCards);
 
         $reportBudgets = AnnualBudget::query()
@@ -202,6 +192,8 @@ class ReportController extends Controller
             'categories' => BudgetCategory::all(),
             'departments' => Department::all(),
             'summaryCards' => $summaryCards,
+            'sections' => $report['sections'],
+            'reportNotes' => $report['reportNotes'],
             'receiptRows' => $receiptRows,
             'disbursementRows' => $disbursementRows,
             'auditRows' => $auditRows,
@@ -227,296 +219,28 @@ class ReportController extends Controller
         ]);
     }
 
-    public function export(
-        Request $request,
-        BudgetUtilizationService $utilization,
-        FiscalPeriodService $fiscalPeriods,
-        CashFlowService $cashFlow
-    ) {
-        $validated = $request->validate([
-            'report_type' => ['nullable', 'string', 'in:overall_financial,budget_utilization,cash_receipts,disbursements,income_vs_receipts,fund_balance,responsibility_center,account_title_ledger,closing_report'],
-            'fiscal_period_id' => ['nullable', 'integer', 'exists:annual_budgets,id'],
-            'allocation_month' => ['nullable', 'date_format:Y-m-d'],
-            'start_date' => ['nullable', 'date'],
-            'end_date' => ['nullable', 'date'],
-            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
-            'category_id' => ['nullable', 'integer', 'exists:budget_categories,id'],
-            'account_title_id' => ['nullable', 'integer', 'exists:budget_particulars,id'],
-        ]);
-
-        $reportType = $validated['report_type'] ?? 'overall_financial';
-        $selectedPeriod = $fiscalPeriods->resolve(isset($validated['fiscal_period_id']) ? (int) $validated['fiscal_period_id'] : null);
-        $allocationMonth = $selectedPeriod
-            ? $fiscalPeriods->allocationMonth($selectedPeriod, $validated['allocation_month'] ?? null)
-            : null;
-        $startDate = $validated['start_date'] ?? null;
-        $endDate = $validated['end_date'] ?? null;
-        if ($startDate && $endDate && $endDate < $startDate) {
-            [$startDate, $endDate] = [$endDate, $startDate];
-        }
-
-        $departmentId = isset($validated['department_id']) ? (int) $validated['department_id'] : null;
-        $categoryId = isset($validated['category_id']) ? (int) $validated['category_id'] : null;
-        $accountTitleId = isset($validated['account_title_id']) ? (int) $validated['account_title_id'] : null;
-
-        $itemsQuery = BudgetItem::query()
-            ->with(['category', 'particular.department'])
-            ->when($selectedPeriod, fn ($query) => $query->where('budget_id', $selectedPeriod->id))
-            ->when($allocationMonth, fn ($query) => $query->whereDate('allocation_month', $allocationMonth));
-        $this->applyItemDimensions($itemsQuery, $departmentId, $categoryId, $accountTitleId);
-        $items = $itemsQuery->orderBy('allocation_month')->get();
-        BudgetItem::hydrateDerivedTotals($items);
-
-        $cashSummary = $cashFlow->summary($selectedPeriod);
-        $budgetRows = [];
-
-        foreach ($items as $item) {
-            $posted = $selectedPeriod
-                ? (float) $utilization->queryForAnnualBudgetFilters(
-                    $selectedPeriod,
-                    $item->allocation_month?->toDateString(),
-                    $startDate,
-                    $endDate,
-                    $item->particular?->department_id,
-                    $item->category_id,
-                    $item->particular_id
-                )->sum('amount')
-                : 0.0;
-            $appropriation = (float) $item->appropriation;
-
-            $budgetRows[] = [
-                $item->allocation_month?->format('Y-m'),
-                $item->ref_no,
-                $item->particular?->department?->name,
-                $item->category?->name,
-                $item->particular?->particular,
-                $appropriation,
-                $posted,
-                null,
-                null,
-            ];
-        }
-
-        $receiptRows = [];
-        foreach ($this->receiptRows($selectedPeriod, $startDate, $endDate, null) as $receipt) {
-            $receiptRows[] = [
-                $receipt['receipt_no'],
-                $receipt['income_no'],
-                $receipt['receipt_type'],
-                $receipt['source'],
-                $receipt['description'],
-                $receipt['receipt_date'],
-                $receipt['amount'],
-            ];
-        }
-
-        $disbursementRows = [];
-        foreach ($this->disbursementRows($selectedPeriod, $startDate, $endDate, null, compact('departmentId', 'categoryId', 'accountTitleId', 'allocationMonth')) as $disbursement) {
-            $disbursementRows[] = [
-                $disbursement['disbursement_no'],
-                $disbursement['expense_ref'],
-                $disbursement['allocation_month'],
-                $disbursement['expense_date'],
-                $disbursement['disbursement_date'],
-                $disbursement['pay_to'],
-                $disbursement['status'],
-                $disbursement['amount'],
-            ];
-        }
-
-        $metadata = [
-            'report_label' => collect($this->reportTypes())->firstWhere('value', $reportType)['label'] ?? 'Financial Report',
-            'fiscal_year' => $selectedPeriod?->fiscal_year_label ?? 'No fiscal year selected',
-            'fiscal_period' => $selectedPeriod?->period_label ?? 'N/A',
-            'allocation_month' => $allocationMonth ? Carbon::parse($allocationMonth)->format('F Y') : 'All Fiscal Months',
-            'date_range' => $this->dateRangeLabel($startDate, $endDate),
-            'generated_by' => $request->user()?->name ?? 'System',
-            'generated_at' => now()->format('M d, Y h:i A'),
-            'total_receipts' => $cashSummary['receipts'],
-            'available_cash' => $cashSummary['cashOnHand'],
-        ];
-
-        $budgetSection = [
-            'type' => 'budget',
-            'title' => 'Budget Utilization',
-            'headers' => [
-                'Allocation Month', 'Monthly Ref No.', 'Responsibility Center', 'Category',
-                'Account Title', 'Appropriation', 'Total Cost Incurred To Date', 'Balance', '% Utilization',
-            ],
-            'rows' => $budgetRows,
-        ];
-        $receiptSection = [
-            'type' => 'receipts',
-            'title' => 'Cash Receipts',
-            'headers' => ['Receipt No.', 'Income No.', 'Receipt Type', 'Source', 'Description', 'Receipt Date', 'Amount'],
-            'rows' => $receiptRows,
-        ];
-        $disbursementSection = [
-            'type' => 'disbursements',
-            'title' => 'Disbursement Details',
-            'headers' => [
-                'DSB No.', 'Expense Ref', 'Allocation Month', 'Expense Date',
-                'Disbursement Date', 'Payee', 'Status', 'Amount',
-            ],
-            'rows' => $disbursementRows,
-        ];
-
-        $sections = [];
-
-        switch ($reportType) {
-            case 'cash_receipts':
-                $sections[] = $receiptSection;
-                break;
-            case 'disbursements':
-                $sections[] = $disbursementSection;
-                break;
-            case 'overall_financial':
-            case 'income_vs_receipts':
-            case 'fund_balance':
-            case 'closing_report':
-                $sections = [$budgetSection, $receiptSection, $disbursementSection];
-                break;
-            default:
-                $sections[] = $budgetSection;
-                break;
-        }
-
+    public function export(Request $request, \App\Services\FinancialReportService $reports)
+    {
+        $report = $reports->build($request);
         return SpreadsheetImportExport::downloadFinancialReportXlsx(
-            str_replace('_', '-', $reportType).'-report-'.now()->format('Ymd-His'),
-            $metadata,
-            $sections
+            str_replace('_', '-', $report['reportType']).'-report-'.now()->format('Ymd-His'),
+            [
+                'report_label' => $report['reportLabel'],
+                'fiscal_year' => $report['period']?->fiscal_year_label ?? 'No fiscal year selected',
+                'fiscal_period' => $report['period']?->period_label ?? 'N/A',
+                'allocation_month' => $report['monthLabel'], 'date_range' => $report['dateRangeLabel'],
+                'generated_by' => $report['generatedBy']['name'], 'generated_at' => $report['generatedAt'],
+                'total_receipts' => $report['totals']['receipts'], 'available_cash' => $report['totals']['cashOnHand'],
+                'department' => $report['departmentLabel'], 'category' => $report['categoryLabel'],
+                'account_title' => $report['accountTitleLabel'], 'notes' => $report['reportNotes'],
+            ],
+            $report['sections']
         );
     }
 
-    public function generate(
-        Request $request,
-        BudgetUtilizationService $utilization,
-        FiscalPeriodService $fiscalPeriods,
-        CashFlowService $cashFlow
-    ) {
-        $validated = $request->validate([
-            'report_type' => ['nullable', 'string', 'in:overall_financial,budget_utilization,cash_receipts,disbursements,income_vs_receipts,fund_balance,responsibility_center,account_title_ledger,closing_report'],
-            'fiscal_period_id' => ['nullable', 'integer', 'exists:annual_budgets,id'],
-            'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
-            'allocation_month' => ['nullable', 'date_format:Y-m-d'],
-            'month' => ['nullable', 'integer', 'between:1,12'],
-            'start_date' => ['nullable', 'date'],
-            'end_date' => ['nullable', 'date'],
-            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
-            'category_id' => ['nullable', 'integer', 'exists:budget_categories,id'],
-            'account_title_id' => ['nullable', 'integer', 'exists:budget_particulars,id'],
-        ]);
-
-        $reportType = $validated['report_type'] ?? 'overall_financial';
-        $selectedPeriod = $fiscalPeriods->resolve(
-            isset($validated['fiscal_period_id']) ? (int) $validated['fiscal_period_id'] : null,
-            isset($validated['year']) ? (int) $validated['year'] : null
-        );
-
-        $allocationMonth = $selectedPeriod
-            ? $fiscalPeriods->allocationMonth(
-                $selectedPeriod,
-                $validated['allocation_month'] ?? null,
-                isset($validated['month']) ? (int) $validated['month'] : null
-            )
-            : null;
-
-        $startDate = $validated['start_date'] ?? null;
-        $endDate = $validated['end_date'] ?? null;
-        if ($startDate && $endDate && $endDate < $startDate) {
-            [$startDate, $endDate] = [$endDate, $startDate];
-        }
-
-        $departmentId = isset($validated['department_id']) ? (int) $validated['department_id'] : null;
-        $categoryId = isset($validated['category_id']) ? (int) $validated['category_id'] : null;
-        $accountTitleId = isset($validated['account_title_id']) ? (int) $validated['account_title_id'] : null;
-
-        $itemsQuery = BudgetItem::query()
-            ->with(['budget', 'category', 'particular.department'])
-            ->when($selectedPeriod, fn ($query) => $query->where('budget_id', $selectedPeriod->id))
-            ->when($allocationMonth, fn ($query) => $query->whereDate('allocation_month', $allocationMonth));
-        $this->applyItemDimensions($itemsQuery, $departmentId, $categoryId, $accountTitleId);
-        $items = $itemsQuery
-            ->orderBy('allocation_month')
-            ->orderBy('category_id')
-            ->orderBy('particular_id')
-            ->get();
-
-        BudgetItem::hydrateDerivedTotals($items);
-
-        $postedDisbursements = $selectedPeriod
-            ? $utilization->queryForAnnualBudgetFilters(
-                $selectedPeriod,
-                $allocationMonth,
-                $startDate,
-                $endDate,
-                $departmentId,
-                $categoryId,
-                $accountTitleId
-            )->with(['expense.budgetItem'])->get()
-            : collect();
-
-        $postedByBudgetItem = $postedDisbursements
-            ->groupBy(fn ($item) => (int) ($item->expense?->budget_item_id ?? 0))
-            ->map(fn ($rows) => (float) $rows->sum('amount'));
-
-        $rows = $items->map(function (BudgetItem $item) use ($postedByBudgetItem) {
-            $appropriation = (float) $item->appropriation;
-            $expenditure = (float) ($postedByBudgetItem[$item->id] ?? 0);
-
-            return [
-                'ref_no' => $item->ref_no,
-                'allocation_month' => $item->allocation_month?->format('F Y') ?? 'Unknown',
-                'responsibility_center' => $item->particular?->department?->name ?? 'No Responsibility Center',
-                'category' => $item->category?->name ?? 'Uncategorized',
-                'account_title' => $item->particular?->particular ?? 'Untitled',
-                'appropriation' => $appropriation,
-                'expenditure' => $expenditure,
-                'balance' => $appropriation - $expenditure,
-                'utilization_rate' => $appropriation > 0 ? round(($expenditure / $appropriation) * 100, 2) : 0,
-            ];
-        });
-
-        $department = $departmentId ? Department::find($departmentId) : null;
-        $category = $categoryId ? BudgetCategory::find($categoryId) : null;
-        $monthLabel = $allocationMonth ? Carbon::parse($allocationMonth)->format('F Y') : 'All Fiscal Months';
-        $cashSummary = $cashFlow->summary($selectedPeriod);
-        $pendingCommitments = $selectedPeriod
-            ? (float) Disbursement::query()
-                ->whereIn('status', ['draft', 'for_release', 'for_approval', 'approved', 'returned_for_revision'])
-                ->whereHas('expense.budgetItem', fn ($query) => $query->where('budget_id', $selectedPeriod->id))
-                ->sum('amount')
-            : 0.0;
-        $totals = [
-            'appropriation' => (float) $rows->sum('appropriation'),
-            'expenditure' => (float) $rows->sum('expenditure'),
-            'balance' => (float) $rows->sum('balance'),
-            'receipts' => round($cashSummary['receipts'], 2),
-            'postedDisbursements' => round($cashSummary['postedDisbursements'], 2),
-            'cashOnHand' => round($cashSummary['cashOnHand'], 2),
-            'pendingCommitments' => round($pendingCommitments, 2),
-            'availableForDisbursement' => round($cashSummary['availableForDisbursement'], 2),
-        ];
-
-        return Inertia::render('Reports/Generated', [
-            'reportType' => $reportType,
-            'reportLabel' => collect($this->reportTypes())->firstWhere('value', $reportType)['label'] ?? 'Financial Report',
-            'period' => $selectedPeriod,
-            'monthLabel' => $monthLabel,
-            'dateRangeLabel' => $this->dateRangeLabel($startDate, $endDate),
-            'departmentLabel' => $department?->name ?? 'All Responsibility Centers',
-            'categoryLabel' => $category?->name ?? 'All Categories',
-            'rows' => $rows,
-            'receiptRows' => $this->receiptRows($selectedPeriod, $startDate, $endDate, null),
-            'disbursementRows' => $this->disbursementRows($selectedPeriod, $startDate, $endDate, null, compact('departmentId', 'categoryId', 'accountTitleId', 'allocationMonth')),
-            'reconciliationWarnings' => $this->reportWarnings($selectedPeriod, [
-                'cashOnHand' => $totals['cashOnHand'],
-                'budgetBalance' => $totals['balance'],
-            ]),
-            'totals' => $totals,
-            'generatedAt' => now(),
-            'generatedBy' => auth()->user(),
-        ]);
+    public function generate(Request $request, \App\Services\FinancialReportService $reports)
+    {
+        return Inertia::render('Reports/Generated', $reports->build($request));
     }
 
     private function applyItemDimensions($query, ?int $departmentId, ?int $categoryId, ?int $accountTitleId): void
@@ -545,82 +269,6 @@ class ReportController extends Controller
         ];
     }
 
-    private function receiptRows(?AnnualBudget $period, ?string $startDate, ?string $endDate, ?int $limit = 25): array
-    {
-        return Income::query()
-            ->whereNotNull('receipt_no')
-            ->where('receipt_no', '<>', '')
-            ->when($period, fn ($query) => $query->whereBetween('date_encoded', [
-                $period->fiscalStart()->toDateString(),
-                $period->fiscalEnd()->toDateString(),
-            ]))
-            ->when($startDate, fn ($query) => $query->whereDate('date_encoded', '>=', $startDate))
-            ->when($endDate, fn ($query) => $query->whereDate('date_encoded', '<=', $endDate))
-            ->latest('date_encoded')
-            ->when($limit, fn ($query) => $query->limit($limit))
-            ->get()
-            ->map(fn (Income $income) => [
-                'id' => $income->id,
-                'income_no' => $income->income_no,
-                'receipt_no' => $income->receipt_no,
-                'receipt_type' => $income->receipt_type,
-                'source' => $income->source,
-                'description' => $income->description,
-                'amount' => (float) $income->amount,
-                'receipt_date' => $income->date_encoded?->toDateString(),
-            ])
-            ->all();
-    }
-
-    private function disbursementRows(?AnnualBudget $period, ?string $startDate, ?string $endDate, ?int $limit = 25, array $dimensions = []): array
-    {
-        return Disbursement::query()
-            ->with(['expense.budgetItem.category', 'expense.budgetItem.particular.department'])
-            ->when(array_filter($dimensions), fn ($query) => $query->whereHas('expense.budgetItem', function ($query) use ($dimensions) {
-                $this->applyItemDimensions($query, $dimensions['departmentId'] ?? null, $dimensions['categoryId'] ?? null, $dimensions['accountTitleId'] ?? null);
-                $query->when($dimensions['allocationMonth'] ?? null, fn ($query, $month) => $query->whereDate('allocation_month', $month));
-            }))
-            ->when($period, fn ($query) => $query->whereHas(
-                'expense.budgetItem',
-                fn ($itemQuery) => $itemQuery->where('budget_id', $period->id)
-            ))
-            ->when($startDate, fn ($query) => $query->whereDate('date_encoded', '>=', $startDate))
-            ->when($endDate, fn ($query) => $query->whereDate('date_encoded', '<=', $endDate))
-            ->latest('date_encoded')
-            ->when($limit, fn ($query) => $query->limit($limit))
-            ->get()
-            ->map(fn (Disbursement $disbursement) => [
-                'id' => $disbursement->id,
-                'disbursement_no' => $disbursement->disbursement_no,
-                'expense_ref' => $disbursement->expense?->ref_no,
-                'allocation_month' => $disbursement->expense?->budgetItem?->allocation_month?->format('F Y'),
-                'expense_date' => $disbursement->expense?->date_encoded?->toDateString(),
-                'disbursement_date' => $disbursement->date_encoded?->toDateString(),
-                'pay_to' => $disbursement->pay_to,
-                'amount' => (float) $disbursement->amount,
-                'status' => $disbursement->status,
-            ])
-            ->all();
-    }
-
-    private function auditRows(?AnnualBudget $period, ?string $startDate, ?string $endDate, ?int $limit = 30): array
-    {
-        return AuditTrail::query()
-            ->when($startDate, fn ($query) => $query->whereDate('created_at', '>=', $startDate))
-            ->when($endDate, fn ($query) => $query->whereDate('created_at', '<=', $endDate))
-            ->latest()
-            ->when($limit, fn ($query) => $query->limit($limit))
-            ->get()
-            ->map(fn (AuditTrail $audit) => [
-                'id' => $audit->id,
-                'action' => $audit->action,
-                'user_name' => $audit->user_name,
-                'user_role' => $audit->user_role,
-                'remarks' => $audit->remarks,
-                'created_at' => $audit->created_at?->format('Y-m-d H:i'),
-            ])
-            ->all();
-    }
 
     private function reportWarnings(?AnnualBudget $period, array $summaryCards): array
     {

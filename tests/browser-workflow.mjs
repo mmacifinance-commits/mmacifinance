@@ -19,6 +19,7 @@ const browser = await chromium.launch({ channel: 'msedge', headless: true })
 const context = await browser.newContext({ baseURL: base, acceptDownloads: true, viewport: { width: 1920, height: 1080 } })
 const page = await context.newPage()
 page.setDefaultTimeout(15000)
+page.setDefaultNavigationTimeout(45000)
 const errors = []
 page.on('pageerror', (error) => errors.push(error.message))
 page.on('dialog', (dialog) => dialog.accept())
@@ -70,6 +71,21 @@ try {
     assert.match(download.suggestedFilename(), /\.xlsx$/)
     assert.equal(await download.failure(), null)
     console.log('PASS browser XLSX download')
+
+    for (const type of ['overall_financial', 'budget_utilization', 'cash_receipts', 'disbursements', 'income_vs_receipts', 'fund_balance', 'responsibility_center', 'account_title_ledger', 'closing_report']) {
+        await page.goto('/reports/generate?report_type='+type)
+        await page.locator('.report-table').first().waitFor()
+        const tablesFit = await page.evaluate(() => {
+            const sheet = document.querySelector('.report-sheet').getBoundingClientRect()
+            return [...document.querySelectorAll('.report-table')].every(table => {
+                const bounds = table.getBoundingClientRect()
+                return bounds.left >= sheet.left && bounds.right <= sheet.right + 1
+            })
+        })
+        assert.equal(tablesFit, true, type+' table overflows its A4 sheet')
+        assert.equal(await page.getByText('draft', { exact: true }).count(), 0)
+    }
+    console.log('PASS all nine generated report types render within the A4 sheet')
 
     await page.goto('/departments')
     await page.getByRole('button', { name: /Next/ }).click()

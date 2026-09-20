@@ -10,17 +10,22 @@ use App\Models\BudgetParticular;
 use App\Models\Expense;
 use App\Services\BudgetUtilizationService;
 use App\Services\FiscalPeriodLockService;
+use App\Support\SpreadsheetImportExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Response;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
-use App\Support\SpreadsheetImportExport;
 
 class ExpenseController extends Controller
 {
     public function index(Request $request)
     {
+        $filters = $request->validate([
+            'search' => 'nullable|string|max:255',
+            'category_id' => 'nullable|integer|exists:budget_categories,id',
+            'status' => 'nullable|in:pending,cancelled,for_approval,approved,rejected,returned_for_revision,posted',
+            'fiscal_period_id' => 'nullable|integer|exists:annual_budgets,id',
+        ]);
         $yearExpression = DB::getDriverName() === 'sqlite'
             ? "CAST(strftime('%Y', date_encoded) AS INTEGER)"
             : 'YEAR(date_encoded)';
@@ -31,7 +36,12 @@ class ExpenseController extends Controller
             'budgetItem.budget',
             'auditTrails',
             'disbursements',
-        ])->latest();
+        ])->when($filters['search'] ?? null, fn ($q, $search) => $q->where(fn ($q) => $q
+            ->where('ref_no', 'like', '%'.$search.'%')->orWhere('description', 'like', '%'.$search.'%')))
+            ->when($filters['category_id'] ?? null, fn ($q, $id) => $q->where('category_id', $id))
+            ->when($filters['status'] ?? null, fn ($q, $status) => $q->where('status', $status))
+            ->when($filters['fiscal_period_id'] ?? null, fn ($q, $id) => $q->whereHas('budgetItem', fn ($q) => $q->where('budget_id', $id)))
+            ->latest('id');
 
         $expenses = $expenseQuery->paginate(25)->withQueryString();
 
@@ -57,45 +67,55 @@ class ExpenseController extends Controller
 
         $defaultYear = $yearsFromExpenses->first() ?? $budgetYears->sortDesc()->values()->first() ?? $currentYear;
 
-        $budgetedCategories = BudgetCategory::query()
-            ->whereHas('budgetItems.budget', function ($query) use ($availableYears) {
-                $query->whereIn('year', $availableYears);
-            })
-            ->with(['budgetItems' => function ($query) use ($availableYears) {
-                $query
-                    ->select(['id', 'budget_id', 'category_id', 'particular_id', 'month', 'allocation_month', 'ref_no', 'appropriation'])
-                    ->whereHas('budget', fn ($budgetQuery) => $budgetQuery->whereIn('year', $availableYears))
-                    ->with('budget:id,year,start_date,end_date');
-            }])
-            ->orderBy('name')
-            ->get();
-
-        $budgetItems = $budgetedCategories->flatMap(fn (BudgetCategory $category) => $category->budgetItems);
-        // Include row allocations too: their appended totals otherwise execute
-        // three aggregate queries per allocation during Inertia serialization.
         $rowBudgetItems = $expenses->getCollection()->pluck('budgetItem')->filter();
-        BudgetItem::hydrateDerivedTotals($budgetItems->concat($rowBudgetItems));
-        $rowBudgetItems->each(fn (BudgetItem $item) => $item->makeHidden('derived_expenditure'));
-
-        // The page only needs fiscal labels on nested budgets, not a repeated
-        // twelve-month calendar for every allocation option and expense row.
-        $budgetItems->concat($rowBudgetItems)->each(function (BudgetItem $item) {
+        BudgetItem::hydrateDerivedTotals($rowBudgetItems);
+        $rowBudgetItems->each(function (BudgetItem $item) {
+            $item->makeHidden('derived_expenditure');
             $item->budget?->makeHidden('fiscal_months');
         });
 
-        // Totals are hydrated in one aggregate query. Disable accessors afterward
-        // so serialization cannot trigger one query per allocation option.
-        $budgetedCategories->each(function (BudgetCategory $category) {
-            $category->budgetItems->each(fn (BudgetItem $item) => $item
-                ->setAppends([])
-                ->makeHidden('derived_expenditure'));
-        });
+        $budgetedCategories = function () use ($availableYears) {
+            $categories = BudgetCategory::query()
+                ->whereHas('budgetItems.budget', function ($query) use ($availableYears) {
+                    $query->whereIn('year', $availableYears);
+                })
+                ->with(['budgetItems' => function ($query) use ($availableYears) {
+                    $query
+                        ->select(['id', 'budget_id', 'category_id', 'particular_id', 'month', 'allocation_month', 'ref_no', 'appropriation'])
+                        ->whereHas('budget', fn ($budgetQuery) => $budgetQuery->whereIn('year', $availableYears))
+                        ->with('budget:id,year,start_date,end_date');
+                }])
+                ->orderBy('name')
+                ->get();
+
+            $budgetItems = $categories->flatMap(fn (BudgetCategory $category) => $category->budgetItems);
+            // Hydrate option balances together instead of querying each allocation.
+            BudgetItem::hydrateDerivedTotals($budgetItems);
+
+            // The page only needs fiscal labels on nested budgets, not a repeated
+            // twelve-month calendar for every allocation option and expense row.
+            $budgetItems->each(function (BudgetItem $item) {
+                $item->budget?->makeHidden('fiscal_months');
+            });
+
+            // Totals are hydrated in one aggregate query. Disable accessors afterward
+            // so serialization cannot trigger one query per allocation option.
+            $categories->each(function (BudgetCategory $category) {
+                $category->budgetItems->each(fn (BudgetItem $item) => $item
+                    ->setAppends([])
+                    ->makeHidden('derived_expenditure'));
+            });
+
+            return $categories;
+        };
 
         return Inertia::render('Expenses/Index', [
             'expenses' => $expenses,
+            'filters' => $filters,
             'categories' => BudgetCategory::all(),
-            'budgetedCategories' => $budgetedCategories,
-            'particulars' => BudgetParticular::with('category', 'department')->get(),
+            'budgetedCategories' => Inertia::optional($budgetedCategories),
+            'particulars' => Inertia::optional(fn () => BudgetParticular::with('department:id,name,code')
+                ->whereHas('budgetItems')->get(['id', 'category_id', 'department_id', 'particular'])),
             'budgetYears' => AnnualBudget::pluck('year')->values()->toArray(),
             'fiscalPeriods' => AnnualBudget::query()->orderByDesc('start_date')->get(['id', 'year', 'start_date', 'end_date', 'ref_no']),
             'defaultFiscalPeriodId' => AnnualBudget::query()

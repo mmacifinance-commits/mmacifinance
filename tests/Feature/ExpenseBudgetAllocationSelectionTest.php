@@ -18,6 +18,41 @@ class ExpenseBudgetAllocationSelectionTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_index_keeps_allocation_options_out_of_initial_response_and_loads_them_on_demand(): void
+    {
+        [$user, , , $item] = $this->fixtures();
+        $initial = $this->actingAs($user)->get('/expenses')->assertOk()->assertInertia(fn ($page) => $page
+            ->missing('budgetedCategories')->missing('particulars')->where('expenses.per_page', 25));
+
+        $response = $this->get('/expenses', [
+            'X-Inertia' => 'true',
+            'X-Inertia-Version' => $initial->viewData('page')['version'],
+            'X-Inertia-Partial-Component' => 'Expenses/Index',
+            'X-Inertia-Partial-Data' => 'budgetedCategories,particulars',
+        ])->assertOk();
+        $options = collect($response->json('props.budgetedCategories'))->flatMap(fn ($category) => $category['budget_items']);
+        $allocation = $options->firstWhere('id', $item->id);
+        $this->assertNotNull($allocation);
+        $this->assertEquals($item->appropriation, $allocation['balance']);
+        $this->assertNotEmpty($response->json('props.particulars'));
+    }
+
+    public function test_filters_search_all_expenses_before_paginating(): void
+    {
+        [$user, $category, $particular, $item] = $this->fixtures();
+        foreach (range(1, 31) as $number) {
+            Expense::create(['ref_no' => 'EXP-SEARCH-'.$number, 'description' => $number === 1 ? 'Old matching expense' : 'Other expense',
+                'category_id' => $category->id, 'particular_id' => $particular->id, 'budget_item_id' => $item->id,
+                'amount' => 10, 'date_encoded' => '2026-08-10', 'status' => 'pending']);
+        }
+        $this->actingAs($user)->get('/expenses?search=Old%20matching&status=pending&category_id='.$category->id.'&fiscal_period_id='.$item->budget_id)
+            ->assertOk()->assertInertia(fn ($page) => $page->where('expenses.total', 1)
+            ->where('expenses.data.0.ref_no', 'EXP-SEARCH-1'));
+        $this->get('/expenses?page=2')->assertOk()->assertInertia(fn ($page) => $page
+            ->where('expenses.total', 31)->has('expenses.data', 6));
+        $this->get('/expenses?status=approved')->assertOk()->assertInertia(fn ($page) => $page->where('expenses.total', 0));
+    }
+
     public function test_september_expense_can_explicitly_charge_an_august_allocation(): void
     {
         [$user, $category, $particular, $augustItem, $septemberItem] = $this->fixtures();
@@ -153,8 +188,7 @@ class ExpenseBudgetAllocationSelectionTest extends TestCase
                 ->component('Expenses/Index')
                 ->where('expenses.data.0.budget_item.balance', 30000));
 
-        $individualTotals = array_filter($queries, fn ($sql) =>
-            str_contains($sql, 'sum(') && str_contains($sql, 'disbursements')
+        $individualTotals = array_filter($queries, fn ($sql) => str_contains($sql, 'sum(') && str_contains($sql, 'disbursements')
             && ! str_contains($sql, 'group by'));
         $this->assertCount(0, $individualTotals, 'Serialization must not query totals per allocation.');
     }

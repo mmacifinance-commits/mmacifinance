@@ -152,7 +152,7 @@ class SpreadsheetImportExport
             // looking cut off.
             $worksheet->getPageSetup()
                 ->setPaperSize(PageSetup::PAPERSIZE_A4)
-                ->setOrientation(PageSetup::ORIENTATION_LANDSCAPE)
+                ->setOrientation(PageSetup::ORIENTATION_PORTRAIT)
                 ->setFitToPage(true)
                 ->setFitToWidth(1)
                 ->setFitToHeight(0)
@@ -185,6 +185,9 @@ class SpreadsheetImportExport
                 ['Generated At', $metadata['generated_at'] ?? now()->format('M d, Y h:i A')],
                 ['Total Receipts', $metadata['total_receipts'] ?? 0],
                 ['Available Cash', $metadata['available_cash'] ?? 0],
+                ['Responsibility Center', $metadata['department'] ?? 'All'],
+                ['Category', $metadata['category'] ?? 'All'],
+                ['Account Title', $metadata['account_title'] ?? 'All'],
             ];
 
             foreach (array_chunk($pairs, 2) as $pairRow) {
@@ -195,7 +198,8 @@ class SpreadsheetImportExport
                     $valueEndCell = self::cellCoordinate($column + 3, $row);
                     $worksheet->setCellValue($labelCell, $label);
                     $worksheet->mergeCells("{$valueStartCell}:{$valueEndCell}");
-                    $worksheet->setCellValue($valueStartCell, $value);
+                    $worksheet->setCellValueExplicit($valueStartCell, $value ?? '',
+                        is_int($value) || is_float($value) ? \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_NUMERIC : \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
                     $worksheet->getStyle("{$labelCell}:{$valueEndCell}")->applyFromArray([
                         'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'CBD5E1']]],
                     ]);
@@ -221,8 +225,17 @@ class SpreadsheetImportExport
             $metadataEndRow = $row - 1;
 
             foreach ($sections as $section) {
-                $row = self::writeReportSection($worksheet, $row, $section);
+                $row = ($section['type'] ?? '') === 'unified'
+                    ? self::writeUnifiedSection($worksheet, $row, $section)
+                    : self::writeReportSection($worksheet, $row, $section);
                 $row += 2;
+            }
+            foreach ($metadata['notes'] ?? [] as $note) {
+                $worksheet->mergeCells("A{$row}:I{$row}");
+                $worksheet->setCellValueExplicit("A{$row}", $note, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $worksheet->getStyle("A{$row}:I{$row}")->getAlignment()->setWrapText(true);
+                $worksheet->getRowDimension($row)->setRowHeight(42);
+                $row++;
             }
             $lastRow = max(1, $row - 1);
 
@@ -259,6 +272,77 @@ class SpreadsheetImportExport
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             ])
             ->deleteFileAfterSend(true);
+    }
+
+    private static function writeUnifiedSection($sheet, int $row, array $section): int
+    {
+        $count = count($section['headers']);
+        // Every section uses the same A:I boundary; spare columns widen text.
+        $widths = array_fill(0, $count, 1);
+        $widths[$count > 3 ? 2 : 0] += 9 - $count;
+        $columns = []; $column = 1;
+        foreach ($widths as $width) { $columns[] = $column; $column += $width; }
+        $sheet->mergeCells("A{$row}:I{$row}");
+        $sheet->setCellValueExplicit("A{$row}", $section['title'], \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+        $sheet->getStyle("A{$row}:I{$row}")->getFont()->setBold(true);
+        $sheet->getStyle("A{$row}:I{$row}")->getAlignment()->setWrapText(true);
+        $sheet->getRowDimension($row)->setRowHeight(36);
+        $row++;
+        $header = $row;
+        $write = function (array $values, int $line, bool $heading = false) use ($sheet, $columns, $widths, $section) {
+            foreach ($values as $i => $value) {
+                $cell = Coordinate::stringFromColumnIndex($columns[$i]).$line;
+                $last = Coordinate::stringFromColumnIndex($columns[$i] + $widths[$i] - 1).$line;
+                if ($widths[$i] > 1) $sheet->mergeCells("{$cell}:{$last}");
+                if (!$heading && (in_array($i, $section['money']) || $section['percent'] === $i) && is_numeric($value)) {
+                    $sheet->setCellValue($cell, $section['percent'] === $i ? $value / 100 : $value);
+                    $sheet->getStyle($cell)->getNumberFormat()->setFormatCode($section['percent'] === $i ? '0.00%' : '"₱"#,##0.00');
+                } else {
+                    $sheet->setCellValueExplicit($cell, (string) ($value ?? ''), \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                }
+            }
+            $lines = 1;
+            foreach ($values as $i => $value) $lines = max($lines, (int) ceil(mb_strlen((string) $value) / max(8, $widths[$i] * 12)));
+            $sheet->getRowDimension($line)->setRowHeight(max($heading ? 42 : 36, min(400, $lines * 15)));
+        };
+        $write($section['headers'], $row++, true);
+        $first = $row;
+        foreach ($section['rows'] as $values) {
+            $write($values, $row);
+            if (isset($section['balanceColumns'])) {
+                [$a, $p, $b] = array_map(fn ($i) => Coordinate::stringFromColumnIndex($columns[$i]), $section['balanceColumns']);
+                $sheet->setCellValue("{$b}{$row}", "={$a}{$row}-{$p}{$row}");
+                $pct = Coordinate::stringFromColumnIndex($columns[$section['percent']]);
+                $sheet->setCellValue("{$pct}{$row}", "=IF({$a}{$row}>0,{$p}{$row}/{$a}{$row},0)");
+            }
+            $row++;
+        }
+        if (!$section['rows']) {
+            $sheet->mergeCells("A{$row}:I{$row}");
+            $sheet->setCellValue("A{$row}", 'No records match the selected report filters.');
+            $row++;
+        }
+        $last = $row - 1;
+        if ($section['totalLabel']) {
+            $write(array_replace(array_fill(0, $count, ''), [0 => $section['totalLabel']], $section['totals']), $row);
+            foreach ($section['money'] as $i) {
+                $c = Coordinate::stringFromColumnIndex($columns[$i]);
+                $sheet->setCellValue("{$c}{$row}", "=SUM({$c}{$first}:{$c}{$last})");
+            }
+            if ($section['percent'] !== null) {
+                $a = Coordinate::stringFromColumnIndex($columns[$section['money'][0]]);
+                $p = Coordinate::stringFromColumnIndex($columns[$section['money'][1]]);
+                $pct = Coordinate::stringFromColumnIndex($columns[$section['percent']]);
+                $sheet->setCellValue("{$pct}{$row}", "=IF({$a}{$row}>0,{$p}{$row}/{$a}{$row},0)");
+            }
+            $sheet->getStyle("A{$row}:I{$row}")->getFont()->setBold(true);
+            $row++;
+        }
+        $last = $row - 1;
+        $sheet->getStyle("A{$header}:I{$last}")->getAlignment()->setWrapText(true);
+        $sheet->getStyle("A{$header}:I{$last}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        $sheet->getStyle("A{$header}:I{$header}")->getFont()->setBold(true);
+        return $row;
     }
 
     private static function writeReportSection($worksheet, int $row, array $section): int
