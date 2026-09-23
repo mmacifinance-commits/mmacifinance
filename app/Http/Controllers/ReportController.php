@@ -165,7 +165,7 @@ class ReportController extends Controller
         $summaryCards = [
             'totalAppropriation' => round($appropriation, 2),
             'totalReceipts' => $report['totals']['receipts'],
-            'postedDisbursements' => $report['totals']['postedDisbursements'],
+            'postedDisbursements' => $report['totals']['institutionalPostedDisbursements'],
             'budgetBalance' => round($appropriation - $expenditure, 2),
             'cashOnHand' => $report['totals']['cashOnHand'],
             'pendingCommitments' => $report['totals']['pendingCommitments'],

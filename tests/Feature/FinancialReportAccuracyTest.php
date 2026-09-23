@@ -56,8 +56,9 @@ class FinancialReportAccuracyTest extends TestCase
         $this->assertSame(200.0, $data['totals']['expenditure']);
         $this->assertSame(800.0, $data['totals']['balance']);
         $this->assertSame(500.0, $data['totals']['receipts']);
-        $this->assertSame(800.0, $data['totals']['openingCash']);
-        $this->assertSame(900.0, $data['totals']['cashOnHand']);
+        $this->assertArrayNotHasKey('openingCash', $data['totals']);
+        $this->assertSame(100.0, $data['totals']['cashOnHand']);
+        $this->assertSame($data['totals']['receipts'] - $data['totals']['institutionalPostedDisbursements'], $data['totals']['cashOnHand']);
         $this->assertSame(30.0, $data['totals']['pendingCommitments']);
         $this->assertCount(1, $data['disbursementRows']);
         $this->assertCount(1, $data['receiptRows']);

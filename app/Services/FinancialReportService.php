@@ -97,16 +97,14 @@ class FinancialReportService
         // Cash balances must use all institutional payments, not a department subset.
         $cashReceipts = round((float) $receipts->sum('amount'), 2);
         $cashPaid = round((float) $dateFilter(clone $payments)->sum('amount'), 2);
-        $opening = $start ? round((float) (clone $incomeQuery)->whereNotNull('receipt_no')->where('receipt_no', '<>', '')->whereDate('date_encoded', '<', $start)->sum('amount')
-            - (float) (clone $payments)->whereDate('date_encoded', '<', $start)->sum('amount'), 2) : 0.0;
-        $closing = round($opening + $cashReceipts - $cashPaid, 2);
+        $availableCash = round($cashReceipts - $cashPaid, 2);
         $pending = Disbursement::query()->whereIn('status', ['draft', 'for_release', 'for_approval', 'approved', 'returned_for_revision'])
             ->whereHas('expense', fn ($q) => $q->whereIn('budget_item_id', $items->modelKeys()));
-        $notes[] = 'Cash balances are reconstructed from recorded receipts and posted payments within the fiscal year; no prior-year opening cash entry is assumed. Pending commitments use current workflow status, not historical status.';
+        $notes[] = 'Available cash equals receipts less posted disbursements for the selected dates. Pending commitments use current workflow status, not historical status.';
         $totals = ['appropriation' => round((float) $budgetRows->sum('appropriation'), 2), 'expenditure' => round((float) $budgetRows->sum('expenditure'), 2),
             'balance' => round((float) $budgetRows->sum('balance'), 2), 'receipts' => $cashReceipts,
-            'postedDisbursements' => round((float) $posted->sum('amount'), 2), 'cashOnHand' => $closing,
-            'openingCash' => $opening, 'institutionalPostedDisbursements' => $cashPaid,
+            'postedDisbursements' => round((float) $posted->sum('amount'), 2), 'cashOnHand' => $availableCash,
+            'institutionalPostedDisbursements' => $cashPaid,
             'pendingCommitments' => round((float) $dateFilter($pending)->sum('amount'), 2),
             'income' => round((float) $incomes->sum('amount'), 2), 'unreceiptedIncome' => round((float) $incomes->sum('amount') - $cashReceipts, 2)];
 
@@ -122,8 +120,8 @@ class FinancialReportService
             $incomes->map(fn ($r) => [$r->income_no, $r->date_encoded?->toDateString(), $r->source.' / '.$r->description, $r->receipt_no,
                 (float) $r->amount, filled($r->receipt_no) ? (float) $r->amount : 0, filled($r->receipt_no) ? 0 : (float) $r->amount])->all(), [4,5,6]);
         $fundSection = $this->section('Fund Balance', ['Description', 'Amount'], [
-            ['Opening recorded cash before date range', $opening], ['Receipts in date range', $cashReceipts],
-            ['Less: posted payments in date range', $cashPaid], ['Closing recorded cash', $closing],
+            ['Receipts', $cashReceipts],
+            ['Less: Posted Disbursements', $cashPaid], ['Available Cash', $availableCash],
         ], [1]);
         $fundSection['totalLabel'] = null;
         $centers = $budgetRows->groupBy('department_id')->map(function ($rows) {
@@ -143,7 +141,7 @@ class FinancialReportService
         };
         if ($type === 'income_vs_receipts') $notes[] = 'Receipted amounts are a subset of Income records, not additional income. Missing receipt numbers do not by themselves establish accounts receivable.';
         if ($type === 'account_title_ledger') $notes[] = 'Budget account-title ledger: appropriation less posted payments, not a double-entry general ledger. Opening balance includes payments before the selected start date.';
-        if ($closing < 0) $notes[] = 'Warning: recorded cash is negative. Review receipts and posted payments.';
+        if ($availableCash < 0) $notes[] = 'Warning: available cash is negative. Review receipts and posted disbursements.';
         return ['reportType' => $type, 'reportLabel' => self::TYPES[$type], 'period' => $period,
             'monthLabel' => $month ? Carbon::parse($month)->format('F Y') : 'All Fiscal Months',
             'dateRangeLabel' => ($start ?: 'Start of fiscal year').' to '.($end ?: 'End of fiscal year'),

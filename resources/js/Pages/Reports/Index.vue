@@ -355,9 +355,9 @@ const activeReportLabel = computed(() => {
             <p class="mt-1 text-xs text-gray-500">Appropriation less posted use</p>
         </div>
         <div class="border border-gray-200 bg-white p-4 shadow-sm border-t-4 border-t-teal-500">
-            <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Recorded Available Cash</p>
+            <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Available Cash</p>
             <p class="mt-1 text-xl font-extrabold text-teal-700 font-sans">{{ PESO }}{{ fmt(summary.cashOnHand) }}</p>
-            <p class="mt-1 text-xs text-gray-500">Starting cash + receipts - posted payments</p>
+            <p class="mt-1 text-xs text-gray-500">Receipts less posted disbursements</p>
         </div>
         <div class="border border-gray-200 bg-white p-4 shadow-sm border-t-4 border-t-amber-500">
             <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Pending Commitments</p>

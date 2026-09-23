@@ -11,9 +11,9 @@ generated print sections, and Excel sections. Financial records are read only.
   other unposted releases are excluded from expenditure.
 - Income vs receipts: all Income records in the date range, with separate
   receipted and unreceipted amounts. Missing receipt numbers are not proof of debt.
-- Fund balance: opening recorded fiscal-year cash before the start date, plus
-  receipts in range, less posted payments in range. No prior-year opening cash is
-  invented. This is not a full balance sheet or certified bank reconciliation.
+- Fund balance / available cash: receipts less posted disbursements for the same
+  selected dates. No starting balance is added. This is not a full balance sheet
+  or certified bank reconciliation.
 - Responsibility center: totals grouped by center ID, with allocation detail.
 - Account-title ledger: each allocation's opening available budget, posted
   payment entries in chronological order, and running remaining budget. This is
