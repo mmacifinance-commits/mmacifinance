@@ -201,7 +201,7 @@ class DashboardController extends Controller
             'categoryStats' => $categoryStats,
             'multiYearComparison' => $multiYearComparison,
             'monthlyBreakdown' => $monthlyBreakdown,
-            'recentDisbursements' => (clone $disbQuery)->latest('date_encoded')->take(6)->get(),
+            'recentDisbursements' => (clone $disbQuery)->latest('date_encoded')->latest('id')->take(10)->get(),
         ]);
     }
 

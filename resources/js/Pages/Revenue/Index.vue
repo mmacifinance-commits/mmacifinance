@@ -325,7 +325,7 @@ watch(
         <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div class="bg-navy-dark px-5 py-3"><h3 class="text-sm font-bold uppercase tracking-wider text-white">Income Records</h3></div>
             <div class="divide-y">
-                <div v-for="item in incomeRecords" :key="item.id" class="flex items-center justify-between gap-4 px-5 py-4">
+                <div v-for="item in (incomeRecords || []).slice(0, 10)" :key="item.id" class="flex items-center justify-between gap-4 px-5 py-4">
                     <div>
                         <p class="text-sm font-bold text-gray-900">{{ item.income_no }}</p>
                         <p class="text-xs text-gray-500">{{ item.source }} - {{ item.description }}</p>
@@ -343,7 +343,7 @@ watch(
         <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div class="bg-navy-dark px-5 py-3"><h3 class="text-sm font-bold uppercase tracking-wider text-white">Appropriation Summary</h3></div>
             <div class="divide-y">
-                <div v-for="item in budgetItems" :key="item.id" class="px-5 py-4">
+                <div v-for="item in (budgetItems || []).slice(0, 10)" :key="item.id" class="px-5 py-4">
                     <div class="flex items-start justify-between gap-4">
                         <div>
                             <p class="text-sm font-bold text-gray-900">{{ item.category?.name || 'Uncategorized' }}</p>

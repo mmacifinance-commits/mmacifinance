@@ -389,7 +389,7 @@ const barColors = ['#1e293b', '#d4a843', '#2563eb', '#059669', '#7c3aed', '#db27
                 <span class="text-xs text-mustard font-semibold">{{ categoryStats?.length || 0 }} Categories</span>
             </div>
             <div class="p-5 space-y-4">
-                <div v-for="(cat, idx) in (categoryStats || [])" :key="cat.name" class="space-y-1.5">
+                <div v-for="(cat, idx) in (categoryStats || []).slice(0, 10)" :key="cat.name" class="space-y-1.5">
                     <div class="flex justify-between items-center text-xs">
                         <span class="font-bold text-gray-800">{{ cat.name }}</span>
                         <span class="font-mono text-gray-600">₱{{ fmt(cat.expenditure) }} / ₱{{ fmt(cat.appropriation) }} ({{ cat.utilization }}%)</span>
@@ -412,7 +412,7 @@ const barColors = ['#1e293b', '#d4a843', '#2563eb', '#059669', '#7c3aed', '#db27
                 <span class="text-xs text-mustard font-semibold">Financial Activity</span>
             </div>
             <div class="divide-y divide-gray-100 flex-1 overflow-y-auto">
-                <div v-for="d in (recentDisbursements || [])" :key="d.id" class="p-4 flex items-center justify-between hover:bg-gray-50/60 transition">
+                <div v-for="d in (recentDisbursements || []).slice(0, 10)" :key="d.id" class="p-4 flex items-center justify-between hover:bg-gray-50/60 transition">
                     <div>
                         <div class="flex items-center gap-2">
                             <span class="font-mono text-xs font-bold text-navy">{{ d.disbursement_no }}</span>
