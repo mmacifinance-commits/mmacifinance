@@ -295,7 +295,7 @@ class ReportController extends Controller
         ])->where(function ($query) {
             $query->whereNull('receipt_no')->orWhere('receipt_no', '');
         })->exists()) {
-            $warnings[] = 'One or more income records in this fiscal period are missing official receipt numbers.';
+            $warnings[] = 'Some income entries have no receipt number and are not counted as receipts.';
         }
 
         if ($period && Disbursement::query()->whereHas(
