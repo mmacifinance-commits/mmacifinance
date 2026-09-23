@@ -15,7 +15,7 @@ export function offlineValidation(url, data = {}) {
     const label = key => key.replaceAll('_', ' ').replace(/ id$/, '')
     const blank = value => value == null || String(value).trim() === ''
     for (const key of required) if (blank(data[key])) errors[key] = `Please enter ${label(key)}.`
-    if (section === 'income' && !blank(data.receipt_no) && blank(data.receipt_type)) errors.receipt_type = 'Receipt type is required when a receipt number is entered.'
+    if (section === 'income' && (!blank(data.receipt_no) || !blank(data.receipt_type))) errors.receipt_no = 'Income is projected income. Add actual collections on the Receipts page.'
     for (const key of ['amount', 'appropriation']) {
         if (blank(data[key])) continue
         const minimum = ['expenses', 'disbursements'].includes(section) ? 0.01 : 0

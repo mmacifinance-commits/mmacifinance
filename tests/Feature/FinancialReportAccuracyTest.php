@@ -71,9 +71,12 @@ class FinancialReportAccuracyTest extends TestCase
     {
         [$period] = $this->fixture();
         $report = $this->data(['report_type' => 'income_vs_receipts', 'fiscal_period_id' => $period->id, 'start_date' => '2026-09-01', 'end_date' => '2026-09-30']);
-        $this->assertCount(1, $report['sections']);
-        $this->assertCount(2, $report['sections'][0]['rows']);
-        $this->assertSame([4 => 575.0, 5 => 500.0, 6 => 75.0], $report['sections'][0]['totals']);
+        $this->assertCount(3, $report['sections']);
+        $this->assertSame(75.0, $report['totals']['income']);
+        $this->assertSame(500.0, $report['totals']['receipts']);
+        $this->assertSame([['Projected Income', 75.0], ['Actual Receipts', 500.0], ['Difference (Projected Income less Receipts)', -425.0]], $report['sections'][0]['rows']);
+        $this->assertCount(1, $report['sections'][1]['rows']);
+        $this->assertCount(1, $report['sections'][2]['rows']);
     }
 
     public function test_ledger_carries_prior_payments_into_opening_and_running_budget_balance(): void
@@ -124,7 +127,7 @@ class FinancialReportAccuracyTest extends TestCase
                             $this->assertEqualsWithDelta($expected, $sheet->getCell([$columns[$column], $totalRow])->getCalculatedValue(), 0.0001, $type.' total');
                         }
                     }
-                    $searchFrom = $titleRow + 1;
+                    $searchFrom = $titleRow + 2 + max(1, count($section['rows']));
                 }
                 $book->disconnectWorksheets();
             } finally { unlink($path); }

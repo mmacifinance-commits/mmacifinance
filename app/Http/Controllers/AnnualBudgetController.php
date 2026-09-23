@@ -29,7 +29,7 @@ class AnnualBudgetController extends Controller
 
     protected function ensureIncomeExistsForPeriod(string $startDate, string $endDate, string $errorField = 'start_date'): void
     {
-        if (! Income::whereBetween('date_encoded', [$startDate, $endDate])->exists()) {
+        if (! Income::projected()->whereBetween('date_encoded', [$startDate, $endDate])->exists()) {
             throw ValidationException::withMessages([
                 $errorField => "You must create at least one income record between {$startDate} and {$endDate} before creating appropriation.",
             ]);
@@ -45,7 +45,7 @@ class AnnualBudgetController extends Controller
 
     protected function incomePoolForBudget(AnnualBudget $annualBudget): array
     {
-        return Income::query()
+        return Income::projected()
             ->whereBetween('date_encoded', [
                 $annualBudget->fiscalStart()->toDateString(),
                 $annualBudget->fiscalEnd()->toDateString(),
@@ -65,7 +65,7 @@ class AnnualBudgetController extends Controller
 
         $availableIncome = $this->incomePoolForBudget($annualBudget);
         $allocatedForBudget = $this->allocatedIncomeTotalForBudget($annualBudget);
-        $periodIncomeTotal = (float) Income::whereBetween('date_encoded', [
+        $periodIncomeTotal = (float) Income::projected()->whereBetween('date_encoded', [
             $annualBudget->fiscalStart()->toDateString(),
             $annualBudget->fiscalEnd()->toDateString(),
         ])->sum('amount');
@@ -375,7 +375,7 @@ class AnnualBudgetController extends Controller
             $csvTotalAppropriation += $amount;
         }
 
-        $availableIncome = (float) Income::whereBetween('date_encoded', [
+        $availableIncome = (float) Income::projected()->whereBetween('date_encoded', [
             $annualBudget->fiscalStart()->toDateString(),
             $annualBudget->fiscalEnd()->toDateString(),
         ])->sum('amount');
@@ -535,7 +535,7 @@ class AnnualBudgetController extends Controller
 
         return Inertia::render('AnnualBudgets/Show', [
             'budget' => $budget,
-            'setupWarning' => Income::whereBetween('date_encoded', [$annualBudget->fiscalStart()->toDateString(), $annualBudget->fiscalEnd()->toDateString()])->exists()
+            'setupWarning' => Income::projected()->whereBetween('date_encoded', [$annualBudget->fiscalStart()->toDateString(), $annualBudget->fiscalEnd()->toDateString()])->exists()
                 ? null : 'No income records are available for this fiscal period. You can review existing items, but add income dated within this period before funding new allocations.',
             'categories' => BudgetCategory::all(),
             'accountTitles' => $accountTitles,

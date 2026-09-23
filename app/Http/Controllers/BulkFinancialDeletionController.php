@@ -42,6 +42,9 @@ class BulkFinancialDeletionController extends Controller
             if ($module === 'receipts') {
                 $query->whereNotNull('receipt_no')->where('receipt_no', '<>', '');
             }
+            if ($module === 'income') {
+                $query->projected();
+            }
             if ($data['scope'] === 'selected') {
                 $query->whereKey($data['ids']);
             }

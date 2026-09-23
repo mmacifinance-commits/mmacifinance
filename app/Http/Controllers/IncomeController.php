@@ -10,7 +10,7 @@ use App\Services\FiscalPeriodLockService;
 use App\Services\FiscalPeriodService;
 use App\Support\SpreadsheetImportExport;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class IncomeController extends Controller
@@ -36,7 +36,7 @@ class IncomeController extends Controller
         $endDate = $request->query('end_date');
         $search = trim((string) $request->query('search', ''));
 
-        $incomeTotalQuery = Income::query();
+        $incomeTotalQuery = Income::projected();
         if ($selectedPeriod) {
             $incomeTotalQuery->whereBetween('date_encoded', [
                 $selectedPeriod->fiscalStart()->toDateString(),
@@ -61,7 +61,6 @@ class IncomeController extends Controller
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
                 $q->where('income_no', 'like', "%{$search}%")
-                    ->orWhere('receipt_no', 'like', "%{$search}%")
                     ->orWhere('source', 'like', "%{$search}%")
                     ->orWhere('description', 'like', "%{$search}%");
             });
@@ -115,8 +114,8 @@ class IncomeController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'receipt_no' => ['nullable', 'string', 'max:100', Rule::unique('incomes', 'receipt_no')],
-            'receipt_type' => ['nullable', 'string', 'max:100', 'required_with:receipt_no'],
+            'receipt_no' => 'prohibited',
+            'receipt_type' => 'prohibited',
             'source' => 'required|string|max:255',
             'description' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
@@ -124,8 +123,7 @@ class IncomeController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        $validated['receipt_no'] = filled($validated['receipt_no'] ?? null) ? trim($validated['receipt_no']) : null;
-        $validated['receipt_type'] = filled($validated['receipt_type'] ?? null) ? trim($validated['receipt_type']) : null;
+        unset($validated['receipt_no'], $validated['receipt_type']);
         app(FiscalPeriodLockService::class)->ensureDateOpen($validated['date_encoded']);
         $validated['income_no'] = sprintf('INC-%s-%04d', date('Y'), Income::count() + 1);
         $validated['created_by_id'] = auth()->id();
@@ -142,9 +140,10 @@ class IncomeController extends Controller
 
     public function update(Request $request, Income $income)
     {
+        $this->ensureProjected($income);
         $validated = $request->validate([
-            'receipt_no' => ['nullable', 'string', 'max:100', Rule::unique('incomes', 'receipt_no')->ignore($income->id)],
-            'receipt_type' => ['nullable', 'string', 'max:100', 'required_with:receipt_no'],
+            'receipt_no' => 'prohibited',
+            'receipt_type' => 'prohibited',
             'source' => 'required|string|max:255',
             'description' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
@@ -152,8 +151,7 @@ class IncomeController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        $validated['receipt_no'] = filled($validated['receipt_no'] ?? null) ? trim($validated['receipt_no']) : null;
-        $validated['receipt_type'] = filled($validated['receipt_type'] ?? null) ? trim($validated['receipt_type']) : null;
+        unset($validated['receipt_no'], $validated['receipt_type']);
         app(FiscalPeriodLockService::class)->ensureDateOpen($income->date_encoded);
         app(FiscalPeriodLockService::class)->ensureDateOpen($validated['date_encoded']);
         $income->update($validated);
@@ -170,6 +168,7 @@ class IncomeController extends Controller
 
     public function destroy(Income $income, bool $bulk = false)
     {
+        $this->ensureProjected($income);
         app(\App\Services\FinancialDeletionGuard::class)->check($income);
         app(FiscalPeriodLockService::class)->ensureDateOpen($income->date_encoded);
         AuditTrail::log($income, 'deleted', auth()->user(), 'Income record deleted.');
@@ -178,20 +177,25 @@ class IncomeController extends Controller
         return $bulk ? response()->noContent() : redirect()->back()->with('success', 'Income item deleted successfully.');
     }
 
+    private function ensureProjected(Income $income): void
+    {
+        if (filled($income->receipt_no)) {
+            throw ValidationException::withMessages(['income' => 'This record is a receipt. Manage it from the Receipts page. No changes were saved.']);
+        }
+    }
+
     public function exportCsv()
     {
         $fileName = 'income-export-'.now()->format('Y-m-d_His');
-        $rows = [['income_no', 'receipt_no', 'receipt_type', 'source', 'description', 'amount', 'date_encoded', 'notes']];
+        $rows = [['income_no', 'source', 'description', 'amount', 'date_encoded', 'notes']];
 
-        Income::query()
+        Income::projected()
             ->orderBy('date_encoded')
             ->orderBy('id')
             ->chunk(200, function ($rowsChunk) use (&$rows) {
                 foreach ($rowsChunk as $income) {
                     $rows[] = [
                         $income->income_no,
-                        $income->receipt_no,
-                        $income->receipt_type,
                         $income->source,
                         $income->description,
                         $income->amount,
@@ -227,6 +231,11 @@ class IncomeController extends Controller
         }
 
         $index = array_flip($header);
+        foreach ($rows as $row) {
+            if (filled($row[$index['receipt_no'] ?? -1] ?? null) || filled($row[$index['receipt_type'] ?? -1] ?? null)) {
+                return back()->withErrors(['csv_file' => 'Income is projected income. Import records with receipt details from the Receipts page. No rows were saved.']);
+            }
+        }
         $created = 0;
         $updated = 0;
 
@@ -236,8 +245,6 @@ class IncomeController extends Controller
             }
 
             $source = trim((string) ($row[$index['source']] ?? ''));
-            $receiptNo = isset($index['receipt_no']) ? trim((string) ($row[$index['receipt_no']] ?? '')) : '';
-            $receiptType = isset($index['receipt_type']) ? trim((string) ($row[$index['receipt_type']] ?? '')) : '';
             $description = trim((string) ($row[$index['description']] ?? ''));
             $amount = (float) ($row[$index['amount']] ?? 0);
             $dateEncoded = trim((string) ($row[$index['date_encoded']] ?? ''));
@@ -249,17 +256,13 @@ class IncomeController extends Controller
 
             $lock->ensureDateOpen($dateEncoded, 'csv_file');
 
-            $income = $receiptNo !== ''
-                ? Income::firstOrNew(['receipt_no' => $receiptNo])
-                : Income::firstOrNew([
-                    'source' => $source,
-                    'description' => $description,
-                    'date_encoded' => $dateEncoded,
-                ]);
+            $income = Income::projected()
+                ->where('source', $source)
+                ->where('description', $description)
+                ->whereDate('date_encoded', $dateEncoded)
+                ->first() ?? new Income;
 
             $isNew = ! $income->exists;
-            $income->receipt_no = $receiptNo !== '' ? $receiptNo : null;
-            $income->receipt_type = $receiptNo !== '' ? ($receiptType !== '' ? $receiptType : 'Cash Receipt') : null;
             $income->source = $source;
             $income->description = $description;
             $income->amount = $amount;

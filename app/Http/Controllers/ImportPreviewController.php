@@ -73,7 +73,9 @@ class ImportPreviewController extends Controller
             ],
             'income' => [
                 'required' => ['source', 'description', 'amount', 'date_encoded', 'notes'],
-                'inspect' => fn (array $row, int $line) => $this->moneyDateRow($row, $line, ['source', 'description', 'date_encoded'], $row['receipt_no'] ?? implode('|', [$row['source'] ?? '', $row['description'] ?? '', $row['date_encoded'] ?? ''])),
+                'inspect' => fn (array $row, int $line) => filled($row['receipt_no'] ?? null) || filled($row['receipt_type'] ?? null)
+                    ? ['valid' => false, 'key' => $row['receipt_no'] ?? null, 'message' => 'Import receipt records from the Receipts page. Income is projected income.']
+                    : $this->moneyDateRow($row, $line, ['source', 'description', 'date_encoded'], implode('|', [$row['source'] ?? '', $row['description'] ?? '', $row['date_encoded'] ?? ''])),
             ],
             'receipts' => [
                 'required' => ['receipt_no', 'receipt_type', 'source', 'description', 'amount', 'date_encoded'],

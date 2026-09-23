@@ -149,7 +149,7 @@ function deleteReceipt(item) {
         <div class="flex items-center justify-between border-b border-gray-100 pb-3">
             <div>
                 <p class="text-xs font-bold uppercase tracking-wider text-gray-500">Filter Receipts</p>
-                <p class="mt-1 text-[11px] text-gray-400">Receipts are sourced from income records and official receipt numbers.</p>
+                <p class="mt-1 text-[11px] text-gray-400">Receipts record actual money collected, separate from projected income.</p>
             </div>
             <button @click="resetFilters" class="text-sm font-semibold text-indigo-600 hover:text-indigo-800">Reset Filters</button>
         </div>

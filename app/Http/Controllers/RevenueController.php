@@ -39,7 +39,7 @@ class RevenueController extends Controller
             ->get();
         BudgetItem::hydrateDerivedTotals($budgetItems);
 
-        $incomeQuery = Income::query()
+        $incomeQuery = Income::projected()
             ->when($selectedPeriod, fn ($query) => $query->whereBetween('date_encoded', [
                 $selectedPeriod->fiscalStart()->toDateString(),
                 $selectedPeriod->fiscalEnd()->toDateString(),
@@ -106,7 +106,7 @@ class RevenueController extends Controller
 
         $comparisonPeriods = $periods->take(4)->sortBy('start_date')->values();
         $multiYearComparison = $comparisonPeriods->map(function ($period) use ($utilization) {
-            $income = (float) Income::query()->whereBetween('date_encoded', [
+            $income = (float) Income::projected()->whereBetween('date_encoded', [
                 $period->fiscalStart()->toDateString(),
                 $period->fiscalEnd()->toDateString(),
             ])->sum('amount');

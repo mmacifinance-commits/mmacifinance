@@ -9,6 +9,11 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Income extends Model
 {
+    public function scopeProjected($query)
+    {
+        return $query->where(fn ($q) => $q->whereNull('receipt_no')->orWhere('receipt_no', ''));
+    }
+
     protected $fillable = [
         'income_no',
         'receipt_no',

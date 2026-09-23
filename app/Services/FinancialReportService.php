@@ -85,8 +85,9 @@ class FinancialReportService
                 'utilization_rate' => $appropriation > 0 ? round($paid / $appropriation * 100, 2) : 0];
         });
         $incomeQuery = Income::query()->when($period, fn ($q) => $q->whereBetween('date_encoded', [$period->fiscalStart()->toDateString(), $period->fiscalEnd()->toDateString()]));
-        $incomes = $dateFilter(clone $incomeQuery)->orderBy('date_encoded')->orderBy('id')->get();
-        $receipts = $incomes->filter(fn ($row) => filled($row->receipt_no));
+        $records = $dateFilter(clone $incomeQuery)->orderBy('date_encoded')->orderBy('id')->get();
+        $receipts = $records->filter(fn ($row) => filled($row->receipt_no));
+        $incomes = $records->reject(fn ($row) => filled($row->receipt_no));
         $receiptRows = $receipts->map(fn ($row) => ['id' => $row->id, 'income_no' => $row->income_no, 'receipt_no' => $row->receipt_no,
             'receipt_type' => $row->receipt_type, 'source' => $row->source, 'description' => $row->description,
             'amount' => (float) $row->amount, 'receipt_date' => $row->date_encoded?->toDateString()])->values();
@@ -106,7 +107,7 @@ class FinancialReportService
             'postedDisbursements' => round((float) $posted->sum('amount'), 2), 'cashOnHand' => $availableCash,
             'institutionalPostedDisbursements' => $cashPaid,
             'pendingCommitments' => round((float) $dateFilter($pending)->sum('amount'), 2),
-            'income' => round((float) $incomes->sum('amount'), 2), 'unreceiptedIncome' => round((float) $incomes->sum('amount') - $cashReceipts, 2)];
+            'income' => round((float) $incomes->sum('amount'), 2)];
 
         $budgetSection = $this->section('Budget Utilization', ['Allocation Month', 'Monthly Ref.', 'Responsibility Center', 'Category', 'Account Title', 'Appropriation', 'Posted Payments in Range', 'Budget Balance', '% Utilization'],
             $budgetRows->map(fn ($r) => [$r['allocation_month'], $r['ref_no'], $r['responsibility_center'], $r['category'], $r['account_title'], $r['appropriation'], $r['expenditure'], $r['balance'], $r['utilization_rate']])->all(), [5,6,7], 8);
@@ -116,9 +117,13 @@ class FinancialReportService
         $receiptSection['totalLabel'] = 'TOTAL RECEIPTS';
         $paymentSection = $this->section('Posted Disbursements', ['DSB No.', 'Expense Ref.', 'Allocation Month', 'Expense Date', 'Disbursement Date', 'Payee', 'Status', 'Amount'],
             $disbursementRows->map(fn ($r) => [$r['disbursement_no'], $r['expense_ref'], $r['allocation_month'], $r['expense_date'], $r['disbursement_date'], $r['pay_to'], $r['status'], $r['amount']])->all(), [7]);
-        $incomeSection = $this->section('Income vs Receipts', ['Income No.', 'Date', 'Source / Description', 'Receipt No.', 'Recorded Income', 'Receipted Amount', 'Without Receipt No.'],
-            $incomes->map(fn ($r) => [$r->income_no, $r->date_encoded?->toDateString(), $r->source.' / '.$r->description, $r->receipt_no,
-                (float) $r->amount, filled($r->receipt_no) ? (float) $r->amount : 0, filled($r->receipt_no) ? 0 : (float) $r->amount])->all(), [4,5,6]);
+        $incomeSection = $this->section('Projected Income', ['Income No.', 'Date', 'Source', 'Description', 'Amount'],
+            $incomes->map(fn ($r) => [$r->income_no, $r->date_encoded?->toDateString(), $r->source, $r->description, (float) $r->amount])->values()->all(), [4]);
+        $comparisonSection = $this->section('Income vs Receipts', ['Description', 'Amount'], [
+            ['Projected Income', $totals['income']], ['Actual Receipts', $cashReceipts],
+            ['Difference (Projected Income less Receipts)', round($totals['income'] - $cashReceipts, 2)],
+        ], [1]);
+        $comparisonSection['totalLabel'] = null;
         $fundSection = $this->section('Fund Balance', ['Description', 'Amount'], [
             ['Receipts', $cashReceipts],
             ['Less: Posted Disbursements', $cashPaid], ['Available Cash', $availableCash],
@@ -132,14 +137,14 @@ class FinancialReportService
         $centerSection['balanceColumns'] = [1,2,3];
         $sections = match ($type) {
             'cash_receipts' => [$receiptSection], 'disbursements' => [$paymentSection],
-            'budget_utilization' => [$budgetSection], 'income_vs_receipts' => [$incomeSection],
+            'budget_utilization' => [$budgetSection], 'income_vs_receipts' => [$comparisonSection, $incomeSection, $receiptSection],
             'fund_balance' => [$fundSection, $receiptSection, $paymentSection],
             'responsibility_center' => [$centerSection, $budgetSection],
             'account_title_ledger' => $this->ledger($items, $posted, $detailPayments, $start),
             'closing_report' => [$fundSection, $budgetSection, $receiptSection, $paymentSection],
             default => [$budgetSection, $receiptSection, $paymentSection],
         };
-        if ($type === 'income_vs_receipts') $notes[] = 'Receipted amounts are a subset of Income records, not additional income. Missing receipt numbers do not by themselves establish accounts receivable.';
+        if ($type === 'income_vs_receipts') $notes[] = 'Income is projected. Receipts are actual collections, not additional projected income. The difference is a comparison, not a list of unpaid debts.';
         if ($type === 'account_title_ledger') $notes[] = 'Budget account-title ledger: appropriation less posted payments, not a double-entry general ledger. Opening balance includes payments before the selected start date.';
         if ($availableCash < 0) $notes[] = 'Warning: available cash is negative. Review receipts and posted disbursements.';
         return ['reportType' => $type, 'reportLabel' => self::TYPES[$type], 'period' => $period,

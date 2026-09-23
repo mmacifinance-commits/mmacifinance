@@ -13,7 +13,7 @@ const valid = { source: 'Collections', description: 'Test', amount: 50, date_enc
 
 test('invalid forms never reach offline storage', async () => {
     await clearQueue()
-    await assert.rejects(queueOfflineAction('POST', '/income', { ...valid, receipt_no: '123' }), /Receipt type is required/)
+    await assert.rejects(queueOfflineAction('POST', '/income', { ...valid, receipt_no: '123' }), /Income is projected income/)
     assert.equal((await getQueue()).length, 0)
 })
 

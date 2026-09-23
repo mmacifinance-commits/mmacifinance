@@ -289,15 +289,6 @@ class ReportController extends Controller
             $warnings[] = 'One or more expenses inside this fiscal period are not linked to a monthly budget allocation.';
         }
 
-        if ($period && Income::query()->whereBetween('date_encoded', [
-            $period->fiscalStart()->toDateString(),
-            $period->fiscalEnd()->toDateString(),
-        ])->where(function ($query) {
-            $query->whereNull('receipt_no')->orWhere('receipt_no', '');
-        })->exists()) {
-            $warnings[] = 'Some income entries have no receipt number and are not counted as receipts.';
-        }
-
         if ($period && Disbursement::query()->whereHas(
             'expense.budgetItem',
             fn ($query) => $query->where('budget_id', $period->id)

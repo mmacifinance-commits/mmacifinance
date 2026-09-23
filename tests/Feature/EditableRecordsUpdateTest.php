@@ -77,8 +77,6 @@ class EditableRecordsUpdateTest extends TestCase
         ]);
 
         $payload = [
-            'receipt_no' => 'OR-2026-0001',
-            'receipt_type' => 'Enrollment',
             'source' => 'Updated Source',
             'description' => 'Updated income',
             'amount' => 60000,
@@ -88,7 +86,7 @@ class EditableRecordsUpdateTest extends TestCase
         $this->actingAs($user)->put("/income/{$income->id}", $payload)->assertSessionHasNoErrors();
         $this->assertDatabaseHas('incomes', [
             'id' => $income->id,
-            'receipt_no' => 'OR-2026-0001',
+            'receipt_no' => null,
             'source' => 'Updated Source',
             'amount' => 60000,
         ]);
@@ -102,7 +100,7 @@ class EditableRecordsUpdateTest extends TestCase
     {
         $user = $this->superAdmin();
 
-        $this->actingAs($user)->post('/income', [
+        $this->actingAs($user)->post('/receipts', [
             'receipt_no' => 'OR-SEARCH-001',
             'receipt_type' => 'Enrollment',
             'source' => 'Collections',
@@ -113,11 +111,11 @@ class EditableRecordsUpdateTest extends TestCase
         ])->assertSessionHasNoErrors();
 
         $this->actingAs($user)
-            ->get('/income?search=OR-SEARCH-001')
+            ->get('/receipts?search=OR-SEARCH-001')
             ->assertInertia(fn ($page) => $page
-                ->where('incomeRecords.data.0.receipt_no', 'OR-SEARCH-001'));
+                ->where('receipts.data.0.receipt_no', 'OR-SEARCH-001'));
 
-        $export = $this->actingAs($user)->get('/income/export-csv');
+        $export = $this->actingAs($user)->get('/receipts/export-csv');
         $export->assertDownload();
 
         [$headers, $exportRows] = \App\Support\SpreadsheetImportExport::readRows(new UploadedFile(
@@ -137,7 +135,7 @@ class EditableRecordsUpdateTest extends TestCase
             '',
         ]);
 
-        $this->actingAs($user)->post('/income/import-csv', [
+        $this->actingAs($user)->post('/receipts/import-csv', [
             'csv_file' => UploadedFile::fake()->createWithContent('income.csv', $csv),
         ])->assertSessionHasNoErrors();
 

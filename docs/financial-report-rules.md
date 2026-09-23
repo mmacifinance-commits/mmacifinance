@@ -5,12 +5,14 @@ generated print sections, and Excel sections. Financial records are read only.
 
 - Budget utilization: allocation appropriation less posted disbursements matching
   the selected allocation and payment-date filters. It is not cash balance.
-- Cash receipts: Income records with a receipt number, by their recorded receipt
-  date. Receipts are a subset of Income, not another amount to add to Income.
+- Projected income: existing rows without receipt numbers. No receipt is required.
+- Cash receipts: existing rows with receipt numbers, by their recorded receipt
+  date. These are actual collections and are excluded from projected income.
+  Both remain in the existing storage table; no records, IDs or links are rewritten.
 - Disbursements: posted payments only; draft, rejected, approved-but-unposted and
   other unposted releases are excluded from expenditure.
-- Income vs receipts: all Income records in the date range, with separate
-  receipted and unreceipted amounts. Missing receipt numbers are not proof of debt.
+- Income vs receipts: projected income versus actual receipts in the date range,
+  with separate detail tables. The difference is not proof of unpaid debt.
 - Fund balance / available cash: receipts less posted disbursements for the same
   selected dates. No starting balance is added. This is not a full balance sheet
   or certified bank reconciliation.
