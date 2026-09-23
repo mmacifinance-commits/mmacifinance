@@ -126,7 +126,7 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
                     <button @click="logout" class="rounded-md bg-red-500/20 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/30 transition hidden md:block">
                         Logout
                     </button>
-                    <button @click="mobileMenuOpen = !mobileMenuOpen" class="text-white md:hidden">
+                    <button @click="mobileMenuOpen = !mobileMenuOpen" aria-label="Toggle navigation" :aria-expanded="mobileMenuOpen" class="flex-none p-2 text-white md:hidden">
                         <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
                     </button>
                 </div>
@@ -135,13 +135,13 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
 
         <!-- Main Navigation Bar -->
         <nav class="bg-navy border-b-2 border-mustard">
-            <div class="hidden md:flex">
+            <div class="hidden overflow-x-auto md:flex">
                 <Link
                     v-for="item in mainNavItems"
                     :key="item.section"
                     :href="item.href"
                     :class="[
-                        'flex items-center gap-2 px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition-all',
+                        'flex flex-none items-center gap-2 whitespace-nowrap px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition-all',
                         isMainActive(item)
                             ? 'bg-mustard text-navy-dark rounded-t-lg'
                             : 'text-white/70 hover:text-white hover:bg-white/5'

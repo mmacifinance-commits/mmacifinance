@@ -23,7 +23,7 @@ generated print sections, and Excel sections. Financial records are read only.
   provisional; even closed periods are current stored data, not immutable snapshots.
 
 Date filters use transaction dates. Allocation month applies to allocations and
-their payments, not receipts. Institution-wide receipts and cash cannot be assigned
+their payments, not receipts. Receipts and cash for the whole school cannot be assigned
 to a department/category/account because the records do not contain those links.
 The reports explain this instead of fabricating an attribution. Pending commitment
 figures reflect current workflow status, not status as of a historical date.

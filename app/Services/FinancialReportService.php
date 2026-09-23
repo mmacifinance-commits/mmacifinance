@@ -48,7 +48,7 @@ class FinancialReportService
             'Expenditure and cash payments include posted disbursements only; draft, rejected and other unposted releases are excluded.',
             'Date range uses receipt dates for cash received and disbursement dates for payments. Allocation month filters budget allocations and linked payments, not receipt dates.',
             'Appropriation is the approved allocation, not income or cash received. Budget balance is appropriation less posted payments in the selected date range.',
-            'Cash and income are institution-wide: these records have no responsibility center, category or account-title assignment. Those filters apply only to budget and payment detail.',
+            'Responsibility center, category and account title filters apply to budget and payment details, not income or receipts.',
         ];
         if ($type === 'closing_report') {
             $notes[] = $period?->closed_at
@@ -113,15 +113,15 @@ class FinancialReportService
         $budgetSection = $this->section('Budget Utilization', ['Allocation Month', 'Monthly Ref.', 'Responsibility Center', 'Category', 'Account Title', 'Appropriation', 'Posted Payments in Range', 'Budget Balance', '% Utilization'],
             $budgetRows->map(fn ($r) => [$r['allocation_month'], $r['ref_no'], $r['responsibility_center'], $r['category'], $r['account_title'], $r['appropriation'], $r['expenditure'], $r['balance'], $r['utilization_rate']])->all(), [5,6,7], 8);
         $budgetSection['balanceColumns'] = [5,6,7];
-        $receiptSection = $this->section('Cash Receipts (Institution-wide)', ['Receipt No.', 'Income No.', 'Receipt Type', 'Source', 'Description', 'Receipt Date', 'Amount'],
+        $receiptSection = $this->section('Cash Receipts', ['Receipt No.', 'Income No.', 'Receipt Type', 'Source', 'Description', 'Receipt Date', 'Amount'],
             $receiptRows->map(fn ($r) => [$r['receipt_no'], $r['income_no'], $r['receipt_type'], $r['source'], $r['description'], $r['receipt_date'], $r['amount']])->all(), [6]);
         $receiptSection['totalLabel'] = 'TOTAL RECEIPTS';
         $paymentSection = $this->section('Posted Disbursements', ['DSB No.', 'Expense Ref.', 'Allocation Month', 'Expense Date', 'Disbursement Date', 'Payee', 'Status', 'Amount'],
             $disbursementRows->map(fn ($r) => [$r['disbursement_no'], $r['expense_ref'], $r['allocation_month'], $r['expense_date'], $r['disbursement_date'], $r['pay_to'], $r['status'], $r['amount']])->all(), [7]);
-        $incomeSection = $this->section('Income vs Receipts (Institution-wide)', ['Income No.', 'Date', 'Source / Description', 'Receipt No.', 'Recorded Income', 'Receipted Amount', 'Without Receipt No.'],
+        $incomeSection = $this->section('Income vs Receipts', ['Income No.', 'Date', 'Source / Description', 'Receipt No.', 'Recorded Income', 'Receipted Amount', 'Without Receipt No.'],
             $incomes->map(fn ($r) => [$r->income_no, $r->date_encoded?->toDateString(), $r->source.' / '.$r->description, $r->receipt_no,
                 (float) $r->amount, filled($r->receipt_no) ? (float) $r->amount : 0, filled($r->receipt_no) ? 0 : (float) $r->amount])->all(), [4,5,6]);
-        $fundSection = $this->section('Recorded Cash / Fund Balance (Institution-wide)', ['Description', 'Amount'], [
+        $fundSection = $this->section('Fund Balance', ['Description', 'Amount'], [
             ['Opening recorded cash before date range', $opening], ['Receipts in date range', $cashReceipts],
             ['Less: posted payments in date range', $cashPaid], ['Closing recorded cash', $closing],
         ], [1]);

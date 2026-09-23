@@ -1,5 +1,4 @@
 <script setup>
-import FinancialReportTables from '@/Components/FinancialReportTables.vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
 import { Head, router } from '@inertiajs/vue3'
@@ -343,7 +342,7 @@ const activeReportLabel = computed(() => {
         <div class="border border-gray-200 bg-white p-4 shadow-sm border-t-4 border-t-emerald-500">
             <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Total Receipts</p>
             <p class="mt-1 text-xl font-extrabold text-emerald-700 font-sans">{{ PESO }}{{ fmt(summary.totalReceipts) }}</p>
-            <p class="mt-1 text-xs text-gray-500">Institution-wide receipts in date range</p>
+            <p class="mt-1 text-xs text-gray-500">Receipts within the selected dates</p>
         </div>
         <div class="border border-gray-200 bg-white p-4 shadow-sm border-t-4 border-t-rose-500">
             <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Posted Disbursements</p>
@@ -358,7 +357,7 @@ const activeReportLabel = computed(() => {
         <div class="border border-gray-200 bg-white p-4 shadow-sm border-t-4 border-t-teal-500">
             <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Recorded Available Cash</p>
             <p class="mt-1 text-xl font-extrabold text-teal-700 font-sans">{{ PESO }}{{ fmt(summary.cashOnHand) }}</p>
-            <p class="mt-1 text-xs text-gray-500">Institution-wide opening cash + receipts - posted payments</p>
+            <p class="mt-1 text-xs text-gray-500">Starting cash + receipts - posted payments</p>
         </div>
         <div class="border border-gray-200 bg-white p-4 shadow-sm border-t-4 border-t-amber-500">
             <p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Pending Commitments</p>
@@ -372,15 +371,6 @@ const activeReportLabel = computed(() => {
         <ul class="mt-2 list-disc space-y-1 pl-5">
             <li v-for="warning in asArray(reconciliationWarnings)" :key="warning">{{ warning }}</li>
         </ul>
-    </div>
-
-    <div class="mb-6 rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden">
-        <div class="px-5 py-3 border-b bg-gray-50">
-            <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wider">{{ activeReportLabel }}</h3>
-            <p class="text-xs text-gray-500 mt-1">Drilldown rows for the selected report type and filters.</p>
-        </div>
-        <div class="overflow-x-auto p-4"><FinancialReportTables :sections="sections" /></div>
-        <div class="px-5 pb-4 text-xs text-gray-500"><p v-for="note in reportNotes" :key="note" class="mt-1">{{ note }}</p></div>
     </div>
 
     <div class="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden mb-6">

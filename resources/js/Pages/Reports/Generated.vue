@@ -6,7 +6,6 @@ import { nextTick } from 'vue'
 const props = defineProps({
     reportType: String,
     sections: Array,
-    reportNotes: Array,
     accountTitleLabel: String,
     reportLabel: String,
     period: Object,
@@ -138,10 +137,9 @@ const printReport = async () => {
                 </ul>
             </section>
 
-            <FinancialReportTables :sections="sections" />
+            <div class="report-tables"><FinancialReportTables :sections="sections" /></div>
             <section class="mt-4 text-[10px] leading-relaxed">
                 <p class="font-bold">Account Title: {{ accountTitleLabel }}</p>
-                <p v-for="note in reportNotes" :key="note" class="mt-1">{{ note }}</p>
             </section>
 
             <section class="mt-10 grid grid-cols-2 gap-12">
@@ -153,6 +151,48 @@ const printReport = async () => {
 </template>
 
 <style>
+@media screen and (max-width: 820px) {
+    .report-sheet {
+        width: 100%;
+        min-height: 0;
+        padding: 1rem;
+        margin: 0;
+    }
+
+    .report-sheet > header {
+        grid-template-columns: 1fr;
+        justify-items: center;
+    }
+
+    .report-sheet > header h1 {
+        font-size: 1.125rem;
+    }
+
+    .report-sheet > header p {
+        overflow-wrap: anywhere;
+    }
+
+    .report-sheet > section.grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.5rem;
+    }
+
+    .report-sheet > section.grid > div {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .report-sheet .report-tables {
+        overflow-x: auto;
+        max-width: 100%;
+    }
+
+    .report-sheet .report-table {
+        min-width: 680px;
+        font-size: 11px;
+    }
+}
+
 .report-table {
     inline-size: 100%;
     max-inline-size: 100%;
