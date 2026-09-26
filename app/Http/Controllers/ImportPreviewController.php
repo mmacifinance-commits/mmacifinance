@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\BudgetCategory;
+use App\Models\AnnualBudget;
 use App\Models\BudgetItem;
 use App\Models\BudgetParticular;
 use App\Models\Department;
+use App\Models\Disbursement;
 use App\Models\Expense;
+use App\Models\Income;
 use App\Services\ImportPreviewService;
 use App\Support\SpreadsheetImportExport;
 use Illuminate\Http\Request;
@@ -19,7 +22,7 @@ class ImportPreviewController extends Controller
 
         $request->validate(SpreadsheetImportExport::validationRules('csv_file', true));
 
-        $config = $this->moduleConfig($module);
+        $config = $this->moduleConfig($module, $request);
         abort_unless($config, 404);
 
         try {
@@ -56,16 +59,20 @@ class ImportPreviewController extends Controller
         abort_unless($allowed, 403);
     }
 
-    private function moduleConfig(string $module): ?array
+    private function moduleConfig(string $module, Request $request): ?array
     {
+        $annualBudget = $module === 'annual-budget-items'
+            ? AnnualBudget::find($request->integer('annual_budget_id'))
+            : null;
+
         return match ($module) {
             'budget-categories' => [
                 'required' => ['budget_category', 'description'],
-                'inspect' => fn (array $row, int $line) => $this->simpleRequired($row, $line, ['budget_category'], $row['budget_category'] ?? null),
+                'inspect' => fn (array $row, int $line) => $this->categoryRow($row, $line),
             ],
             'departments' => [
                 'required' => ['responsibility_center', 'code'],
-                'inspect' => fn (array $row, int $line) => $this->simpleRequired($row, $line, ['responsibility_center', 'code'], $row['code'] ?? null),
+                'inspect' => fn (array $row, int $line) => $this->departmentRow($row, $line),
             ],
             'account-titles' => [
                 'required' => ['budget_category', 'responsibility_center', 'account_code', 'account_name', 'account_title', 'description'],
@@ -75,11 +82,11 @@ class ImportPreviewController extends Controller
                 'required' => ['source', 'description', 'amount', 'date_encoded', 'notes'],
                 'inspect' => fn (array $row, int $line) => filled($row['receipt_no'] ?? null) || filled($row['receipt_type'] ?? null)
                     ? ['valid' => false, 'key' => $row['receipt_no'] ?? null, 'message' => 'Import receipt records from the Receipts page. Income is projected income.']
-                    : $this->moneyDateRow($row, $line, ['source', 'description', 'date_encoded'], implode('|', [$row['source'] ?? '', $row['description'] ?? '', $row['date_encoded'] ?? ''])),
+                    : $this->incomeRow($row, $line),
             ],
             'receipts' => [
                 'required' => ['receipt_no', 'receipt_type', 'source', 'description', 'amount', 'date_encoded'],
-                'inspect' => fn (array $row, int $line) => $this->moneyDateRow($row, $line, ['receipt_no', 'receipt_type', 'source', 'description', 'date_encoded'], $row['receipt_no'] ?? null),
+                'inspect' => fn (array $row, int $line) => $this->receiptRow($row, $line),
             ],
             'expenses' => [
                 'required' => ['ref_no', 'description', 'category', 'account_title', 'amount', 'date_encoded', 'date_approved', 'status', 'notes'],
@@ -91,7 +98,7 @@ class ImportPreviewController extends Controller
             ],
             'annual-budget-items' => [
                 'required' => ['allocation_month', 'budget_category', 'responsibility_center', 'account_title', 'appropriation'],
-                'inspect' => fn (array $row, int $line) => $this->moneyDateRow($row, $line, ['allocation_month', 'budget_category', 'responsibility_center', 'account_title'], implode('|', [$row['allocation_month'] ?? '', $row['account_title'] ?? '']), 'appropriation'),
+                'inspect' => fn (array $row, int $line) => $this->annualBudgetItemRow($row, $line, $annualBudget),
             ],
             default => null,
         };
@@ -105,7 +112,7 @@ class ImportPreviewController extends Controller
             }
         }
 
-        return ['valid' => true, 'key' => (string) $key, 'message' => 'Ready to import.'];
+        return ['valid' => true, 'key' => (string) $key, 'action' => 'new', 'message' => 'New record will be created.'];
     }
 
     private function moneyDateRow(array $row, int $line, array $required, mixed $key, string $amountColumn = 'amount'): array
@@ -125,7 +132,46 @@ class ImportPreviewController extends Controller
             }
         }
 
-        return ['valid' => true, 'key' => (string) $key, 'message' => 'Ready to import.'];
+        return ['valid' => true, 'key' => (string) $key, 'action' => 'new', 'message' => 'New record will be created.'];
+    }
+
+    private function categoryRow(array $row, int $line): array
+    {
+        $check = $this->simpleRequired($row, $line, ['budget_category'], $row['budget_category'] ?? null);
+        if (! $check['valid']) return $check;
+        $exists = BudgetCategory::whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower(trim((string) $row['budget_category']))])->exists();
+        return $this->withAction($check, $exists, 'budget category');
+    }
+
+    private function departmentRow(array $row, int $line): array
+    {
+        $check = $this->simpleRequired($row, $line, ['responsibility_center', 'code'], $row['code'] ?? null);
+        if (! $check['valid']) return $check;
+        $exists = Department::where('code', strtoupper(trim((string) $row['code'])))->exists();
+        return $this->withAction($check, $exists, 'responsibility center');
+    }
+
+    private function incomeRow(array $row, int $line): array
+    {
+        $key = implode('|', [$row['source'] ?? '', $row['description'] ?? '', $row['date_encoded'] ?? '']);
+        $check = $this->moneyDateRow($row, $line, ['source', 'description', 'date_encoded'], $key);
+        if (! $check['valid']) return $check;
+        $exists = Income::projected()->where('source', trim((string) $row['source']))->where('description', trim((string) $row['description']))->whereDate('date_encoded', $row['date_encoded'])->exists();
+        return $this->withAction($check, $exists, 'projected income record');
+    }
+
+    private function receiptRow(array $row, int $line): array
+    {
+        $check = $this->moneyDateRow($row, $line, ['receipt_no', 'receipt_type', 'source', 'description', 'date_encoded'], $row['receipt_no'] ?? null);
+        if (! $check['valid']) return $check;
+        return $this->withAction($check, Income::where('receipt_no', trim((string) $row['receipt_no']))->exists(), 'receipt');
+    }
+
+    private function withAction(array $check, bool $exists, string $record): array
+    {
+        $check['action'] = $exists ? 'update' : 'new';
+        $check['message'] = $exists ? "Will update the existing {$record}." : "New {$record} will be created.";
+        return $check;
     }
 
     private function accountTitleRow(array $row, int $line): array
@@ -142,7 +188,14 @@ class ImportPreviewController extends Controller
             return ['valid' => false, 'key' => $row['account_code'], 'message' => "Line {$line} has missing category or responsibility center reference."];
         }
 
-        return ['valid' => true, 'key' => strtolower($row['budget_category'].'|'.$row['responsibility_center'].'|'.$row['account_code'].'|'.$row['account_title']), 'message' => 'Ready to import.'];
+        $key = strtolower($category->id.'|'.$department->id.'|'.trim((string) $row['account_code']).'|'.trim((string) $row['account_title']));
+        $exists = BudgetParticular::where('category_id', $category->id)
+            ->where('department_id', $department->id)
+            ->where('account_code', trim((string) $row['account_code']))
+            ->where('particular', trim((string) $row['account_title']))
+            ->exists();
+
+        return $this->withAction(['valid' => true, 'key' => $key], $exists, 'account title');
     }
 
     private function expenseRow(array $row, int $line): array
@@ -160,7 +213,7 @@ class ImportPreviewController extends Controller
             return ['valid' => false, 'key' => $row['ref_no'], 'message' => "Line {$line} references an unknown account title."];
         }
 
-        return ['valid' => true, 'key' => $row['ref_no'], 'message' => 'Ready to import.'];
+        return $this->withAction($check, Expense::where('ref_no', trim((string) $row['ref_no']))->exists(), 'expenditure');
     }
 
     private function disbursementRow(array $row, int $line): array
@@ -174,6 +227,43 @@ class ImportPreviewController extends Controller
             return ['valid' => false, 'key' => $row['disbursement_no'], 'message' => "Line {$line} needs an approved expense first."];
         }
 
-        return ['valid' => true, 'key' => $row['disbursement_no'], 'message' => 'Ready to import.'];
+        return $this->withAction($check, Disbursement::where('disbursement_no', trim((string) $row['disbursement_no']))->exists(), 'disbursement');
+    }
+
+    private function annualBudgetItemRow(array $row, int $line, ?AnnualBudget $annualBudget): array
+    {
+        if (! $annualBudget) {
+            return ['valid' => false, 'key' => null, 'message' => 'Select an annual budget before previewing this file.'];
+        }
+
+        $key = implode('|', [$row['allocation_month'] ?? '', $row['budget_category'] ?? '', $row['responsibility_center'] ?? '', $row['account_title'] ?? '']);
+        $check = $this->moneyDateRow($row, $line, ['allocation_month', 'budget_category', 'responsibility_center', 'account_title'], $key, 'appropriation');
+        if (! $check['valid']) return $check;
+
+        $category = BudgetCategory::where('name', trim((string) $row['budget_category']))->orWhere('id', $row['budget_category'])->first();
+        $department = Department::where('code', trim((string) $row['responsibility_center']))
+            ->orWhere('name', trim((string) $row['responsibility_center']))
+            ->orWhere('id', $row['responsibility_center'])
+            ->first();
+        $account = $category && $department
+            ? BudgetParticular::where('category_id', $category->id)
+                ->where('department_id', $department->id)
+                ->where(fn ($query) => $query->where('particular', trim((string) $row['account_title']))->orWhere('account_name', trim((string) $row['account_title'])))
+                ->first()
+            : null;
+
+        if (! $account) {
+            return ['valid' => true, 'key' => $key, 'action' => 'new', 'message' => 'New allocation will be created. Related setup records will be added if needed.'];
+        }
+
+        $exists = $annualBudget->items()
+            ->where('particular_id', $account->id)
+            ->whereDate('allocation_month', $row['allocation_month'])
+            ->exists();
+        if ($exists) {
+            return ['valid' => false, 'key' => $key, 'message' => 'This monthly allocation already exists. Edit it from Annual Budget instead of importing it again.'];
+        }
+
+        return ['valid' => true, 'key' => $key, 'action' => 'new', 'message' => 'New allocation will be created.'];
     }
 }

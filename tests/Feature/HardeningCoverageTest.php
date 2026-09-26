@@ -36,6 +36,49 @@ class HardeningCoverageTest extends TestCase
             ->assertJsonStructure(['valid_rows', 'invalid_rows', 'duplicates']);
     }
 
+    public function test_import_preview_marks_existing_records_as_updates_before_confirmation(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+        Income::create([
+            'income_no' => 'INC-EXISTING-RECEIPT',
+            'receipt_no' => 'OR-EXISTING',
+            'receipt_type' => 'Enrollment',
+            'source' => 'Collections',
+            'description' => 'Existing receipt',
+            'amount' => 100,
+            'date_encoded' => '2026-08-01',
+        ]);
+        Income::create([
+            'income_no' => 'INC-EXISTING-PROJECTED',
+            'source' => 'Tuition',
+            'description' => 'Existing projected income',
+            'amount' => 200,
+            'date_encoded' => '2026-08-01',
+        ]);
+
+        $receipt = $this->actingAs($user)->postJson('/imports/receipts/preview', [
+            'csv_file' => UploadedFile::fake()->createWithContent('receipts.csv', implode("\n", [
+                'receipt_no,receipt_type,source,description,amount,date_encoded',
+                'OR-EXISTING,Enrollment,Collections,Updated receipt,150,2026-08-01',
+            ])),
+        ]);
+        $receipt->assertOk()
+            ->assertJsonPath('new_count', 0)
+            ->assertJsonPath('update_count', 1)
+            ->assertJsonPath('valid_rows.0.action', 'update');
+
+        $income = $this->actingAs($user)->postJson('/imports/income/preview', [
+            'csv_file' => UploadedFile::fake()->createWithContent('income.csv', implode("\n", [
+                'source,description,amount,date_encoded,notes',
+                'Tuition,Existing projected income,250,2026-08-01,Updated forecast',
+            ])),
+        ]);
+        $income->assertOk()
+            ->assertJsonPath('new_count', 0)
+            ->assertJsonPath('update_count', 1)
+            ->assertJsonPath('valid_rows.0.action', 'update');
+    }
+
     public function test_full_system_backup_is_super_admin_only(): void
     {
         $cashier = User::factory()->create(['role' => User::ROLE_CASHIER]);

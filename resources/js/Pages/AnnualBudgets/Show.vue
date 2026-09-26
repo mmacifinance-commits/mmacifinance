@@ -455,6 +455,7 @@ function catBalancePercent(group) {
     <Modal :show="showImportModal" title="Import Budget XLSX" subtitle="Preview monthly budget allocation rows before saving." max-width="4xl" @close="showImportModal = false">
         <ImportPreviewPanel
             module="annual-budget-items"
+            :annual-budget-id="budget.id"
             :form="importForm"
             :error-messages="Object.values(importForm.errors || {}).flat().filter(Boolean)"
             required-columns="allocation_month, budget_category, responsibility_center, account_title, appropriation"

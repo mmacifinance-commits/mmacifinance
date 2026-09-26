@@ -6,6 +6,7 @@ const props = defineProps({
     form: { type: Object, required: true },
     errorMessages: { type: Array, default: () => [] },
     requiredColumns: { type: String, default: '' },
+    annualBudgetId: { type: [Number, String], default: null },
 })
 
 const emit = defineEmits(['confirm', 'cancel'])
@@ -48,6 +49,7 @@ async function previewImport() {
 
     const data = new FormData()
     data.append('csv_file', props.form.csv_file)
+    if (props.annualBudgetId) data.append('annual_budget_id', props.annualBudgetId)
 
     try {
         const response = await fetch(`/imports/${props.module}/preview`, {
@@ -122,7 +124,15 @@ function confirmImport() {
         </div>
 
         <div v-if="preview" class="space-y-4 rounded-lg border border-gray-200 bg-white p-4">
-            <div class="grid gap-3 sm:grid-cols-4">
+            <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
+                <div class="rounded-lg border border-sky-200 bg-sky-50 p-3">
+                    <p class="text-[10px] font-bold uppercase text-sky-700">New</p>
+                    <p class="text-xl font-black text-sky-900">{{ preview.new_count || 0 }}</p>
+                </div>
+                <div class="rounded-lg border border-violet-200 bg-violet-50 p-3">
+                    <p class="text-[10px] font-bold uppercase text-violet-700">Will Update</p>
+                    <p class="text-xl font-black text-violet-900">{{ preview.update_count || 0 }}</p>
+                </div>
                 <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
                     <p class="text-[10px] font-bold uppercase text-emerald-700">Valid Rows</p>
                     <p class="text-xl font-black text-emerald-900">{{ preview.valid_count || 0 }}</p>
@@ -171,14 +181,14 @@ function confirmImport() {
                     <thead class="bg-gray-100">
                         <tr>
                             <th class="px-3 py-2 text-left">Line</th>
-                            <th class="px-3 py-2 text-left">Status</th>
+                            <th class="px-3 py-2 text-left">Action</th>
                             <th class="px-3 py-2 text-left">Data</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-for="row in preview.valid_rows" :key="`valid-${row.line}`" class="border-t">
                             <td class="px-3 py-2">{{ row.line }}</td>
-                            <td class="px-3 py-2 text-emerald-700">{{ row.message }}</td>
+                            <td :class="['px-3 py-2 font-semibold', row.action === 'update' ? 'text-violet-700' : 'text-emerald-700']">{{ row.message }}</td>
                             <td class="px-3 py-2 font-mono text-[11px] text-gray-600">{{ row.row }}</td>
                         </tr>
                     </tbody>

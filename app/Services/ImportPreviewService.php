@@ -19,6 +19,8 @@ class ImportPreviewService
         $seen = [];
         $line = 1;
         $validCount = 0;
+        $newCount = 0;
+        $updateCount = 0;
         $invalidCount = count($missing);
         $duplicateCount = 0;
         $totalAmount = 0.0;
@@ -44,6 +46,7 @@ class ImportPreviewService
                     'message' => "Duplicate row key also appears on line {$seen[$key]}.",
                     'row' => $data,
                 ];
+                continue;
             }
             if ($key) {
                 $seen[$key] = $line;
@@ -51,9 +54,15 @@ class ImportPreviewService
 
             if (($result['valid'] ?? false)) {
                 $validCount++;
+                ($result['action'] ?? 'new') === 'update' ? $updateCount++ : $newCount++;
                 $totalAmount += (float) ($data['amount'] ?? $data['appropriation'] ?? 0);
                 if (count($valid) < $limit) {
-                    $valid[] = ['line' => $line, 'row' => $data, 'message' => $result['message'] ?? 'Ready to import.'];
+                    $valid[] = [
+                        'line' => $line,
+                        'row' => $data,
+                        'action' => $result['action'] ?? 'new',
+                        'message' => $result['message'] ?? 'Ready to import.',
+                    ];
                 }
             } else {
                 $invalidCount++;
@@ -67,6 +76,8 @@ class ImportPreviewService
             'headers' => $header,
             'missing_columns' => $missing,
             'valid_count' => $validCount,
+            'new_count' => $newCount,
+            'update_count' => $updateCount,
             'total_amount' => round($totalAmount, 2),
             'invalid_count' => $invalidCount,
             'duplicate_count' => $duplicateCount,
