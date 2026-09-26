@@ -325,13 +325,13 @@ watch(
         <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div class="bg-navy-dark px-5 py-3"><h3 class="text-sm font-bold uppercase tracking-wider text-white">Income Records</h3></div>
             <div class="divide-y">
-                <div v-for="item in (incomeRecords || []).slice(0, 10)" :key="item.id" class="flex items-center justify-between gap-4 px-5 py-4">
-                    <div>
+                <div v-for="item in (incomeRecords || []).slice(0, 10)" :key="item.id" class="record-summary-row px-5 py-4">
+                    <div class="min-w-0">
                         <p class="text-sm font-bold text-gray-900">{{ item.income_no }}</p>
-                        <p class="text-xs text-gray-500">{{ item.source }} - {{ item.description }}</p>
+                        <p class="break-words text-xs text-gray-500">{{ item.source }} - {{ item.description }}</p>
                         <p class="mt-1 text-[11px] text-gray-400">{{ item.date_encoded?.slice?.(0, 10) }}</p>
                     </div>
-                    <div class="text-right">
+                    <div class="record-summary-amount text-right">
                         <p class="text-sm font-bold text-gray-900">{{ fmt(item.amount) }}</p>
                         <p class="text-xs text-gray-500">{{ item.notes || 'No notes' }}</p>
                     </div>
@@ -344,13 +344,13 @@ watch(
             <div class="bg-navy-dark px-5 py-3"><h3 class="text-sm font-bold uppercase tracking-wider text-white">Appropriation Summary</h3></div>
             <div class="divide-y">
                 <div v-for="item in (budgetItems || []).slice(0, 10)" :key="item.id" class="px-5 py-4">
-                    <div class="flex items-start justify-between gap-4">
-                        <div>
+                    <div class="record-summary-row">
+                        <div class="min-w-0">
                             <p class="text-sm font-bold text-gray-900">{{ item.category?.name || 'Uncategorized' }}</p>
-                            <p class="text-xs text-gray-500">{{ item.particular?.name || 'No particular' }} <span v-if="item.particular?.department">- {{ item.particular.department.name }}</span></p>
+                            <p class="break-words text-xs text-gray-500">{{ item.particular?.name || 'No particular' }} <span v-if="item.particular?.department">- {{ item.particular.department.name }}</span></p>
                             <p class="mt-1 text-[11px] text-gray-400">{{ item.allocation_month_label || `Month ${item.month}` }} · {{ item.budget?.fiscal_year_label || activeFiscalPeriod?.label }}</p>
                         </div>
-                        <div class="text-right">
+                        <div class="record-summary-amount text-right">
                             <p class="text-sm font-bold text-gray-900">{{ fmt(item.appropriation) }}</p>
                             <p class="text-xs text-gray-500">{{ item.account_title?.name || 'No account title' }}</p>
                         </div>
@@ -364,6 +364,28 @@ watch(
 </template>
 
 <style scoped>
+.record-summary-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 1rem;
+}
+
+.record-summary-amount {
+    min-width: 6rem;
+    flex-shrink: 0;
+}
+
+@media (max-width: 380px) {
+    .record-summary-row {
+        gap: 0.75rem;
+    }
+
+    .record-summary-amount {
+        min-width: 5.5rem;
+    }
+}
+
 .annual-chart__glow {
     background:
         radial-gradient(circle at 18% 30%, rgba(217, 174, 68, 0.14), transparent 32%),

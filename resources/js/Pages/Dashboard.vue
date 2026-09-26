@@ -412,16 +412,16 @@ const barColors = ['#1e293b', '#d4a843', '#2563eb', '#059669', '#7c3aed', '#db27
                 <span class="text-xs text-mustard font-semibold">Financial Activity</span>
             </div>
             <div class="divide-y divide-gray-100 flex-1 overflow-y-auto">
-                <div v-for="d in (recentDisbursements || []).slice(0, 10)" :key="d.id" class="p-4 flex items-center justify-between hover:bg-gray-50/60 transition">
-                    <div>
+                <div v-for="d in (recentDisbursements || []).slice(0, 10)" :key="d.id" class="transaction-summary-row p-4 hover:bg-gray-50/60 transition">
+                    <div class="min-w-0">
                         <div class="flex items-center gap-2">
                             <span class="font-mono text-xs font-bold text-navy">{{ d.disbursement_no }}</span>
                             <span :class="[statusBadgeStyles[d.status] || 'bg-gray-100 text-gray-700', 'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase']">{{ d.status }}</span>
                         </div>
                         <p class="text-xs font-semibold text-gray-900 mt-1">{{ d.pay_to }}</p>
-                        <p class="text-[11px] text-gray-500">{{ d.description }}</p>
+                        <p class="break-words text-[11px] text-gray-500">{{ d.description }}</p>
                     </div>
-                    <div class="text-right">
+                    <div class="transaction-summary-amount text-right">
                         <p class="text-sm font-extrabold text-gray-900">₱{{ fmt(d.amount) }}</p>
                         <p class="text-[10px] text-gray-400 mt-0.5">{{ d.date_encoded?.slice(0, 10) }}</p>
                     </div>
@@ -436,6 +436,27 @@ const barColors = ['#1e293b', '#d4a843', '#2563eb', '#059669', '#7c3aed', '#db27
 </template>
 
 <style scoped>
+.transaction-summary-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 1rem;
+}
+
+.transaction-summary-amount {
+    min-width: 6rem;
+}
+
+@media (max-width: 380px) {
+    .transaction-summary-row {
+        gap: 0.75rem;
+    }
+
+    .transaction-summary-amount {
+        min-width: 5.5rem;
+    }
+}
+
 .dashboard-line {
     stroke-dashoffset: 0;
     animation: dashboard-line-draw 1.1s ease-out both;
