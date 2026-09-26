@@ -454,7 +454,6 @@ const activeReportLabel = computed(() => {
             <thead>
                 <tr class="bg-navy-dark text-white border-b-2 border-mustard">
                     <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Fiscal Year</th>
-                    <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Record Types</th>
                     <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-wider text-white">Appropriation</th>
                     <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-wider text-white">Expenditure</th>
                     <th class="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-white">Utilization</th>
@@ -471,17 +470,6 @@ const activeReportLabel = computed(() => {
                             {{ row.label || `FY ${row.year}` }}
                         </button>
                     </td>
-                    <td class="px-5 py-3 text-sm text-gray-700">
-                        <div class="flex flex-wrap gap-1.5">
-                            <span
-                                v-for="record in row.records"
-                                :key="record.id"
-                                class="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-semibold text-gray-700"
-                            >
-                                {{ record.semester }}
-                            </span>
-                        </div>
-                    </td>
                     <td class="px-5 py-3 text-right font-medium font-sans tabular-nums">{{ PESO }}{{ fmt(row.appropriation) }}</td>
                     <td class="px-5 py-3 text-right font-medium font-sans tabular-nums">{{ PESO }}{{ fmt(row.expenditure) }}</td>
                     <td class="px-5 py-3 text-center">
@@ -496,7 +484,7 @@ const activeReportLabel = computed(() => {
                     </td>
                 </tr>
                 <tr v-if="!yearlyBudgetPerformance.length">
-                    <td colspan="5" class="px-5 py-8 text-center text-gray-400">No annual budget records found.</td>
+                    <td colspan="4" class="px-5 py-8 text-center text-gray-400">No annual budget records found.</td>
                 </tr>
             </tbody>
         </table>
