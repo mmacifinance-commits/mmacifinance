@@ -24,8 +24,8 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [LoginController::class, 'login']);
 
     Route::get('/2fa/verify', [TwoFactorController::class, 'index'])->name('2fa.index');
-    Route::post('/2fa/verify', [TwoFactorController::class, 'verify'])->name('2fa.verify');
-    Route::post('/2fa/resend', [TwoFactorController::class, 'resend'])->name('2fa.resend');
+    Route::post('/2fa/verify', [TwoFactorController::class, 'verify'])->middleware('throttle:otp-verify')->name('2fa.verify');
+    Route::post('/2fa/resend', [TwoFactorController::class, 'resend'])->middleware('throttle:5,10')->name('2fa.resend');
 
     Route::get('/forgot-password', [PasswordResetController::class, 'showForgotForm'])->name('password.request');
     Route::post('/forgot-password', [PasswordResetController::class, 'sendResetCode'])
@@ -42,6 +42,8 @@ Route::middleware('guest')->group(function () {
 
 // --- Authenticated Routes ---
 Route::middleware('auth')->group(function () {
+    Route::get('/reconciliations', [\App\Http\Controllers\ReconciliationController::class, 'index'])->name('reconciliations.index');
+    Route::post('/reconciliations', [\App\Http\Controllers\ReconciliationController::class, 'store'])->name('reconciliations.store');
     Route::post('/financial-records/{module}/bulk-delete', \App\Http\Controllers\BulkFinancialDeletionController::class)
         ->whereIn('module', ['income', 'receipts', 'expenses', 'disbursements']);
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout');

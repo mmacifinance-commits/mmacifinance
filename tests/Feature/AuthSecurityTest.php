@@ -39,6 +39,43 @@ class AuthSecurityTest extends TestCase
         $this->assertNotNull($user->otp_sent_at);
     }
 
+    public function test_unknown_emails_share_an_ip_limit_and_expire_after_ten_minutes(): void
+    {
+        $user = User::factory()->create(['password' => Hash::make('password123')]);
+        for ($i = 0; $i < 5; $i++) {
+            $this->post('/login', [
+                'email' => "missing{$i}@example.com",
+                'password' => 'wrongpassword',
+            ])->assertSessionHasErrors('email');
+        }
+
+        $queries = [];
+        DB::listen(function ($query) use (&$queries) {
+            $queries[] = $query->sql;
+        });
+        $this->post('/login', ['email' => $user->email, 'password' => 'password123'])
+            ->assertSessionHasErrors('email');
+        $this->assertStringContainsString('temporarily locked', session('errors')->first('email'));
+        $this->assertFalse(collect($queries)->contains(fn ($sql) => str_contains($sql, '"users"')));
+        Mail::assertNothingSent();
+        $this->assertNull(session('2fa_user_id'));
+
+        $this->travel(10)->minutes();
+        $this->travel(1)->seconds();
+        $this->post('/login', ['email' => $user->email, 'password' => 'password123'])
+            ->assertRedirect(route('2fa.index'));
+    }
+
+    public function test_malformed_login_requests_also_count_towards_the_limit(): void
+    {
+        for ($i = 0; $i < 5; $i++) {
+            $this->post('/login', ['email' => 'invalid'])->assertSessionHasErrors();
+        }
+        $this->post('/login', ['email' => 'unknown@example.com', 'password' => 'wrong'])
+            ->assertSessionHasErrors('email');
+        $this->assertStringContainsString('temporarily locked', session('errors')->first('email'));
+    }
+
     public function test_2fa_resend_cooldown_restriction()
     {
         $user = User::factory()->create([
@@ -62,14 +99,14 @@ class AuthSecurityTest extends TestCase
         $response->assertSessionHas('message', 'Verification code resent successfully.');
     }
 
-    public function test_account_locks_after_6_failed_attempts_with_incremental_durations()
+    public function test_account_locks_after_5_failed_attempts_with_incremental_durations()
     {
         $user = User::factory()->create([
             'password' => Hash::make('password123'),
         ]);
 
-        // 1. Perform 5 failed attempts
-        for ($i = 0; $i < 5; $i++) {
+        // 1. Perform 4 failed attempts
+        for ($i = 0; $i < 4; $i++) {
             $response = $this->post('/login', [
                 'email' => $user->email,
                 'password' => 'wrongpassword',
@@ -80,7 +117,7 @@ class AuthSecurityTest extends TestCase
             $this->assertNull($user->locked_until);
         }
 
-        // 2. 6th failed attempt locks the account for 10 minutes
+        // 2. 5th failed attempt locks the account for 10 minutes
         $response = $this->post('/login', [
             'email' => $user->email,
             'password' => 'wrongpassword',
@@ -105,8 +142,8 @@ class AuthSecurityTest extends TestCase
         // 4. Travel past 10 minutes lock
         $this->travel(11)->minutes();
 
-        // 5. Next 6 failed attempts should lock for 30 minutes (Level 2)
-        for ($i = 0; $i < 5; $i++) {
+        // 5. Next 5 failed attempts should lock for 30 minutes (Level 2)
+        for ($i = 0; $i < 4; $i++) {
             $this->post('/login', [
                 'email' => $user->email,
                 'password' => 'wrongpassword',
@@ -123,8 +160,8 @@ class AuthSecurityTest extends TestCase
         // 6. Travel past 30 minutes
         $this->travel(31)->minutes();
 
-        // 7. Next 6 failed attempts lock for 1 hour (Level 3)
-        for ($i = 0; $i < 5; $i++) {
+        // 7. Next 5 failed attempts lock for 1 hour (Level 3)
+        for ($i = 0; $i < 4; $i++) {
             $this->post('/login', [
                 'email' => $user->email,
                 'password' => 'wrongpassword',

@@ -117,7 +117,7 @@ class DisbursementController extends Controller
 
     protected function ensureApprovedLinkedExpense(Expense $expense): void
     {
-        if (strtolower((string) $expense->status) !== 'approved') {
+        if (!in_array(strtolower((string) $expense->status), ['approved', 'posted'], true)) {
             throw ValidationException::withMessages([
                 'expense_id' => 'Only approved expenses can be released as disbursements.',
             ]);
@@ -154,7 +154,9 @@ class DisbursementController extends Controller
 
     public function store(Request $request)
     {
+        $request->merge(['payment_reference' => $request->filled('payment_reference') ? strtoupper(trim($request->string('payment_reference')->toString())) : null]);
         $validated = $request->validate([
+            'payment_reference' => ['nullable', 'string', 'max:100', \Illuminate\Validation\Rule::unique('disbursements', 'payment_reference')],
             'expense_id' => 'required|exists:expenses,id',
             'description' => 'required|string|max:255',
             'source' => 'required|string|max:255',
@@ -193,12 +195,13 @@ class DisbursementController extends Controller
             // If Cashier sets status to for_approval directly upon saving release details
             if (! $request->header('X-Offline-Sync') && auth()->user()?->isCashier() && in_array($validated['status'], ['for_release', 'for_approval'])) {
                 $validated['status'] = 'for_approval';
-                $validated['released_by_id'] = auth()->id();
-                $validated['submitted_by_id'] = auth()->id();
             }
 
-            if ($validated['status'] === 'for_release') {
-                $validated['released_by_id'] = $validated['released_by_id'] ?? auth()->id();
+            if (in_array($validated['status'], ['for_release', 'for_approval'], true)) {
+                $validated['released_by_id'] = auth()->id();
+            }
+            if ($validated['status'] === 'for_approval') {
+                $validated['submitted_by_id'] = auth()->id();
             }
 
             $dsb = Disbursement::create($validated);
@@ -229,7 +232,9 @@ class DisbursementController extends Controller
 
         $oldExpenseId = $disbursement->expense_id;
 
+        $request->merge(['payment_reference' => $request->filled('payment_reference') ? strtoupper(trim($request->string('payment_reference')->toString())) : null]);
         $validated = $request->validate([
+            'payment_reference' => ['nullable', 'string', 'max:100', \Illuminate\Validation\Rule::unique('disbursements', 'payment_reference')->ignore($disbursement->id)],
             'expense_id' => 'required|exists:expenses,id',
             'description' => 'required|string|max:255',
             'source' => 'required|string|max:255',
@@ -263,12 +268,15 @@ class DisbursementController extends Controller
         // Same escalation as store(): a Cashier saving release details goes straight to for_approval
         if (auth()->user()?->isCashier() && in_array($validated['status'], ['for_release', 'for_approval'])) {
             $validated['status'] = 'for_approval';
-            $validated['released_by_id'] = auth()->id();
-            $validated['submitted_by_id'] = auth()->id();
         }
 
-        if ($validated['status'] === 'for_release') {
-            $validated['released_by_id'] = $validated['released_by_id'] ?? auth()->id();
+        if ($validated['status'] !== $disbursement->status) {
+            if (in_array($validated['status'], ['for_release', 'for_approval'], true)) {
+                $validated['released_by_id'] = auth()->id();
+            }
+            if ($validated['status'] === 'for_approval') {
+                $validated['submitted_by_id'] = auth()->id();
+            }
         }
 
         DB::transaction(function () use ($disbursement, $validated, $selectedExpense) {
@@ -342,10 +350,10 @@ class DisbursementController extends Controller
             'status' => 'approved',
             'approved_by_id' => auth()->id(),
             'date_approved' => now(),
-            'remarks' => $request->remarks ?: 'Approved by Head of Finance.',
+            'remarks' => $request->remarks ?: 'Approved.',
         ]);
 
-        AuditTrail::log($disbursement, 'approved', auth()->user(), $request->remarks ?: 'Approved by Head of Finance.');
+        AuditTrail::log($disbursement, 'approved', auth()->user(), $request->remarks ?: 'Approved.');
 
         return redirect()->route('disbursements.index')->with('success', 'Disbursement approved.');
     }
@@ -368,6 +376,8 @@ class DisbursementController extends Controller
 
         try {
             DB::transaction(function () use ($disbursement, $request) {
+                // Use the same lock order as create/update to avoid competing payment deadlocks.
+                AnnualBudget::whereKey($disbursement->expense?->budgetItem?->budget_id)->lockForUpdate()->firstOrFail();
                 $lockedDisbursement = Disbursement::query()
                     ->with('expense.budgetItem.budget')
                     ->lockForUpdate()
@@ -476,7 +486,7 @@ class DisbursementController extends Controller
     public function exportCsv()
     {
         $fileName = 'disbursements-export-'.now()->format('Y-m-d_His');
-        $rows = [['disbursement_no', 'expense_ref_no', 'description', 'source', 'pay_to', 'amount', 'method', 'date_encoded', 'status', 'notes', 'remarks']];
+        $rows = [['disbursement_no', 'expense_ref_no', 'description', 'source', 'pay_to', 'amount', 'method', 'date_encoded', 'status', 'notes', 'remarks', 'payment_reference']];
 
         Disbursement::with('expense:id,ref_no')->orderBy('id')->chunk(200, function ($rowsChunk) use (&$rows) {
             foreach ($rowsChunk as $dsb) {
@@ -492,6 +502,7 @@ class DisbursementController extends Controller
                     $dsb->status,
                     $dsb->notes,
                     $dsb->remarks,
+                    $dsb->payment_reference,
                 ];
             }
         });
@@ -532,6 +543,7 @@ class DisbursementController extends Controller
             }
             $parsedRows[] = [
                 'line' => count($parsedRows) + 2,
+                'payment_reference' => isset($index['payment_reference']) ? strtoupper(trim((string) ($row[$index['payment_reference']] ?? ''))) : null,
                 'disbursement_no' => trim((string) ($row[$index['disbursement_no']] ?? '')),
                 'expense_ref_no' => trim((string) ($row[$index['expense_ref_no']] ?? '')),
                 'description' => trim((string) ($row[$index['description']] ?? '')),
@@ -559,7 +571,7 @@ class DisbursementController extends Controller
                 return back()->withErrors(['csv_file' => 'Row '.($i + 2).' must have an amount greater than zero.']);
             }
 
-            $expense = Expense::where('ref_no', $row['expense_ref_no'])->where('status', 'approved')->first();
+            $expense = Expense::where('ref_no', $row['expense_ref_no'])->whereIn('status', ['approved', 'posted'])->first();
             if (! $expense) {
                 return back()->withErrors(['csv_file' => 'Row '.($i + 2)." requires an approved expense with ref_no {$row['expense_ref_no']} before importing disbursements."]);
             }
@@ -580,13 +592,23 @@ class DisbursementController extends Controller
         try {
             DB::transaction(function () use ($parsedRows, &$created, &$updated) {
                 foreach ($parsedRows as $row) {
-                    $expense = Expense::where('ref_no', $row['expense_ref_no'])->where('status', 'approved')->first();
+                    $expense = Expense::where('ref_no', $row['expense_ref_no'])->whereIn('status', ['approved', 'posted'])->first();
                     if (! $expense) {
                         continue;
                     }
 
                     $disbursement = Disbursement::firstOrNew(['disbursement_no' => $row['disbursement_no']]);
                     $isNew = ! $disbursement->exists;
+                    if (!$isNew && in_array($disbursement->status, ['approved', 'posted'], true)) {
+                        throw ValidationException::withMessages(['csv_file' => 'Row '.$row['line'].' cannot overwrite an approved or posted payment.']);
+                    }
+                    if ($row['payment_reference'] !== null) {
+                        $reference = $row['payment_reference'] ?: null;
+                        if (strlen($reference ?? '') > 100 || ($reference && Disbursement::where('payment_reference', $reference)->when($disbursement->id, fn ($query) => $query->whereKeyNot($disbursement->id))->exists())) {
+                            throw ValidationException::withMessages(['csv_file' => 'Row '.$row['line'].' has an invalid or already-used payment reference.']);
+                        }
+                        $disbursement->payment_reference = $reference;
+                    }
                     $disbursement->disbursement_no = $row['disbursement_no'];
                     $disbursement->expense_id = $expense->id;
                     $disbursement->description = $row['description'];
@@ -598,7 +620,9 @@ class DisbursementController extends Controller
                     $disbursement->status = $row['status'];
                     $disbursement->notes = $row['notes'] !== '' ? $row['notes'] : null;
                     $disbursement->remarks = $row['remarks'] !== '' ? $row['remarks'] : null;
-                    $disbursement->prepared_by_id = auth()->id();
+                    if ($isNew) {
+                        $disbursement->prepared_by_id = auth()->id();
+                    }
                     $disbursement->expense()->associate($expense);
 
                     try {

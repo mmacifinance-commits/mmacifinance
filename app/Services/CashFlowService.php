@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AnnualBudget;
 use App\Models\Disbursement;
+use App\Models\Expense;
 use App\Models\Income;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -101,6 +102,7 @@ class CashFlowService
         }
 
         $availableCash = $this->lockedAvailableCashForCommitment($budget, $disbursement->id);
+        $this->ensureExpenseBalance($disbursement);
         $amount = (float) $disbursement->amount;
 
         if ($availableCash <= 0 || $amount > $availableCash) {
@@ -121,6 +123,7 @@ class CashFlowService
         }
 
         $availableCash = $this->lockedCashOnHand($budget, $disbursement->id);
+        $this->ensureExpenseBalance($disbursement);
         $amount = (float) $disbursement->amount;
 
         if ($amount > $availableCash) {
@@ -164,6 +167,8 @@ class CashFlowService
 
     private function lockReceiptRows(AnnualBudget $budget): void
     {
+        // Serialize commitments even when there are no receipt/payment rows yet.
+        AnnualBudget::whereKey($budget->id)->lockForUpdate()->firstOrFail();
         DB::table('incomes')
             ->whereNotNull('receipt_no')
             ->where('receipt_no', '<>', '')
@@ -173,5 +178,25 @@ class CashFlowService
             ])
             ->lockForUpdate()
             ->get('id');
+    }
+
+    private function ensureExpenseBalance(Disbursement $disbursement): void
+    {
+        $expense = Expense::whereKey($disbursement->expense_id)->lockForUpdate()->firstOrFail();
+        $others = $this->committedDisbursementQuery(null, $disbursement->id)
+            ->where('expense_id', $expense->id)->lockForUpdate()->get();
+        $remaining = (int) round((float) $expense->amount * 100)
+            - $others->sum(fn ($row) => (int) round((float) $row->amount * 100));
+        if ((int) round((float) $disbursement->amount * 100) > $remaining) {
+            throw ValidationException::withMessages(['amount' => 'Payment exceeds the uncommitted expense balance of ₱'.number_format(max(0, $remaining) / 100, 2).'.']);
+        }
+        if (! $disbursement->payment_reference && $others->contains(fn ($row) => ! $row->payment_reference
+            && (string) $row->amount === (string) $disbursement->amount
+            && $row->date_encoded->isSameDay($disbursement->date_encoded)
+            && mb_strtolower(trim($row->pay_to)) === mb_strtolower(trim($disbursement->pay_to))
+            && $row->method === $disbursement->method
+        )) {
+            throw ValidationException::withMessages(['payment_reference' => 'A matching payment already exists for this expense, payee, date, method and amount. For a separate installment, enter its unique payment reference.']);
+        }
     }
 }

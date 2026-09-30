@@ -204,7 +204,7 @@ document.addEventListener('click', (event) => {
 }, true)
 
 createInertiaApp({
-    title: (title) => title ? `${title} - Budget Fund Utilization & Tracking` : 'Budget Fund Utilization & Tracking',
+    title: (title) => title ? `${title} - Budget Fund Utilization Tracking System` : 'Budget Fund Utilization Tracking System',
     resolve: (name) =>
         resolvePageComponent(
             `./Pages/${name}.vue`,

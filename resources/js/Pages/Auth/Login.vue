@@ -39,7 +39,7 @@ function submit() {
                 <!-- Logo -->
                 <div class="mb-6 text-center">
                     <img src="/images/logo.png" alt="MMAC Logo" class="mx-auto h-20 w-20 object-contain" />
-                    <h1 class="mt-4 text-xl font-bold text-white">Budget Fund Utilization & Tracking</h1>
+                    <h1 class="mt-4 text-xl font-bold text-white">Budget Fund Utilization Tracking System</h1>
                     <p class="text-sm text-mustard/80 mt-1">Merchant Marine Academy of Caraga, Inc.</p>
                 </div>
 

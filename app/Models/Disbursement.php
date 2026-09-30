@@ -12,6 +12,7 @@ class Disbursement extends Model
 
     protected $fillable = [
         'disbursement_no',
+        'payment_reference',
         'expense_id',
         'description',
         'source',

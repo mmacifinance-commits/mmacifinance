@@ -5,6 +5,10 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\Console\Command\Command;
+use Illuminate\Support\Facades\Schedule;
+
+Schedule::command('system:backup')->dailyAt('02:00')->withoutOverlapping()->onOneServer()
+    ->onFailure(fn () => \Illuminate\Support\Facades\Log::error('Scheduled database backup failed. Check Cloud logs and private backup storage.'));
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());

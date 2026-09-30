@@ -290,7 +290,7 @@ class ExpenseController extends Controller
             $expense,
             'approved',
             auth()->user(),
-            $request->remarks ?: 'Approved by Head of Finance.',
+            $request->remarks ?: 'Approved.',
             ['status' => 'approved']
         );
 
@@ -321,7 +321,7 @@ class ExpenseController extends Controller
             $expense,
             'returned_for_revision',
             auth()->user(),
-            $request->remarks ?: 'Returned for revision by Head of Finance.',
+            $request->remarks ?: 'Returned for revision.',
             ['status' => 'returned_for_revision']
         );
 
@@ -352,7 +352,7 @@ class ExpenseController extends Controller
             $expense,
             'rejected',
             auth()->user(),
-            $request->remarks ?: 'Rejected by Head of Finance.',
+            $request->remarks ?: 'Rejected.',
             ['status' => 'rejected']
         );
 

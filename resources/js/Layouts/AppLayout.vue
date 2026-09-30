@@ -20,6 +20,7 @@ const mainNavItems = computed(() => [
     { href: '/expenses', label: 'EXPENDITURES', icon: '', section: 'expenditures' },
     { href: '/disbursements', label: 'DISBURSEMENTS', icon: '', section: 'disbursements' },
     { href: '/reports', label: 'FINANCIAL REPORTS', icon: '', section: 'reports' },
+    { href: '/reconciliations', label: 'RECONCILIATION', icon: '', section: 'reconciliation' },
 ])
 
 const sidebarMenus = {
@@ -50,6 +51,7 @@ function getActiveSection() {
     if (p.startsWith('/expenses')) return 'expenditures'
     if (p.startsWith('/disbursements')) return 'disbursements'
     if (p.startsWith('/reports')) return 'reports'
+    if (p.startsWith('/reconciliations')) return 'reconciliation'
     return 'dashboard'
 }
 
@@ -114,7 +116,7 @@ watch(flash, () => { showFlash.value = true; setTimeout(() => { showFlash.value 
                 <div class="flex min-w-0 items-center gap-2 sm:gap-3">
                     <img src="/images/logo.png" alt="MMAC Logo" class="h-9 w-9 flex-none object-contain sm:h-11 sm:w-11" />
                     <div class="min-w-0">
-                        <h1 class="truncate text-sm font-bold leading-tight tracking-wide text-white sm:text-base">Budget Fund Utilization System</h1>
+                        <h1 class="truncate text-sm font-bold leading-tight tracking-wide text-white sm:text-base">Budget Fund Utilization Tracking System</h1>
                         <p class="mt-0.5 truncate text-[10px] text-mustard sm:text-xs">Merchant Marine Academy of Caraga, Inc.</p>
                     </div>
                 </div>

@@ -142,6 +142,85 @@ class BudgetAndDisbursementEnhancementTest extends TestCase
         ]);
     }
 
+    public function test_release_stamps_follow_the_actor_for_create_update_and_submit(): void
+    {
+        $this->expense->update(['status' => 'approved']);
+        $payload = [
+            'expense_id' => $this->expense->id,
+            'description' => 'Payment for supplies',
+            'source' => 'Operational Expenses',
+            'pay_to' => 'Supplier',
+            'amount' => 100,
+            'method' => 'cash',
+            'date_encoded' => '2026-01-16',
+            'status' => 'for_approval',
+            'released_by_id' => $this->cashier->id,
+            'submitted_by_id' => $this->cashier->id,
+        ];
+
+        $this->actingAs($this->superAdmin)->post('/disbursements', $payload)
+            ->assertSessionHasNoErrors()->assertRedirect('/disbursements');
+        $record = Disbursement::latest('id')->firstOrFail();
+        $this->assertEquals($this->superAdmin->id, $record->released_by_id);
+        $this->assertEquals($this->superAdmin->id, $record->submitted_by_id);
+        $this->assertSame('Head of Finance', $record->releasedBy->toArray()['role_label']);
+
+        // Editing details must not replace the person who released the payment.
+        $this->actingAs($this->cashier)->put("/disbursements/{$record->id}", $payload)
+            ->assertSessionHasNoErrors()->assertRedirect('/disbursements');
+        $this->assertEquals($this->superAdmin->id, $record->fresh()->released_by_id);
+        $this->assertEquals($this->superAdmin->id, $record->fresh()->submitted_by_id);
+
+        $record->update(['status' => 'draft', 'released_by_id' => null, 'submitted_by_id' => null]);
+        $this->actingAs($this->superAdmin)->put("/disbursements/{$record->id}", $payload)
+            ->assertSessionHasNoErrors()->assertRedirect('/disbursements');
+        $this->assertEquals($this->superAdmin->id, $record->fresh()->released_by_id);
+        $this->assertEquals($this->superAdmin->id, $record->fresh()->submitted_by_id);
+
+        $record->refresh()->update(['status' => 'draft', 'released_by_id' => $this->cashier->id]);
+        $this->actingAs($this->superAdmin)->post("/disbursements/{$record->id}/submit")
+            ->assertSessionHasNoErrors()->assertRedirect('/disbursements');
+        $this->assertEquals($this->superAdmin->id, $record->fresh()->released_by_id);
+        $this->assertDatabaseHas('audit_trails', [
+            'auditable_type' => Disbursement::class,
+            'auditable_id' => $record->id,
+            'action' => 'submitted',
+            'user_id' => $this->superAdmin->id,
+            'user_role' => 'Head of Finance',
+            'remarks' => 'Released & submitted to Head of Finance for approval.',
+        ]);
+    }
+
+    public function test_expense_audit_history_keeps_the_actual_actor_for_each_action(): void
+    {
+        $this->actingAs($this->cashier)->post("/expenses/{$this->expense->id}/submit", [
+            'user_id' => $this->superAdmin->id,
+            'user_name' => $this->superAdmin->name,
+            'user_role' => 'Head of Finance',
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($this->superAdmin)->post("/expenses/{$this->expense->id}/approve")
+            ->assertSessionHasNoErrors();
+
+        foreach (['submitted' => $this->cashier, 'approved' => $this->superAdmin] as $action => $actor) {
+            $this->assertDatabaseHas('audit_trails', [
+                'auditable_type' => Expense::class,
+                'auditable_id' => $this->expense->id,
+                'action' => $action,
+                'user_id' => $actor->id,
+                'user_name' => $actor->name,
+                'user_role' => $actor->role_label,
+            ]);
+        }
+
+        // History retains the identity and role at the time of the action.
+        $originalName = $this->cashier->name;
+        $this->cashier->update(['name' => 'Renamed User', 'role' => User::ROLE_AUDITOR]);
+        $entry = $this->expense->auditTrails()->where('action', 'submitted')->firstOrFail();
+        $this->assertSame($originalName, $entry->user_name);
+        $this->assertSame('Cashier', $entry->user_role);
+    }
+
     public function test_cashier_cannot_approve_or_post_disbursements()
     {
         $disbursement = Disbursement::create([
@@ -162,6 +241,46 @@ class BudgetAndDisbursementEnhancementTest extends TestCase
         ]);
 
         $response->assertStatus(403);
+    }
+
+    public function test_payment_duplicates_and_overcommitments_are_blocked_but_distinct_installments_are_allowed(): void
+    {
+        $this->expense->update(['status' => 'approved']);
+        $payload = [
+            'expense_id' => $this->expense->id, 'description' => 'Installment',
+            'source' => 'Expenditure', 'pay_to' => 'Supplier', 'amount' => 2000,
+            'method' => 'cash', 'date_encoded' => '2026-01-16', 'status' => 'draft',
+        ];
+        $this->actingAs($this->superAdmin)->post('/disbursements', $payload)->assertSessionHasNoErrors();
+        $this->postJson('/disbursements', $payload)->assertUnprocessable()->assertJsonValidationErrors('payment_reference');
+        $this->postJson('/disbursements', array_replace($payload, ['amount' => 3000.01, 'payment_reference' => 'PAY-2']))
+            ->assertUnprocessable()->assertJsonValidationErrors('amount');
+        $this->post('/disbursements', $payload + ['payment_reference' => 'PAY-2'])->assertSessionHasNoErrors();
+        $this->postJson('/disbursements', array_replace($payload, ['amount' => 1000, 'payment_reference' => 'pay-2']))
+            ->assertUnprocessable()->assertJsonValidationErrors('payment_reference');
+        $this->post('/disbursements', array_replace($payload, ['amount' => 1000, 'payment_reference' => 'PAY-3']))->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('disbursements', 3);
+
+        $record = Disbursement::first();
+        $record->update(['status' => 'approved']);
+        // A changed expense total must be rechecked when posting a previously approved payment.
+        $this->expense->update(['amount' => 4000]);
+        $this->post("/disbursements/{$record->id}/post")->assertSessionHasErrors('amount');
+        $this->assertSame('approved', $record->fresh()->status);
+    }
+
+    public function test_import_cannot_overcommit_expenses_and_rolls_back_the_whole_batch(): void
+    {
+        $this->expense->update(['status' => 'approved']);
+        $csv = implode("\n", [
+            'disbursement_no,expense_ref_no,description,source,pay_to,amount,method,date_encoded,status,notes,remarks,payment_reference',
+            'DSB00000101,EXP-2026-0001,Installment,Expenditure,Supplier,3000,cash,2026-01-16,draft,,,IMPORT-1',
+            'DSB00000102,EXP-2026-0001,Installment,Expenditure,Supplier,3000,cash,2026-01-16,draft,,,IMPORT-2',
+        ]);
+        $this->actingAs($this->superAdmin)->post('/disbursements/import-csv', [
+            'csv_file' => \Illuminate\Http\UploadedFile::fake()->createWithContent('payments.csv', $csv),
+        ])->assertSessionHasErrors('csv_file');
+        $this->assertDatabaseCount('disbursements', 0);
     }
 
     public function test_unposted_disbursement_does_not_affect_expenditure_and_posting_updates_it()
@@ -198,6 +317,21 @@ class BudgetAndDisbursementEnhancementTest extends TestCase
         $disbursement->refresh();
         $this->assertEquals('posted', $disbursement->status);
         $this->assertEquals(2000.00, $this->expense->fresh()->paid); // Updated ONLY after posting!
+
+        $this->post('/reconciliations', [
+            'as_of_date' => '2026-01-31', 'opening_balance' => 0,
+            'actual_cash' => 8000, 'bank_balance' => 0,
+            'deposits_in_transit' => 0, 'outstanding_payments' => 0,
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('reconciliations', [
+            'receipts' => 10000, 'payments' => 2000, 'book_balance' => 8000, 'difference' => 0,
+        ]);
+        $this->post('/disbursements', [
+            'expense_id' => $this->expense->id, 'description' => 'Remaining installment',
+            'source' => 'Expenditure', 'pay_to' => 'Supplier', 'amount' => 3000,
+            'method' => 'cash', 'date_encoded' => '2026-01-17', 'status' => 'draft',
+            'payment_reference' => 'FINAL-INSTALLMENT',
+        ])->assertSessionHasNoErrors();
     }
 
     public function test_cashier_cannot_create_disbursement_with_posted_or_approved_status()

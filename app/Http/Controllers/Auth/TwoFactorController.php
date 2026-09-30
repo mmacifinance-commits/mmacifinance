@@ -28,12 +28,9 @@ class TwoFactorController extends Controller
             }
         }
 
-        $isDevMode = strtolower((string) config('app.env', 'local')) !== 'production' || (bool) config('app.debug', true);
+        $isDevMode = app()->environment('local') && (bool) config('app.debug', false);
         $otpCode = $user ? (string) $user->otp_code : null;
 
-        if ($user && $user->otp_code) {
-            Log::info("2FA OTP Verification Code for {$user->email}: {$user->otp_code}");
-        }
 
         return Inertia::render('Auth/Verify2FA', [
             'cooldownSeconds' => $cooldownSeconds,
@@ -44,10 +41,8 @@ class TwoFactorController extends Controller
     public function verify(Request $request)
     {
         Log::info('2FA verify request received', [
-            'session_id' => $request->session()->getId(),
             'has_2fa_user_id' => $request->session()->has('2fa_user_id'),
             'user_id' => $request->session()->get('2fa_user_id'),
-            'submitted_otp' => $request->input('otp'),
             'url' => $request->fullUrl(),
         ]);
 
@@ -65,7 +60,6 @@ class TwoFactorController extends Controller
 
         if (!$user) {
             Log::warning('2FA verify aborted: user not found', [
-                'session_id' => $request->session()->getId(),
                 'user_id' => $userId,
             ]);
             return redirect()->route('login')->withErrors([
@@ -88,8 +82,6 @@ class TwoFactorController extends Controller
         if (!hash_equals($storedOtp, $submittedOtp) || (!$user->otp_expires_at || now()->greaterThan($user->otp_expires_at))) {
             Log::warning('2FA verify failed', [
                 'email' => $user->email,
-                'submitted' => $submittedOtp,
-                'stored' => $storedOtp,
                 'expired' => !$user->otp_expires_at || now()->greaterThan($user->otp_expires_at),
             ]);
             return back()->withErrors(['otp' => 'The provided OTP is invalid or expired.']);
@@ -141,7 +133,7 @@ class TwoFactorController extends Controller
             }
 
             // Generate new OTP
-            $otp = rand(100000, 999999);
+            $otp = random_int(100000, 999999);
 
             // Save new OTP, expiration, and update otp_sent_at
             $user->otp_code = $otp;

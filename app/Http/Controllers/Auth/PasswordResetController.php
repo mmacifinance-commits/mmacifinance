@@ -44,7 +44,7 @@ class PasswordResetController extends Controller
         $this->ensureResetRequestNotThrottled($request, $email);
 
         // Generate 6 digit code
-        $code = (string) rand(100000, 999999);
+        $code = (string) random_int(100000, 999999);
         $codeHash = Hash::make($code);
 
         // Persist in database so the reset flow survives reloads, tab changes, and browser restarts

@@ -28,6 +28,8 @@ class User extends Authenticatable
         'remember_token',
     ];
 
+    protected $appends = ['role_label'];
+
     protected function casts(): array
     {
         return [

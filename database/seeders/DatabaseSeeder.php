@@ -20,6 +20,9 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        if (app()->environment('production')) {
+            throw new \RuntimeException('Demo data and default passwords cannot be seeded in production.');
+        }
         // --- 1. Users & System Roles ---
         $headOfFinance = User::updateOrCreate(
             ['email' => 'admin@mmac.edu.ph'],

@@ -371,7 +371,7 @@ function approveExpense(expense) {
     if (!isOnline.value) return alert('Expense approval requires an internet connection.')
     if (!confirm('Approve this expenditure as Head of Finance?')) return
     router.post(`/expenses/${expense.id}/approve`, {
-        remarks: 'Approved by Head of Finance.',
+        remarks: 'Approved.',
     })
 }
 
@@ -379,7 +379,7 @@ function returnExpense(expense) {
     if (!isOnline.value) return alert('Returning an expense requires an internet connection.')
     if (!confirm('Return this expenditure for revision?')) return
     router.post(`/expenses/${expense.id}/return`, {
-        remarks: 'Returned for revision by Head of Finance.',
+        remarks: 'Returned for revision.',
     })
 }
 
@@ -387,7 +387,7 @@ function rejectExpense(expense) {
     if (!isOnline.value) return alert('Expense rejection requires an internet connection.')
     if (!confirm('Reject this expenditure?')) return
     router.post(`/expenses/${expense.id}/reject`, {
-        remarks: 'Rejected by Head of Finance.',
+        remarks: 'Rejected.',
     })
 }
 

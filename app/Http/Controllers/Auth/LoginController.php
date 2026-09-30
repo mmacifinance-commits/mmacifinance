@@ -10,12 +10,13 @@ use Illuminate\Support\Str;
 use App\Models\User;
 use App\Mail\TwoFactorOtpMail;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\RateLimiter;
 
 class LoginController extends Controller
 {
     public function showLoginForm()
     {
-        $isLocalDev = config('app.env') === 'local' || config('app.debug') === true;
+        $isLocalDev = app()->environment('local') && config('app.debug') === true;
 
         $users = [];
         if ($isLocalDev) {
@@ -43,6 +44,16 @@ class LoginController extends Controller
 
     public function login(Request $request)
     {
+        // Count requests before validation or account lookup, including unknown emails.
+        $throttleKey = 'login-attempts:'.hash('sha256', (string) $request->ip());
+        if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
+            $seconds = RateLimiter::availableIn($throttleKey);
+            return back()->withErrors([
+                'email' => "Login temporarily locked due to too many attempts. Please try again in {$seconds} seconds.",
+            ])->onlyInput('email');
+        }
+        RateLimiter::hit($throttleKey, 600);
+
         $credentials = $request->validate([
             'email' => 'required|email',
             'password' => 'required',
@@ -66,8 +77,11 @@ class LoginController extends Controller
         }
 
         if (Auth::validate($credentials)) {
+            if (app()->environment('production') && $credentials['password'] === 'password') {
+                return back()->withErrors(['email' => 'This password cannot be used in production. Reset your password before signing in.'])->onlyInput('email');
+            }
             // Generate OTP
-            $otp = rand(100000, 999999);
+            $otp = random_int(100000, 999999);
 
             // Save OTP, expiration (10 minutes), and sent_at time
             $user->otp_code = $otp;
@@ -94,7 +108,7 @@ class LoginController extends Controller
         if ($user) {
             $user->failed_login_attempts += 1;
 
-            if ($user->failed_login_attempts >= 6) {
+            if ($user->failed_login_attempts >= 5) {
                 $user->lockout_level += 1;
 
                 $durationMinutes = match ($user->lockout_level) {
@@ -123,7 +137,7 @@ class LoginController extends Controller
             }
 
             $user->save();
-            $remaining = 6 - $user->failed_login_attempts;
+            $remaining = 5 - $user->failed_login_attempts;
 
             return back()->withErrors([
                 'email' => "The provided credentials do not match our records. You have {$remaining} attempts remaining before lockout.",

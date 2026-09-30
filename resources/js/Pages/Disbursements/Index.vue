@@ -60,6 +60,7 @@ const form = useForm({
     description: '',
     source: 'Expenditure',
     pay_to: '',
+    payment_reference: '',
     amount: 0,
     method: 'check',
     date_encoded: '',
@@ -126,7 +127,7 @@ const filteredDisbursements = computed(() => {
 })
 
 const filteredExpensesForModal = computed(() => {
-    let rows = [...(props.expenses || [])].filter(e => String(e.status || '').toLowerCase() === 'approved')
+    let rows = [...(props.expenses || [])].filter(e => ['approved', 'posted'].includes(String(e.status || '').toLowerCase()))
 
     if (linkedExpenseSearch.value.trim()) {
         const q = linkedExpenseSearch.value.trim().toLowerCase()
@@ -252,6 +253,7 @@ function openEdit(d) {
         description: d.description,
         source: d.source,
         pay_to: d.pay_to,
+        payment_reference: d.payment_reference || '',
         amount: d.amount,
         method: d.method,
         status: d.status,
@@ -286,6 +288,7 @@ async function save() {
         description: form.description,
         source: form.source,
         pay_to: form.pay_to,
+        payment_reference: form.payment_reference,
         amount: form.amount,
         method: form.method,
         date_encoded: form.date_encoded,
@@ -340,7 +343,7 @@ function remove(id) {
 function submitForApproval(d) {
     if (!isOnline.value) return alert('Payment release submission requires an internet connection.')
     if (confirm('Submit this disbursement for approval to the Head of Finance?')) {
-        router.post(`/disbursements/${d.id}/submit`, { remarks: 'Released and submitted by Cashier' })
+        router.post(`/disbursements/${d.id}/submit`)
     }
 }
 
@@ -713,6 +716,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                         />
                     </div>
                     <div><label class="block text-sm font-medium mb-1.5">Category / Source</label><input v-model="form.source" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
+                    <div><label class="block text-sm font-medium mb-1.5">Payment Reference</label><input v-model="form.payment_reference" maxlength="100" placeholder="Unique check, transfer or cash voucher number" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" /><p v-if="form.errors.payment_reference" class="text-red-600 text-xs mt-1">{{ form.errors.payment_reference }}</p></div>
                     <div><label class="block text-sm font-medium mb-1.5">Pay To (Payee)</label><input v-model="form.pay_to" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
                     <div><label class="block text-sm font-medium mb-1.5">Disbursement Amount (₱)</label><input v-model.number="form.amount" type="number" step="0.01" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
                     <div><label class="block text-sm font-medium mb-1.5">Payment Method</label><select v-model="form.method" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"><option value="check">Check</option><option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option></select></div>
