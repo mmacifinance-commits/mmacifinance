@@ -42,10 +42,9 @@ The ZIP contains database tables, their schema, row counts and SHA-256 hashes. I
 
 The automated suite exercises a full SQLite restore into an isolated in-memory database, corruption detection and private-storage upload/read-back. Run the MySQL drill against the deployed database version before relying on it for production recovery.
 
-## Payment controls and reconciliation
+## Payment controls
 
 - New/edited/imported payments and posting recheck the linked expense's balance, including other pending commitments. Matching expense/payee/date/method/amount payments without a reference are blocked. A unique payment reference distinguishes legitimate equal installments; reusing a reference is blocked by a database unique constraint. Existing historical duplicates are not silently deleted.
-- The Reconciliation page records a dated comparison of all actual receipts and posted payments against counted cash and combined bank statements. Forecast income is excluded. Enter the opening balance from before the first recorded transaction, deposits in transit and outstanding payments. Explain any difference. Entries retain their original totals and the acting user's name/role. They do not automatically alter the ledger or prove transaction-by-transaction bank matching.
 
 References: [Cloud deployments and environment variables](https://laravel.com/cloud/docs/environments), [Cloud scheduler](https://laravel.com/cloud/docs/scheduled-tasks), [private object storage](https://laravel.com/cloud/docs/resources/object-storage), [Cloud security and TLS](https://marketing.cloud.laravel.com/).
 

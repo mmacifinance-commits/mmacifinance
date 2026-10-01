@@ -17,9 +17,8 @@ generated print sections, and Excel sections. Financial records are read only.
   selected dates. No starting balance is added. This is not a full balance sheet
   or certified bank reconciliation.
 - Responsibility center: totals grouped by center ID, with allocation detail.
-- Account-title ledger: each allocation's opening available budget, posted
-  payment entries in chronological order, and running remaining budget. This is
-  a budget ledger, not a double-entry general ledger.
+- Account Title Report: each allocation's opening available budget, posted
+  disbursements in chronological order, and running remaining budget.
 - Overall: allocation utilization, receipts and posted disbursement detail.
 - Closing: full fiscal-year cash and budget sections only. Open periods are
   provisional; even closed periods are current stored data, not immutable snapshots.

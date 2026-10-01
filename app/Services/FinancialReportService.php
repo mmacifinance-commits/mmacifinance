@@ -13,7 +13,7 @@ class FinancialReportService
         'overall_financial' => 'Overall Financial Report', 'budget_utilization' => 'Budget Utilization Report',
         'cash_receipts' => 'Cash Receipts Report', 'disbursements' => 'Disbursement Report',
         'income_vs_receipts' => 'Income vs Receipts Report', 'fund_balance' => 'Fund Balance Report',
-        'responsibility_center' => 'Responsibility Center Report', 'account_title_ledger' => 'Account Title Ledger',
+        'responsibility_center' => 'Responsibility Center Report', 'account_title_ledger' => 'Account Title Report',
         'closing_report' => 'Closing Report',
     ];
 
@@ -53,7 +53,7 @@ class FinancialReportService
         if ($type === 'closing_report') {
             $notes[] = $period?->closed_at
                 ? 'Closed fiscal period. This is a report of current stored records, not an immutable historical snapshot.'
-                : 'PROVISIONAL: this fiscal period is not closed. This report is not a final closing statement.';
+                : 'PROVISIONAL: this fiscal period is not closed. This report is not a final closing report.';
             if ($start || $end || $month || $department || $category || $account) {
                 throw ValidationException::withMessages(['report_type' => 'A closing report must cover the full fiscal year. Clear date, month, responsibility center, category and account-title filters.']);
             }
@@ -145,7 +145,7 @@ class FinancialReportService
             default => [$budgetSection, $receiptSection, $paymentSection],
         };
         if ($type === 'income_vs_receipts') $notes[] = 'Income is projected. Receipts are actual collections, not additional projected income. The difference is a comparison, not a list of unpaid debts.';
-        if ($type === 'account_title_ledger') $notes[] = 'Budget account-title ledger: appropriation less posted payments, not a double-entry general ledger. Opening balance includes payments before the selected start date.';
+        if ($type === 'account_title_ledger') $notes[] = 'Account Title Report: appropriation less posted disbursements. Opening balance includes disbursements before the selected start date.';
         if ($availableCash < 0) $notes[] = 'Warning: available cash is negative. Review receipts and posted disbursements.';
         return ['reportType' => $type, 'reportLabel' => self::TYPES[$type], 'period' => $period,
             'monthLabel' => $month ? Carbon::parse($month)->format('F Y') : 'All Fiscal Months',
@@ -184,6 +184,6 @@ class FinancialReportService
             $section['totalLabel'] = null;
             $sections[] = $section;
         }
-        return $sections ?: [$this->section('Account Title Ledger', ['Date / Entry', 'Reference', 'Expense Ref.', 'Payee', 'Posted Payment', 'Budget Balance'], [], [4,5])];
+        return $sections ?: [$this->section('Account Title Report', ['Date / Entry', 'Reference', 'Expense Ref.', 'Payee', 'Posted Payment', 'Budget Balance'], [], [4,5])];
     }
 }

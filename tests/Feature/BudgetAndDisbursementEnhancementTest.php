@@ -309,23 +309,15 @@ class BudgetAndDisbursementEnhancementTest extends TestCase
         $this->assertEquals('approved', $disbursement->status);
         $this->assertEquals(0.00, $this->expense->fresh()->paid); // Still 0 until posted!
 
-        // Head of Finance posts to ledger
+        // Head of Finance posts the disbursement
         $this->actingAs($this->superAdmin)->post("/disbursements/{$disbursement->id}/post", [
-            'remarks' => 'Posted to GL',
+            'remarks' => 'Disbursement posted',
         ]);
 
         $disbursement->refresh();
         $this->assertEquals('posted', $disbursement->status);
         $this->assertEquals(2000.00, $this->expense->fresh()->paid); // Updated ONLY after posting!
 
-        $this->post('/reconciliations', [
-            'as_of_date' => '2026-01-31', 'opening_balance' => 0,
-            'actual_cash' => 8000, 'bank_balance' => 0,
-            'deposits_in_transit' => 0, 'outstanding_payments' => 0,
-        ])->assertSessionHasNoErrors();
-        $this->assertDatabaseHas('reconciliations', [
-            'receipts' => 10000, 'payments' => 2000, 'book_balance' => 8000, 'difference' => 0,
-        ]);
         $this->post('/disbursements', [
             'expense_id' => $this->expense->id, 'description' => 'Remaining installment',
             'source' => 'Expenditure', 'pay_to' => 'Supplier', 'amount' => 3000,

@@ -20,7 +20,6 @@ const mainNavItems = computed(() => [
     { href: '/expenses', label: 'EXPENDITURES', icon: '', section: 'expenditures' },
     { href: '/disbursements', label: 'DISBURSEMENTS', icon: '', section: 'disbursements' },
     { href: '/reports', label: 'FINANCIAL REPORTS', icon: '', section: 'reports' },
-    { href: '/reconciliations', label: 'RECONCILIATION', icon: '', section: 'reconciliation' },
 ])
 
 const sidebarMenus = {
@@ -51,7 +50,6 @@ function getActiveSection() {
     if (p.startsWith('/expenses')) return 'expenditures'
     if (p.startsWith('/disbursements')) return 'disbursements'
     if (p.startsWith('/reports')) return 'reports'
-    if (p.startsWith('/reconciliations')) return 'reconciliation'
     return 'dashboard'
 }
 

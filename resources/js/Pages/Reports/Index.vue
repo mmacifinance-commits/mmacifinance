@@ -264,7 +264,7 @@ const activeReportLabel = computed(() => {
     <div class="flex items-center justify-between mb-6">
         <div>
             <h2 class="text-xl font-bold text-gray-900">Financial Reports & Performance</h2>
-                <p class="text-sm text-gray-500">Filtered financial statements, budget utilization, and posted expenditure reports</p>
+                <p class="text-sm text-gray-500">Filtered financial reports, budget utilization, and posted expenditure reports</p>
         </div>
     </div>
 
@@ -367,7 +367,7 @@ const activeReportLabel = computed(() => {
     </div>
 
     <div v-if="asArray(reconciliationWarnings).length" class="mb-6 border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        <p class="font-bold uppercase tracking-wider">Reconciliation Warnings</p>
+        <p class="font-bold uppercase tracking-wider">Report Validation Warnings</p>
         <ul class="mt-2 list-disc space-y-1 pl-5">
             <li v-for="warning in asArray(reconciliationWarnings)" :key="warning">{{ warning }}</li>
         </ul>
@@ -401,7 +401,7 @@ const activeReportLabel = computed(() => {
     <div class="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden mb-6">
         <div class="px-5 py-3 border-b bg-gray-50 flex flex-wrap items-center justify-between gap-2">
             <div>
-                <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wider">Monthly Budget Reconciliation</h3>
+                <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wider">Monthly Budget Summary</h3>
                 <p class="text-xs text-gray-500 mt-1">Monthly totals dynamically follow the fiscal year, month, date range, responsibility center, and category filters above.</p>
             </div>
             <div class="flex gap-2 text-xs">

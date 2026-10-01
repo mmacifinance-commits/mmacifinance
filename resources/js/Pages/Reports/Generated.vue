@@ -131,7 +131,7 @@ const printReport = async () => {
             </section>
 
             <section v-if="reconciliationWarnings?.length" class="my-4 border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
-                <p class="font-black uppercase tracking-wider">Reconciliation Warnings</p>
+                <p class="font-black uppercase tracking-wider">Report Validation Warnings</p>
                 <ul class="mt-2 list-disc space-y-1 pl-5">
                     <li v-for="warning in reconciliationWarnings" :key="warning">{{ warning }}</li>
                 </ul>

@@ -60,7 +60,7 @@ try {
     await page.locator('.app-modal button[type="submit"]').click()
     await page.getByRole('button', { name: 'Post Release', exact: true }).first().click()
     await page.locator('.app-modal button[type="submit"]').click()
-    await page.locator('tbody').getByText('Posted (GL)', { exact: true }).waitFor()
+    await page.locator('tbody').getByText('Posted', { exact: true }).waitFor()
     console.log('PASS browser payment creation, approval and posting')
 
     await page.goto('/reports')

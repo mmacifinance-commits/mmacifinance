@@ -394,10 +394,10 @@ class DisbursementController extends Controller
                 $lockedDisbursement->update([
                     'status' => 'posted',
                     'posted_by_id' => auth()->id(),
-                    'remarks' => $request->remarks ?: 'Posted to general ledger & official expenditures updated.',
+                    'remarks' => $request->remarks ?: 'Disbursement posted and expenditures updated.',
                 ]);
 
-                AuditTrail::log($lockedDisbursement, 'posted', auth()->user(), $request->remarks ?: 'Posted to general ledger.');
+                AuditTrail::log($lockedDisbursement, 'posted', auth()->user(), $request->remarks ?: 'Disbursement posted.');
 
                 $this->syncExpensePaidAmount($lockedDisbursement->expense_id);
             });

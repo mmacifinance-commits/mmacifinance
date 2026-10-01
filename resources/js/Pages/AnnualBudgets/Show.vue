@@ -442,7 +442,7 @@ function catBalancePercent(group) {
                     <p v-if="itemForm.errors.appropriation" class="mt-1 text-xs text-red-600">{{ itemForm.errors.appropriation }}</p>
                 </div>
                 <div class="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
-                    Expenditure is now calculated automatically from linked disbursements with status <span class="font-semibold">Posted (GL)</span>. It is no longer editable here.
+                    Expenditure is now calculated automatically from linked disbursements with status <span class="font-semibold">Posted</span>. It is no longer editable here.
                 </div>
             </div>
             <div class="flex items-center justify-end gap-3 pt-5 border-t mt-4">

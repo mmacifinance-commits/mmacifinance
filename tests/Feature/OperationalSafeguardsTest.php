@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Income;
-use App\Models\Reconciliation;
 use App\Models\User;
 use App\Services\SystemBackupService;
 use Illuminate\Support\Facades\Storage;
@@ -13,26 +12,6 @@ use Tests\TestCase;
 class OperationalSafeguardsTest extends TestCase
 {
     use SafeRefreshDatabase;
-
-    public function test_reconciliation_uses_actual_receipts_and_preserves_actor_and_snapshot(): void
-    {
-        $user = User::factory()->create(['role' => 'cashier']);
-        Income::create(['income_no' => 'ACTUAL', 'receipt_no' => 'R1', 'source' => 'Fees', 'description' => 'Receipt', 'amount' => 100, 'date_encoded' => '2026-01-01']);
-        Income::create(['income_no' => 'FORECAST', 'source' => 'Fees', 'description' => 'Forecast', 'amount' => 500, 'date_encoded' => '2026-01-01']);
-        $data = ['as_of_date' => '2026-01-02', 'opening_balance' => 20, 'actual_cash' => 30, 'bank_balance' => 100, 'deposits_in_transit' => 10, 'outstanding_payments' => 20];
-        $this->actingAs($user)->post('/reconciliations', $data + ['created_by_name' => 'Spoofed'])->assertSessionHasNoErrors();
-        $record = Reconciliation::firstOrFail();
-        $this->assertEquals(120, $record->book_balance);
-        $this->assertEquals(0, $record->difference);
-        $this->assertSame($user->name, $record->created_by_name);
-        Income::where('income_no', 'ACTUAL')->update(['amount' => 200]);
-        $this->assertEquals(120, $record->fresh()->book_balance);
-        $this->post('/reconciliations', $data)->assertSessionHasErrors('notes');
-        $this->post('/reconciliations', $data + ['notes' => 'Investigating unrecorded deposit'])->assertSessionHasNoErrors();
-        $this->assertEquals(-100, Reconciliation::latest('id')->first()->difference);
-        $this->actingAs(User::factory()->create(['role' => 'auditor']))->postJson('/reconciliations', $data)->assertForbidden();
-        $this->get('/reconciliations')->assertOk();
-    }
 
     public function test_scheduled_backup_is_stored_privately_and_corruption_is_detected(): void
     {

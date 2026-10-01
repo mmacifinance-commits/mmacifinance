@@ -419,7 +419,7 @@ const statusLabels = {
     for_release: 'For Release',
     for_approval: 'For Approval',
     approved: 'Approved',
-    posted: 'Posted (GL)',
+    posted: 'Posted',
     rejected: 'Rejected',
     returned_for_revision: 'Returned for Revision',
 }
@@ -433,7 +433,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
     <div class="flex items-center justify-between mb-6">
         <div>
             <h2 class="text-xl font-bold text-gray-900">Disbursements & Workflow</h2>
-            <p class="text-sm text-gray-500">Manage payment release, approval, and posting of linked expenses to General Ledger</p>
+            <p class="text-sm text-gray-500">Manage disbursement releases, approvals, and posting for linked expenditures</p>
         </div>
         <div v-if="perms.canManageDisbursements || perms.isCashier || perms.isSuperAdmin" class="flex flex-wrap gap-2">
             <BulkDeleteRecords module="disbursements" :records="disbursementItems" />

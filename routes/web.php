@@ -42,8 +42,6 @@ Route::middleware('guest')->group(function () {
 
 // --- Authenticated Routes ---
 Route::middleware('auth')->group(function () {
-    Route::get('/reconciliations', [\App\Http\Controllers\ReconciliationController::class, 'index'])->name('reconciliations.index');
-    Route::post('/reconciliations', [\App\Http\Controllers\ReconciliationController::class, 'store'])->name('reconciliations.store');
     Route::post('/financial-records/{module}/bulk-delete', \App\Http\Controllers\BulkFinancialDeletionController::class)
         ->whereIn('module', ['income', 'receipts', 'expenses', 'disbursements']);
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout');

@@ -264,7 +264,7 @@ class ReportController extends Controller
             ['value' => 'income_vs_receipts', 'label' => 'Income vs Receipts Report'],
             ['value' => 'fund_balance', 'label' => 'Fund Balance Report'],
             ['value' => 'responsibility_center', 'label' => 'Responsibility Center Report'],
-            ['value' => 'account_title_ledger', 'label' => 'Account Title Ledger'],
+            ['value' => 'account_title_ledger', 'label' => 'Account Title Report'],
             ['value' => 'closing_report', 'label' => 'Closing Report'],
         ];
     }
