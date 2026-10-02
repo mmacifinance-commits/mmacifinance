@@ -2,6 +2,8 @@
 
 These changes are additive. Deploy them to the existing application; do not seed or rebuild its database.
 
+The reference-number fix requires migration `2026_10_02_000001_create_reference_sequences` before the new code serves requests. Ensure `php artisan migrate --force` runs in Cloud Deploy Commands. It adds a sequence table without changing existing financial records. Automatic income, receipt, expense, disbursement and budget references now reserve distinct numbers instead of using row counts. Repeated income descriptions, sources and amounts are allowed; automatic record references remain unique.
+
 ## Before deploying
 
 1. Take a Cloud database snapshot/backup and confirm the recovery options for your database plan.

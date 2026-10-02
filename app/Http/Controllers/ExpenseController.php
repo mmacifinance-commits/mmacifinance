@@ -152,9 +152,7 @@ class ExpenseController extends Controller
             ]);
         }
 
-        $lastExpense = Expense::latest('id')->first();
-        $nextNum = $lastExpense ? intval(substr($lastExpense->ref_no, 3)) + 1 : 1;
-        $validated['ref_no'] = 'EXP'.str_pad($nextNum, 8, '0', STR_PAD_LEFT);
+        $validated['ref_no'] = app(\App\Services\ReferenceNumberService::class)->next('expenses', 'ref_no', 'EXP', 8);
         $budgetItem = $this->validateSelectedBudgetItem($validated);
         app(FiscalPeriodLockService::class)->ensureBudgetOpen($budgetItem->budget, 'budget_item_id');
         app(FiscalPeriodLockService::class)->ensureDateOpen($validated['date_encoded']);

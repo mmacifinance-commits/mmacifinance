@@ -125,7 +125,7 @@ class IncomeController extends Controller
 
         unset($validated['receipt_no'], $validated['receipt_type']);
         app(FiscalPeriodLockService::class)->ensureDateOpen($validated['date_encoded']);
-        $validated['income_no'] = sprintf('INC-%s-%04d', date('Y'), Income::count() + 1);
+        $validated['income_no'] = app(\App\Services\ReferenceNumberService::class)->next('incomes', 'income_no', 'INC-'.date('Y').'-');
         $validated['created_by_id'] = auth()->id();
 
         $income = Income::create($validated);
@@ -269,7 +269,7 @@ class IncomeController extends Controller
             $income->date_encoded = $dateEncoded;
             $income->notes = $notes !== '' ? $notes : null;
             if ($isNew) {
-                $income->income_no = sprintf('INC-%s-%04d', date('Y'), Income::count() + 1);
+                $income->income_no = app(\App\Services\ReferenceNumberService::class)->next('incomes', 'income_no', 'INC-'.date('Y').'-');
                 $income->created_by_id = auth()->id();
             }
             $income->save();

@@ -107,10 +107,7 @@ class BudgetItem extends Model
                 $allocationMonth = $model->allocation_month
                     ? Carbon::parse($model->allocation_month)
                     : Carbon::create($year, (int) ($model->month ?: 1), 1);
-                $count = self::where('budget_id', $model->budget_id)
-                    ->whereDate('allocation_month', $allocationMonth->toDateString())
-                    ->count() + 1;
-                $model->ref_no = sprintf('MB-%d-%02d-%04d', $allocationMonth->year, $allocationMonth->month, $count);
+                $model->ref_no = app(\App\Services\ReferenceNumberService::class)->next('budget_items', 'ref_no', sprintf('MB-%d-%02d-', $allocationMonth->year, $allocationMonth->month));
             }
         });
     }

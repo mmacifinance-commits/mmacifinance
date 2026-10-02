@@ -116,6 +116,55 @@ class BudgetAndDisbursementEnhancementTest extends TestCase
         $this->assertStringStartsWith('MB-2026-02-', $item->ref_no);
     }
 
+    public function test_complete_workflow_preserves_actors_blocks_unauthorized_actions_and_posts_only_once(): void
+    {
+        $this->actingAs($this->cashier)->post("/expenses/{$this->expense->id}/submit")
+            ->assertSessionHasNoErrors();
+        $this->actingAs($this->superAdmin)->post("/expenses/{$this->expense->id}/approve")
+            ->assertSessionHasNoErrors();
+        $this->actingAs($this->cashier)->post('/disbursements', [
+            'expense_id' => $this->expense->id, 'description' => 'Workflow payment',
+            'source' => 'Expenditure', 'pay_to' => 'Supplier', 'amount' => 1000,
+            'method' => 'cash', 'date_encoded' => '2026-01-16', 'status' => 'draft',
+            'payment_reference' => 'WORKFLOW-001',
+        ])->assertSessionHasNoErrors();
+        $payment = Disbursement::latest('id')->firstOrFail();
+        $this->assertEquals(0, $this->expense->fresh()->paid);
+
+        $this->actingAs($this->superAdmin)->post("/disbursements/{$payment->id}/submit")
+            ->assertSessionHasNoErrors();
+        $this->actingAs($this->cashier)->postJson("/disbursements/{$payment->id}/approve")->assertForbidden();
+        $this->assertSame('for_approval', $payment->fresh()->status);
+        $this->actingAs($this->superAdmin)->post("/disbursements/{$payment->id}/approve")
+            ->assertSessionHasNoErrors();
+        $this->assertEquals(0, $this->expense->fresh()->paid);
+        $this->actingAs($this->cashier)->postJson("/disbursements/{$payment->id}/post")->assertForbidden();
+        $this->assertSame('approved', $payment->fresh()->status);
+        $this->actingAs($this->superAdmin)->post("/disbursements/{$payment->id}/post")
+            ->assertSessionHasNoErrors();
+        $this->post("/disbursements/{$payment->id}/post")->assertSessionHas('error');
+        $this->assertEquals(1000, $this->expense->fresh()->paid);
+        $this->assertSame(1, $payment->auditTrails()->where('action', 'posted')->count());
+        $payment->refresh();
+        $this->assertEquals($this->cashier->id, $payment->prepared_by_id);
+        foreach (['released_by_id', 'submitted_by_id', 'approved_by_id', 'posted_by_id'] as $stamp) {
+            $this->assertEquals($this->superAdmin->id, $payment->$stamp);
+        }
+        foreach (['created' => $this->cashier, 'submitted' => $this->superAdmin, 'approved' => $this->superAdmin, 'posted' => $this->superAdmin] as $action => $actor) {
+            $this->assertDatabaseHas('audit_trails', [
+                'auditable_type' => Disbursement::class, 'auditable_id' => $payment->id,
+                'action' => $action, 'user_id' => $actor->id,
+                'user_name' => $actor->name, 'user_role' => $actor->role_label,
+            ]);
+        }
+        $this->get('/disbursements')->assertInertia(fn ($page) => $page
+            ->where('disbursements.data.0.prepared_by.id', $this->cashier->id)
+            ->where('disbursements.data.0.released_by.id', $this->superAdmin->id)
+            ->where('disbursements.data.0.released_by.role_label', 'Head of Finance')
+            ->where('disbursements.data.0.posted_by.id', $this->superAdmin->id));
+        $this->get('/reports')->assertOk();
+    }
+
     public function test_cashier_can_create_disbursement_and_submit_for_approval()
     {
         $this->expense->update(['status' => 'approved']);

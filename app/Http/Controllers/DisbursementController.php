@@ -182,9 +182,7 @@ class DisbursementController extends Controller
             $draftDisbursement->expense()->associate($selectedExpense);
             $this->cashFlow->ensureSufficientCashForDisbursement($draftDisbursement);
 
-            $lastDsb = Disbursement::latest('id')->lockForUpdate()->first();
-            $nextNum = $lastDsb ? intval(substr($lastDsb->disbursement_no, 3)) + 1 : 1;
-            $validated['disbursement_no'] = 'DSB'.str_pad($nextNum, 8, '0', STR_PAD_LEFT);
+            $validated['disbursement_no'] = app(\App\Services\ReferenceNumberService::class)->next('disbursements', 'disbursement_no', 'DSB', 8);
             $validated['prepared_by_id'] = auth()->id();
 
             if ($request->header('X-Offline-Sync')) {

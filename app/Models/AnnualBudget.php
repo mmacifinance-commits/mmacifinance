@@ -34,8 +34,7 @@ class AnnualBudget extends Model
 
         static::creating(function ($model) {
             if (empty($model->ref_no)) {
-                $count = self::where('year', $model->year)->count() + 1;
-                $model->ref_no = sprintf('AB-%d-%04d', $model->year, $count);
+                $model->ref_no = app(\App\Services\ReferenceNumberService::class)->next('annual_budgets', 'ref_no', 'AB-'.$model->year.'-');
             }
         });
 
