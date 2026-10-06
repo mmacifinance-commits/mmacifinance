@@ -4,10 +4,10 @@ namespace App\Support;
 
 use Illuminate\Http\UploadedFile;
 use PhpOffice\PhpSpreadsheet\Cell\Cell;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
@@ -32,7 +32,7 @@ class SpreadsheetImportExport
         return [$field => $rules];
     }
 
-    public static function readRows(UploadedFile $file): array
+    public static function readRows(UploadedFile $file, bool $rejectInvalidDates = true): array
     {
         $path = $file->getRealPath();
 
@@ -83,7 +83,7 @@ class SpreadsheetImportExport
         );
 
         $dataRows = [];
-        foreach (array_slice($rows, 1) as $row) {
+        foreach (array_slice($rows, 1) as $rowIndex => $row) {
             if (! is_array($row)) {
                 continue;
             }
@@ -93,10 +93,59 @@ class SpreadsheetImportExport
                 continue;
             }
 
+            foreach ($headers as $columnIndex => $header) {
+                $dateColumn = str_replace([' ', '-'], '_', $header);
+                if (! in_array($dateColumn, ['date_encoded', 'date_approved', 'allocation_month', 'start_date', 'end_date', 'fiscal_start_date', 'fiscal_end_date'], true)) {
+                    continue;
+                }
+                try {
+                    $cell = $worksheet->getCell(Coordinate::stringFromColumnIndex($columnIndex + 1).($rowIndex + 2));
+                    $value = $cell->isFormula() ? $cell->getCalculatedValue() : ($cleanRow[$columnIndex] ?? '');
+                    $cleanRow[$columnIndex] = self::importDate($value, $spreadsheet->getExcelCalendar(), $dateColumn);
+                } catch (\Throwable $exception) {
+                    if (! $rejectInvalidDates) {
+                        continue;
+                    }
+                    throw new \RuntimeException('Row '.($rowIndex + 2)." has an invalid {$header}. Use YYYY-MM-DD or a valid Excel date.", 0, $exception);
+                }
+            }
+
             $dataRows[] = $cleanRow;
         }
 
         return [$headers, $dataRows];
+    }
+
+    private static function importDate(mixed $value, int $calendar, string $column): string
+    {
+        $value = trim((string) ($value ?? ''));
+        if ($value === '') {
+            return '';
+        }
+        if (is_numeric($value)) {
+            $serial = (float) $value;
+            if (! is_finite($serial) || $serial < 1 || $serial >= 2958466) {
+                throw new \InvalidArgumentException('Excel date is outside the supported range.');
+            }
+            $date = Date::excelToDateTimeObject($serial, 'UTC', $calendar)->format('Y-m-d');
+            if (strlen($date) !== 10) {
+                throw new \InvalidArgumentException('Excel date is outside the supported range.');
+            }
+
+            return $date;
+        }
+        if ($column === 'allocation_month' && preg_match('/^\d{4}-\d{2}$/', $value)) {
+            if (! checkdate((int) substr($value, 5, 2), 1, (int) substr($value, 0, 4))) {
+                throw new \InvalidArgumentException('Invalid allocation month.');
+            }
+
+            return $value;
+        }
+        if (\Illuminate\Support\Facades\Validator::make(['date' => $value], ['date' => 'date'])->fails()) {
+            throw new \InvalidArgumentException('Invalid date text.');
+        }
+
+        return \Carbon\Carbon::parse($value)->format('Y-m-d');
     }
 
     public static function downloadXlsx(string $filename, array $rows): BinaryFileResponse
@@ -580,10 +629,6 @@ class SpreadsheetImportExport
 
         if ($value === null || $value === '') {
             return '';
-        }
-
-        if (Date::isDateTime($cell) && is_numeric($value)) {
-            return Date::excelToDateTimeObject((float) $value)->format('Y-m-d');
         }
 
         return $value;

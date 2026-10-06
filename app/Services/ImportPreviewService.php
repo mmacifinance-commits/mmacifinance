@@ -9,7 +9,7 @@ class ImportPreviewService
 {
     public function preview(UploadedFile $file, array $requiredColumns, callable $inspectRow, int $limit = 100): array
     {
-        [$header, $rows] = SpreadsheetImportExport::readRows($file);
+        [$header, $rows] = SpreadsheetImportExport::readRows($file, rejectInvalidDates: false);
         $header = array_map(fn ($value) => trim((string) $value), $header);
         $missing = array_values(array_diff($requiredColumns, $header));
         $index = array_flip($header);
