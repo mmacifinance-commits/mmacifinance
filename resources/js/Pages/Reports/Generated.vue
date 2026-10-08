@@ -62,7 +62,7 @@ const printReport = async () => {
             </button>
         </div>
 
-        <main class="report-sheet mx-auto my-6 min-h-[297mm] w-[210mm] bg-white p-[14mm] shadow-2xl print:m-0 print:min-h-0 print:w-auto print:shadow-none">
+        <main class="report-sheet mx-auto my-6 min-h-[210mm] w-[297mm] bg-white p-[10mm] shadow-2xl print:m-0 print:min-h-0 print:w-auto print:shadow-none">
             <header class="grid grid-cols-[110px_1fr_150px] items-center gap-4 border-b-[3px] border-black pb-2">
                 <div>
                     <img src="/images/logo.png" alt="MMACI Logo" class="h-[92px] w-[92px] object-contain" />
@@ -151,7 +151,7 @@ const printReport = async () => {
 </template>
 
 <style>
-@media screen and (max-width: 820px) {
+@media screen and (max-width: 1150px) {
     .report-sheet {
         width: 100%;
         min-height: 0;
@@ -188,7 +188,7 @@ const printReport = async () => {
     }
 
     .report-sheet .report-table {
-        min-width: 680px;
+        min-width: 1040px;
         font-size: 11px;
     }
 }
@@ -201,15 +201,15 @@ const printReport = async () => {
 
 .report-table th,
 .report-table td {
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    overflow-wrap: break-word;
+    word-break: normal;
     white-space: normal;
     vertical-align: top;
 }
 
 @media print {
     @page {
-        size: A4 portrait;
+        size: A4 landscape;
         margin: 0;
     }
 
@@ -217,20 +217,20 @@ const printReport = async () => {
     body {
         background: #fff !important;
         overflow: visible !important;
-        width: 210mm !important;
+        width: 297mm !important;
     }
 
     .report-sheet {
         box-sizing: border-box !important;
-        min-height: 297mm !important;
+        min-height: 210mm !important;
         overflow: visible !important;
         padding: 8mm !important;
-        width: 210mm !important;
+        width: 297mm !important;
     }
 
     .report-table {
         border-collapse: collapse !important;
-        font-size: 8.25px !important;
+        font-size: 10px !important;
         inline-size: 100% !important;
         max-inline-size: 100% !important;
         page-break-inside: auto;
@@ -255,11 +255,10 @@ const printReport = async () => {
     .report-table td {
         box-sizing: border-box !important;
         line-height: 1.15 !important;
-        max-width: 0 !important;
-        overflow-wrap: anywhere !important;
+        overflow-wrap: break-word !important;
         padding: 3.5px !important;
         white-space: normal !important;
-        word-break: break-word !important;
+        word-break: normal !important;
     }
 
     .report-table .text-right {

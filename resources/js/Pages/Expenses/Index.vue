@@ -4,6 +4,7 @@ import AppLayout from '@/Layouts/AppLayout.vue'
 import BulkDeleteRecords from '@/Components/BulkDeleteRecords.vue'
 import Modal from '@/Components/Modal.vue'
 import ImportPreviewPanel from '@/Components/ImportPreviewPanel.vue'
+import AllocationPicker from '@/Components/AllocationPicker.vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useOfflineQueue } from '@/composables/useOfflineQueue'
@@ -605,10 +606,7 @@ function splitDate(d) {
                 </p>
                 <div class="sm:col-span-2">
                     <label class="block text-sm font-medium mb-1.5">Charge to Monthly Budget Allocation</label>
-                    <select v-model="form.budget_item_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" :class="{ 'border-rose-400': form.errors.budget_item_id }" :disabled="!form.particular_id || (editing && editingHasDisbursements)" required>
-                        <option value="">Select Monthly Allocation</option>
-                        <option v-for="item in allocationOptions" :key="item.id" :value="item.id">{{ allocationOptionLabel(item) }}</option>
-                    </select>
+                    <AllocationPicker v-model="form.budget_item_id" :options="allocationOptions" :invalid="Boolean(form.errors.budget_item_id)" :disabled="!form.particular_id || Boolean(editing && editingHasDisbursements)" />
                     <p v-if="form.errors.budget_item_id" class="mt-1 text-xs text-rose-600">{{ form.errors.budget_item_id }}</p>
                     <div v-if="selectedAllocation" class="mt-2 border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
                         <span class="font-semibold">{{ allocationMonthLabel(selectedAllocation) }} · {{ selectedAllocation.budget?.fiscal_year_label }}</span>
