@@ -5,6 +5,7 @@ import BulkDeleteRecords from '@/Components/BulkDeleteRecords.vue'
 import Modal from '@/Components/Modal.vue'
 import SystemAlert from '@/Components/SystemAlert.vue'
 import ImportPreviewPanel from '@/Components/ImportPreviewPanel.vue'
+import TextSuggestions from '@/Components/TextSuggestions.vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import { computed, onBeforeUnmount, ref } from 'vue'
 
@@ -306,19 +307,16 @@ function deleteReceipt(item) {
                     <p v-if="receiptForm.errors.receipt_no" class="text-xs text-red-600">{{ receiptForm.errors.receipt_no }}</p>
                 </div>
                 <div class="space-y-1">
-                    <label class="block text-sm font-medium text-gray-700">Receipt Type <span class="text-red-600">*</span></label>
-                    <input
+                    <label for="receipt-type" class="block text-sm font-medium text-gray-700">Receipt Type <span class="text-red-600">*</span></label>
+                    <TextSuggestions
+                        id="receipt-type"
                         v-model="receiptForm.receipt_type"
-                        list="receipt-type-options"
-                        type="text"
+                        :options="termOptions || []"
                         required
                         placeholder="Example: Enrollment"
-                        class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm shadow-sm focus:border-navy focus:ring-navy"
-                        :class="{ 'border-red-400': receiptForm.errors.receipt_type }"
+                        :invalid="Boolean(receiptForm.errors.receipt_type)"
                     />
-                    <datalist id="receipt-type-options">
-                        <option v-for="option in termOptions.filter(option => option.value)" :key="option.value" :value="option.value" />
-                    </datalist>
+                    <p class="text-xs text-gray-500">Choose a suggestion or type a new receipt type.</p>
                     <p v-if="receiptForm.errors.receipt_type" class="text-xs text-red-600">{{ receiptForm.errors.receipt_type }}</p>
                 </div>
             </div>
