@@ -37,7 +37,8 @@ class ExpenseController extends Controller
             'auditTrails',
             'disbursements',
         ])->when($filters['search'] ?? null, fn ($q, $search) => $q->where(fn ($q) => $q
-            ->where('ref_no', 'like', '%'.$search.'%')->orWhere('description', 'like', '%'.$search.'%')))
+            ->where('ref_no', 'like', '%'.$search.'%')->orWhere('description', 'like', '%'.$search.'%')
+            ->orWhereHas('budgetItem', fn ($q) => $q->where('particulars', 'like', '%'.$search.'%'))))
             ->when($filters['category_id'] ?? null, fn ($q, $id) => $q->where('category_id', $id))
             ->when($filters['status'] ?? null, fn ($q, $status) => $q->where('status', $status))
             ->when($filters['fiscal_period_id'] ?? null, fn ($q, $id) => $q->whereHas('budgetItem', fn ($q) => $q->where('budget_id', $id)))
@@ -81,7 +82,7 @@ class ExpenseController extends Controller
                 })
                 ->with(['budgetItems' => function ($query) use ($availableYears) {
                     $query
-                        ->select(['id', 'budget_id', 'category_id', 'particular_id', 'month', 'allocation_month', 'ref_no', 'appropriation'])
+                        ->select(['id', 'budget_id', 'category_id', 'particular_id', 'particulars', 'month', 'allocation_month', 'ref_no', 'appropriation'])
                         ->whereHas('budget', fn ($budgetQuery) => $budgetQuery->whereIn('year', $availableYears))
                         ->with('budget:id,year,start_date,end_date');
                 }])
@@ -371,9 +372,9 @@ class ExpenseController extends Controller
     public function exportCsv()
     {
         $fileName = 'expenses-export-'.now()->format('Y-m-d_His');
-        $rows = [['ref_no', 'description', 'category_id', 'particular_id', 'monthly_allocation_ref', 'amount', 'date_encoded', 'date_approved', 'status', 'notes']];
+        $rows = [['ref_no', 'description', 'category_id', 'particular_id', 'monthly_allocation_ref', 'amount', 'date_encoded', 'date_approved', 'status', 'notes', 'particulars']];
 
-        Expense::query()->with('budgetItem:id,ref_no')->orderBy('id')->chunk(200, function ($rowsChunk) use (&$rows) {
+        Expense::query()->with('budgetItem:id,ref_no,particulars')->orderBy('id')->chunk(200, function ($rowsChunk) use (&$rows) {
             foreach ($rowsChunk as $expense) {
                 $rows[] = [
                     $expense->ref_no,
@@ -386,6 +387,7 @@ class ExpenseController extends Controller
                     optional($expense->date_approved)->format('Y-m-d'),
                     $expense->status,
                     $expense->notes,
+                    $expense->budgetItem?->particulars,
                 ];
             }
         });
@@ -569,7 +571,7 @@ class ExpenseController extends Controller
         if (! $budgetItem) {
             $month = date('F', strtotime((string) $expenseData['date_encoded']));
             throw ValidationException::withMessages([
-                'particular_id' => "The selected account title and responsibility center have no single matching allocation for {$month}. Check Annual Budget > Manage Items and select the account belonging to the funded responsibility center.",
+                'particular_id' => "The selected account title and responsibility center have no single matching allocation for {$month}. Supply monthly_allocation_ref to select the intended particulars from Annual Budget Allocations.",
             ]);
         }
 

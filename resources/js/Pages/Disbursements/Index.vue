@@ -113,7 +113,8 @@ const filteredDisbursements = computed(() => {
             ((d.disbursement_no || '').toLowerCase().includes(filterSearch.value.toLowerCase()) ||
              (d.description || '').toLowerCase().includes(filterSearch.value.toLowerCase()) ||
              (d.pay_to || '').toLowerCase().includes(filterSearch.value.toLowerCase()) ||
-             (d.expense?.ref_no || '').toLowerCase().includes(filterSearch.value.toLowerCase())) : true
+             (d.expense?.ref_no || '').toLowerCase().includes(filterSearch.value.toLowerCase()) ||
+             (d.expense?.budget_item?.particulars || '').toLowerCase().includes(filterSearch.value.toLowerCase())) : true
         const matchMethod = filterMethod.value ? d.method === filterMethod.value : true
         const matchStatus = filterStatus.value ? d.status === filterStatus.value : true
 
@@ -134,7 +135,8 @@ const filteredExpensesForModal = computed(() => {
         rows = rows.filter(e =>
             (e.ref_no || '').toLowerCase().includes(q) ||
             (e.description || '').toLowerCase().includes(q) ||
-            (e.pay_to || '').toLowerCase().includes(q)
+            (e.pay_to || '').toLowerCase().includes(q) ||
+            (e.budget_item?.particulars || '').toLowerCase().includes(q)
         )
     }
 
@@ -214,7 +216,7 @@ function expenseFiscalAttribution(expense) {
         ? new Date(`${String(item.allocation_month).slice(0, 10)}T00:00:00`).toLocaleDateString('en-PH', { month: 'long', year: 'numeric' })
         : `Month ${item?.month || '?'}`
 
-    return item ? `${allocationMonth} · ${budget?.fiscal_year_label || 'Fiscal period unavailable'}` : 'Monthly allocation not linked'
+    return item ? `${allocationMonth}${item.particulars ? ' · ' + item.particulars : ''} · ${budget?.fiscal_year_label || 'Fiscal period unavailable'}` : 'Monthly allocation not linked'
 }
 
 function fmt(v) { return new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(v || 0) }

@@ -16,7 +16,7 @@ export function queueDetails(data = {}) {
         description: 'Description', pay_to: 'Payee', amount: 'Amount', appropriation: 'Appropriation',
         date_encoded: 'Date', allocation_month: 'Allocation month', method: 'Payment method',
         name: 'Name', code: 'Code', account_code: 'Account code', account_name: 'Account name',
-        particular: 'Account title', status: 'Status', notes: 'Notes', remarks: 'Remarks',
+        particular: 'Account title', particulars: 'Particulars', status: 'Status', notes: 'Notes', remarks: 'Remarks',
     }
     return Object.entries(fields).flatMap(([key, label]) => {
         const value = data?.[key]

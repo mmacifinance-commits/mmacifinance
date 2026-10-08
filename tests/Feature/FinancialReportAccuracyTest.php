@@ -108,7 +108,8 @@ class FinancialReportAccuracyTest extends TestCase
                         if ($sheet->getCell('A'.$r)->getValue() === $section['title']) { $titleRow = $r; break; }
                     }
                     $this->assertNotNull($titleRow, $type.' missing '.$section['title']);
-                    $count = count($section['headers']); $widths = array_fill(0, $count, 1); $widths[$count > 3 ? 2 : 0] += 9 - $count;
+                    $reportWidth = max(9, ...array_map(fn ($s) => count($s['headers']), $data['sections']));
+                    $count = count($section['headers']); $widths = array_fill(0, $count, 1); $widths[$count > 3 ? 2 : 0] += $reportWidth - $count;
                     $columns = []; $c = 1;
                     foreach ($widths as $width) { $columns[] = $c; $c += $width; }
                     foreach ($section['rows'] as $i => $values) {

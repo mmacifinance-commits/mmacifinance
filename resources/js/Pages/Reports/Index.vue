@@ -91,6 +91,7 @@ const selectedYearBreakdown = computed(() => {
                     category: item.category.name || '',
                     department: item.particular.department.name || '',
                     account: item.particular.particular || '',
+                    particulars: item.particulars || '',
                     appropriation: Number(item.appropriation || 0),
                     expenditure: Number(item.expenditure || 0),
                 })),
@@ -105,7 +106,7 @@ const selectedYearBreakdown = computed(() => {
                 budget.appropriation,
                 budget.expenditure,
                 budget.balance,
-                ...budget.items.flatMap((item) => [item.category, item.department, item.account, item.month]),
+                ...budget.items.flatMap((item) => [item.category, item.department, item.account, item.particulars, item.month]),
             ].join(' ').toLowerCase()
 
             return haystack.includes(search)
@@ -132,6 +133,7 @@ const selectedYearItems = computed(() => {
                     const category = item.category.name || 'Uncategorized'
                     const department = item.particular.department.name || 'No RC'
                     const account = item.particular.particular || 'Untitled'
+                    const particulars = item.particulars || ''
                     const appropriation = Number(item.appropriation || 0)
                     const expenditure = Number(item.expenditure || 0)
                     const balance = appropriation - expenditure
@@ -145,10 +147,11 @@ const selectedYearItems = computed(() => {
                         category,
                         department,
                         account,
+                        particulars,
                         appropriation,
                         expenditure,
                         balance,
-                        haystack: [refNo, semester, monthLabel, category, department, account, appropriation, expenditure, balance].join(' ').toLowerCase(),
+                        haystack: [refNo, semester, monthLabel, category, department, account, particulars, appropriation, expenditure, balance].join(' ').toLowerCase(),
                     }
                 })
                 .filter((item) => {
@@ -556,6 +559,7 @@ const activeReportLabel = computed(() => {
                             <th class="w-[9%] px-5 py-3 text-left text-xs font-bold uppercase tracking-wider">Month</th>
                             <th class="w-[17%] px-5 py-3 text-left text-xs font-bold uppercase tracking-wider">Responsibility Center</th>
                             <th class="w-[17%] px-5 py-3 text-left text-xs font-bold uppercase tracking-wider">Account Title</th>
+                            <th class="w-[17%] px-5 py-3 text-left text-xs font-bold uppercase tracking-wider">Particulars</th>
                             <th class="w-[13%] px-5 py-3 text-left text-xs font-bold uppercase tracking-wider">Category</th>
                             <th class="w-[10%] px-6 py-3 text-right text-xs font-bold uppercase tracking-wider whitespace-nowrap">Appropriation</th>
                             <th class="w-[10%] px-6 py-3 text-right text-xs font-bold uppercase tracking-wider whitespace-nowrap">Expenditure</th>
@@ -570,6 +574,7 @@ const activeReportLabel = computed(() => {
                             <td class="px-4 py-3 break-words text-gray-700">{{ item.monthLabel }}</td>
                             <td class="px-4 py-3 break-words text-gray-700">{{ item.department || 'No RC' }}</td>
                             <td class="px-4 py-3 break-words font-semibold text-gray-800">{{ item.account || 'Untitled' }}</td>
+                            <td class="px-4 py-3 break-words text-gray-700">{{ item.particulars || '—' }}</td>
                             <td class="px-4 py-3 break-words text-gray-700">{{ item.category || 'Uncategorized' }}</td>
                             <td class="px-6 py-3 whitespace-nowrap text-right font-medium font-sans tabular-nums">{{ PESO }}{{ fmt(item.appropriation) }}</td>
                             <td class="px-6 py-3 whitespace-nowrap text-right font-medium font-sans tabular-nums">{{ PESO }}{{ fmt(item.expenditure) }}</td>
@@ -587,7 +592,7 @@ const activeReportLabel = computed(() => {
                             </td>
                         </tr>
                         <tr v-if="!selectedYearItems.length">
-                            <td colspan="10" class="px-4 py-8 text-center text-gray-400">No matching budget records found for this year.</td>
+                            <td colspan="11" class="px-4 py-8 text-center text-gray-400">No matching budget records found for this year.</td>
                         </tr>
                     </tbody>
                 </table>

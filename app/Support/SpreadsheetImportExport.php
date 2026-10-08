@@ -212,7 +212,8 @@ class SpreadsheetImportExport
                 ->setBottom(0.4)
                 ->setLeft(0.3);
 
-            $lastColumn = 'I';
+            $columnCount = max(9, ...array_map(fn ($section) => count($section['headers'] ?? []), $sections));
+            $lastColumn = Coordinate::stringFromColumnIndex($columnCount);
             $row = 1;
 
             $worksheet->mergeCells("A{$row}:{$lastColumn}{$row}");
@@ -275,14 +276,14 @@ class SpreadsheetImportExport
 
             foreach ($sections as $section) {
                 $row = ($section['type'] ?? '') === 'unified'
-                    ? self::writeUnifiedSection($worksheet, $row, $section)
+                    ? self::writeUnifiedSection($worksheet, $row, $section, $columnCount)
                     : self::writeReportSection($worksheet, $row, $section);
                 $row += 2;
             }
             foreach ($metadata['notes'] ?? [] as $note) {
-                $worksheet->mergeCells("A{$row}:I{$row}");
+                $worksheet->mergeCells("A{$row}:{$lastColumn}{$row}");
                 $worksheet->setCellValueExplicit("A{$row}", $note, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                $worksheet->getStyle("A{$row}:I{$row}")->getAlignment()->setWrapText(true);
+                $worksheet->getStyle("A{$row}:{$lastColumn}{$row}")->getAlignment()->setWrapText(true);
                 $worksheet->getRowDimension($row)->setRowHeight(42);
                 $row++;
             }
@@ -323,18 +324,19 @@ class SpreadsheetImportExport
             ->deleteFileAfterSend(true);
     }
 
-    private static function writeUnifiedSection($sheet, int $row, array $section): int
+    private static function writeUnifiedSection($sheet, int $row, array $section, int $columnCount): int
     {
         $count = count($section['headers']);
-        // Every section uses the same A:I boundary; spare columns widen text.
+        // All sections share the report width; spare columns widen text.
+        $lastColumn = Coordinate::stringFromColumnIndex($columnCount);
         $widths = array_fill(0, $count, 1);
-        $widths[$count > 3 ? 2 : 0] += 9 - $count;
+        $widths[$count > 3 ? 2 : 0] += $columnCount - $count;
         $columns = []; $column = 1;
         foreach ($widths as $width) { $columns[] = $column; $column += $width; }
-        $sheet->mergeCells("A{$row}:I{$row}");
+        $sheet->mergeCells("A{$row}:{$lastColumn}{$row}");
         $sheet->setCellValueExplicit("A{$row}", $section['title'], \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-        $sheet->getStyle("A{$row}:I{$row}")->getFont()->setBold(true);
-        $sheet->getStyle("A{$row}:I{$row}")->getAlignment()->setWrapText(true);
+        $sheet->getStyle("A{$row}:{$lastColumn}{$row}")->getFont()->setBold(true);
+        $sheet->getStyle("A{$row}:{$lastColumn}{$row}")->getAlignment()->setWrapText(true);
         $sheet->getRowDimension($row)->setRowHeight(36);
         $row++;
         $header = $row;
@@ -367,7 +369,7 @@ class SpreadsheetImportExport
             $row++;
         }
         if (!$section['rows']) {
-            $sheet->mergeCells("A{$row}:I{$row}");
+            $sheet->mergeCells("A{$row}:{$lastColumn}{$row}");
             $sheet->setCellValue("A{$row}", 'No records match the selected report filters.');
             $row++;
         }
@@ -384,13 +386,13 @@ class SpreadsheetImportExport
                 $pct = Coordinate::stringFromColumnIndex($columns[$section['percent']]);
                 $sheet->setCellValue("{$pct}{$row}", "=IF({$a}{$row}>0,{$p}{$row}/{$a}{$row},0)");
             }
-            $sheet->getStyle("A{$row}:I{$row}")->getFont()->setBold(true);
+            $sheet->getStyle("A{$row}:{$lastColumn}{$row}")->getFont()->setBold(true);
             $row++;
         }
         $last = $row - 1;
-        $sheet->getStyle("A{$header}:I{$last}")->getAlignment()->setWrapText(true);
-        $sheet->getStyle("A{$header}:I{$last}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
-        $sheet->getStyle("A{$header}:I{$header}")->getFont()->setBold(true);
+        $sheet->getStyle("A{$header}:{$lastColumn}{$last}")->getAlignment()->setWrapText(true);
+        $sheet->getStyle("A{$header}:{$lastColumn}{$last}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        $sheet->getStyle("A{$header}:{$lastColumn}{$header}")->getFont()->setBold(true);
         return $row;
     }
 

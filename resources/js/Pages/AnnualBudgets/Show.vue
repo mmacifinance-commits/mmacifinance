@@ -40,11 +40,12 @@ const itemForm = useForm({
     category_id: '',
     department_id: '',
     particular_id: '',
+    particulars: '',
     allocation_month: '',
     appropriation: 0,
 })
 
-const itemErrorMessages = computed(() => summaryMessages(itemForm.errors, ['allocation_month', 'category_id', 'department_id', 'particular_id', 'appropriation']))
+const itemErrorMessages = computed(() => summaryMessages(itemForm.errors, ['allocation_month', 'category_id', 'department_id', 'particular_id', 'particulars', 'appropriation']))
 const isClosed = computed(() => Boolean(props.budget?.is_closed || props.budget?.closed_at))
 
 const availableDepartments = computed(() => {
@@ -82,11 +83,11 @@ const filteredAccountTitles = computed(() => {
 watch(() => itemForm.category_id, () => {
     itemForm.department_id = ''
     itemForm.particular_id = ''
-})
+}, { flush: 'sync' })
 
 watch(() => itemForm.department_id, () => {
     itemForm.particular_id = ''
-})
+}, { flush: 'sync' })
 
 // Filters
 const selectedBudgetId = ref(props.budget.id)
@@ -113,6 +114,7 @@ const filteredItems = computed(() => {
         const matchesSearch = !term || [
             item.ref_no,
             item.particular?.particular,
+            item.particulars,
             item.particular?.department?.name,
             item.category?.name,
         ].some((value) => String(value || '').toLowerCase().includes(term))
@@ -160,6 +162,7 @@ function openEditItem(item) {
     itemForm.category_id = item.category_id
     itemForm.department_id = Number(item.particular?.department_id || item.particular?.department?.id || 0) || ''
     itemForm.particular_id = item.particular_id
+    itemForm.particulars = item.particulars || ''
     itemForm.allocation_month = String(item.allocation_month || '').slice(0, 10)
     itemForm.appropriation = item.appropriation
     editingItem.value = item.id
@@ -293,7 +296,7 @@ function catBalancePercent(group) {
                 v-model="searchTerm"
                 type="text"
                 class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm bg-white"
-                placeholder="Search account title, responsibility center, or ref no..."
+                placeholder="Search account title, particulars, responsibility center, or ref no..."
             />
         </div>
 
@@ -318,6 +321,7 @@ function catBalancePercent(group) {
                         <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Month</th>
                         <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Responsibility Center</th>
                         <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Account Title</th>
+                        <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Particulars</th>
                         <th class="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-white">Appropriation</th>
                         <th class="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-white">Expenditure</th>
                         <th class="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-white">Balance</th>
@@ -341,6 +345,7 @@ function catBalancePercent(group) {
                         <td class="px-4 py-3 text-gray-900 font-medium text-sm align-middle">
                             {{ item.particular?.particular || 'N/A' }}
                         </td>
+                        <td class="px-4 py-3 text-gray-700 text-sm align-middle break-words">{{ item.particulars || '—' }}</td>
                         <td class="px-4 py-3 text-right font-medium text-gray-900 align-middle">₱{{ fmt(item.appropriation) }}</td>
                         <td class="px-4 py-3 text-right font-medium text-gray-700 align-middle">₱{{ fmt(item.expenditure) }}</td>
                         <td class="px-4 py-3 text-right font-medium text-gray-700 align-middle">₱{{ fmt(Number(item.appropriation || 0) - Number(item.expenditure || 0)) }}</td>
@@ -363,7 +368,7 @@ function catBalancePercent(group) {
                 </tbody>
                 <tfoot>
                     <tr class="bg-gray-50 border-t-2 border-gray-300 font-bold">
-                        <td colspan="4" class="px-4 py-2.5 text-gray-700 text-xs uppercase">Category Subtotal:</td>
+                        <td colspan="5" class="px-4 py-2.5 text-gray-700 text-xs uppercase">Category Subtotal:</td>
                         <td class="px-4 py-2.5 text-right text-gray-900">₱{{ fmt(group.totals.appropriation) }}</td>
                         <td class="px-4 py-2.5 text-right text-gray-900">₱{{ fmt(group.totals.expenditure) }}</td>
                         <td class="px-4 py-2.5 text-right text-gray-900">₱{{ fmt(group.totals.appropriation - group.totals.expenditure) }}</td>
@@ -437,6 +442,12 @@ function catBalancePercent(group) {
                     <p v-if="itemForm.errors.particular_id" class="mt-1 text-xs text-red-600">{{ itemForm.errors.particular_id }}</p>
                 </div>
                 <div>
+                    <label for="allocation-particulars" class="block text-sm font-medium text-gray-700 mb-1.5">Particulars</label>
+                    <input id="allocation-particulars" v-model="itemForm.particulars" type="text" maxlength="255" placeholder="e.g. Photocopier" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" />
+                    <p v-if="itemForm.errors.particulars" class="mt-1 text-xs text-red-600">{{ itemForm.errors.particulars }}</p>
+                    <p class="mt-1 text-xs text-gray-500">Specify what this allocation is for.</p>
+                </div>
+                <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Monthly Appropriation Amount (₱)</label>
                     <input v-model.number="itemForm.appropriation" type="number" step="0.01" min="0" placeholder="0.00" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required />
                     <p v-if="itemForm.errors.appropriation" class="mt-1 text-xs text-red-600">{{ itemForm.errors.appropriation }}</p>
@@ -458,7 +469,7 @@ function catBalancePercent(group) {
             :annual-budget-id="budget.id"
             :form="importForm"
             :error-messages="Object.values(importForm.errors || {}).flat().filter(Boolean)"
-            required-columns="allocation_month, budget_category, responsibility_center, account_title, appropriation"
+            required-columns="allocation_month, budget_category, responsibility_center, account_title, appropriation (optional: particulars)"
             @cancel="showImportModal = false"
             @confirm="handleImportCsv"
         />

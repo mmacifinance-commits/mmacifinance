@@ -232,11 +232,14 @@ class ImportPreviewController extends Controller
 
     private function annualBudgetItemRow(array $row, int $line, ?AnnualBudget $annualBudget): array
     {
+        if (mb_strlen(trim((string) ($row['particulars'] ?? ''))) > 255) {
+            return ['valid' => false, 'key' => null, 'message' => "Line {$line}: particulars must not exceed 255 characters."];
+        }
         if (! $annualBudget) {
             return ['valid' => false, 'key' => null, 'message' => 'Select an annual budget before previewing this file.'];
         }
 
-        $key = implode('|', [$row['allocation_month'] ?? '', $row['budget_category'] ?? '', $row['responsibility_center'] ?? '', $row['account_title'] ?? '']);
+        $key = mb_strtolower(implode('|', array_map(fn ($value) => trim((string) $value), [$row['allocation_month'] ?? '', $row['budget_category'] ?? '', $row['responsibility_center'] ?? '', $row['account_title'] ?? '', $row['particulars'] ?? ''])));
         $check = $this->moneyDateRow($row, $line, ['allocation_month', 'budget_category', 'responsibility_center', 'account_title'], $key, 'appropriation');
         if (! $check['valid']) return $check;
 
@@ -258,7 +261,8 @@ class ImportPreviewController extends Controller
 
         $exists = $annualBudget->items()
             ->where('particular_id', $account->id)
-            ->whereDate('allocation_month', $row['allocation_month'])
+            ->whereRaw('LOWER(particulars) = ?', [mb_strtolower(trim((string) ($row['particulars'] ?? '')))])
+            ->whereDate('allocation_month', \Carbon\Carbon::parse($row['allocation_month'])->startOfMonth()->toDateString())
             ->exists();
         if ($exists) {
             return ['valid' => false, 'key' => $key, 'message' => 'This monthly allocation already exists. Edit it from Annual Budget instead of importing it again.'];

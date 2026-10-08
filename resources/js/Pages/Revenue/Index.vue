@@ -347,7 +347,8 @@ watch(
                     <div class="record-summary-row">
                         <div class="min-w-0">
                             <p class="text-sm font-bold text-gray-900">{{ item.category?.name || 'Uncategorized' }}</p>
-                            <p class="break-words text-xs text-gray-500">{{ item.particular?.name || 'No particular' }} <span v-if="item.particular?.department">- {{ item.particular.department.name }}</span></p>
+                            <p class="break-words text-xs text-gray-500">{{ item.particular?.particular || 'No account title' }} <span v-if="item.particular?.department">- {{ item.particular.department.name }}</span></p>
+                            <p v-if="item.particulars" class="break-words text-xs text-gray-600">Particulars: {{ item.particulars }}</p>
                             <p class="mt-1 text-[11px] text-gray-400">{{ item.allocation_month_label || `Month ${item.month}` }} · {{ item.budget?.fiscal_year_label || activeFiscalPeriod?.label }}</p>
                         </div>
                         <div class="record-summary-amount text-right">

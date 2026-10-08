@@ -17,6 +17,7 @@ class BudgetItem extends Model
         'budget_id',
         'category_id',
         'particular_id',
+        'particulars',
         'month',
         'allocation_month',
         'appropriation',
@@ -40,6 +41,7 @@ class BudgetItem extends Model
         parent::boot();
 
         static::saving(function (self $model) {
+            $model->particulars = trim((string) $model->particulars);
             // Budget allocations must never store an independently edited expenditure.
             // The displayed expenditure is always derived from posted disbursements.
             $model->expenditure = 0;
@@ -84,13 +86,14 @@ class BudgetItem extends Model
             $duplicateExists = self::query()
                 ->where('budget_id', $model->budget_id)
                 ->where('particular_id', $model->particular_id)
+                ->whereRaw('LOWER(particulars) = ?', [mb_strtolower($model->particulars)])
                 ->whereDate('allocation_month', $allocationMonth->toDateString())
                 ->when($model->exists, fn ($query) => $query->whereKeyNot($model->getKey()))
                 ->exists();
 
             if ($duplicateExists) {
                 throw ValidationException::withMessages([
-                    'particular_id' => "A budget record already exists for {$particular->particular} in {$allocationMonth->format('F Y')}.",
+                    'particular_id' => "A budget record already exists for {$particular->particular} with these particulars in {$allocationMonth->format('F Y')}.",
                 ]);
             }
         });

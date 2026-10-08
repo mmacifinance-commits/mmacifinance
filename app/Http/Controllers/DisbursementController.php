@@ -484,9 +484,9 @@ class DisbursementController extends Controller
     public function exportCsv()
     {
         $fileName = 'disbursements-export-'.now()->format('Y-m-d_His');
-        $rows = [['disbursement_no', 'expense_ref_no', 'description', 'source', 'pay_to', 'amount', 'method', 'date_encoded', 'status', 'notes', 'remarks', 'payment_reference']];
+        $rows = [['disbursement_no', 'expense_ref_no', 'description', 'source', 'pay_to', 'amount', 'method', 'date_encoded', 'status', 'notes', 'remarks', 'payment_reference', 'monthly_allocation_ref', 'particulars']];
 
-        Disbursement::with('expense:id,ref_no')->orderBy('id')->chunk(200, function ($rowsChunk) use (&$rows) {
+        Disbursement::with('expense.budgetItem')->orderBy('id')->chunk(200, function ($rowsChunk) use (&$rows) {
             foreach ($rowsChunk as $dsb) {
                 $rows[] = [
                     $dsb->disbursement_no,
@@ -501,6 +501,8 @@ class DisbursementController extends Controller
                     $dsb->notes,
                     $dsb->remarks,
                     $dsb->payment_reference,
+                    $dsb->expense?->budgetItem?->ref_no,
+                    $dsb->expense?->budgetItem?->particulars,
                 ];
             }
         });

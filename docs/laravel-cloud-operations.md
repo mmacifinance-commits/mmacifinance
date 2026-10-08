@@ -2,6 +2,8 @@
 
 These changes are additive. Deploy them to the existing application; do not seed or rebuild its database.
 
+Budget allocation particulars require migration `2026_10_08_000001_add_particulars_to_budget_items`. Run `php artisan migrate --force` in Cloud Deploy Commands before serving the new code. Existing allocations keep their amounts and receive blank particulars. The replacement unique index allows different particulars under the same account title and month, while rejecting identical allocation rows. Expense imports with multiple matching allocations must specify `monthly_allocation_ref`. Reverting this migration is blocked while multiple allocations would conflict with the old rule.
+
 The reference-number fix requires migration `2026_10_02_000001_create_reference_sequences` before the new code serves requests. Ensure `php artisan migrate --force` runs in Cloud Deploy Commands. It adds a sequence table without changing existing financial records. Automatic income, receipt, expense, disbursement and budget references now reserve distinct numbers instead of using row counts. Repeated income descriptions, sources and amounts are allowed; automatic record references remain unique.
 
 ## Before deploying

@@ -148,7 +148,7 @@ const maximumExpenseAmount = computed(() => {
 
 function allocationOptionLabel(item) {
     const month = allocationMonthLabel(item)
-    return `${item.ref_no} | ${month} | Available: ₱${fmt(item.balance)}`
+    return `${item.ref_no}${item.particulars ? ' | ' + item.particulars : ''} | ${month} | Available: ₱${fmt(item.balance)}`
 }
 
 function allocationMonthLabel(item) {
@@ -167,7 +167,7 @@ function expenseAllocationLabel(expense) {
     const allocation = expenseAllocation(expense)
     if (!allocation) return 'Allocation not linked'
     const month = allocation.allocation_month_label || monthNames[Number(allocation.month) - 1] || `Month ${allocation.month}`
-    return `${allocation.ref_no} · ${month} · ${allocation.budget?.fiscal_year_label || ''}`
+    return `${allocation.ref_no}${allocation.particulars ? ' · ' + allocation.particulars : ''} · ${month} · ${allocation.budget?.fiscal_year_label || ''}`
 }
 
 const filteredExpenses = computed(() => {
@@ -477,6 +477,7 @@ function splitDate(d) {
                         <th class="px-5 py-4 text-left font-bold text-xs tracking-wide">Category</th>
                         <th class="px-5 py-4 text-left font-bold text-xs tracking-wide">Responsibility Center</th>
                         <th class="px-5 py-4 text-left font-bold text-xs tracking-wide">Account Title</th>
+                        <th class="px-5 py-4 text-left font-bold text-xs tracking-wide">Particulars</th>
                         <th class="px-5 py-4 text-right font-bold text-xs tracking-wide">Amount</th>
                         <th class="px-5 py-4 text-right font-bold text-xs tracking-wide">Paid via Disbursements</th>
                         <th class="px-5 py-4 text-right font-bold text-xs tracking-wide">Balance</th>
@@ -508,6 +509,7 @@ function splitDate(d) {
                         <td class="px-5 py-4 text-gray-800 font-medium text-xs align-middle">
                             {{ e.particular?.particular || '—' }}
                         </td>
+                        <td class="px-5 py-4 text-gray-700 text-xs align-middle">{{ expenseAllocation(e)?.particulars || '—' }}</td>
                         <td class="px-5 py-4 text-right font-mono text-sm text-gray-700 font-medium align-middle">₱{{ fmt(e.amount) }}</td>
                         <td class="px-5 py-4 text-right font-mono text-sm text-emerald-700 font-bold align-middle">
                             ₱{{ fmt(e.paid) }}
@@ -562,7 +564,7 @@ function splitDate(d) {
                         </td>
                     </tr>
                     <tr v-if="filteredExpenses.length === 0">
-                        <td colspan="12" class="px-5 py-8 text-center text-sm text-gray-500">No expenditures found.</td>
+                        <td colspan="13" class="px-5 py-8 text-center text-sm text-gray-500">No expenditures found.</td>
                     </tr>
                 </tbody>
             </table>
@@ -611,6 +613,7 @@ function splitDate(d) {
                     <div v-if="selectedAllocation" class="mt-2 border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
                         <span class="font-semibold">{{ allocationMonthLabel(selectedAllocation) }} · {{ selectedAllocation.budget?.fiscal_year_label }}</span>
                         <span class="block break-words">{{ accountOptionLabel((props.accountTitles || props.particulars || []).find(p => String(p.id) === String(selectedAllocation.particular_id)) || {}) }}</span>
+                        <span v-if="selectedAllocation.particulars" class="block break-words">Particulars: {{ selectedAllocation.particulars }}</span>
                         <span class="block">Appropriation: ₱{{ fmt(selectedAllocation.appropriation) }} · Available: ₱{{ fmt(selectedAllocation.balance) }}</span>
                     </div>
                     <p class="mt-1 text-xs text-gray-500">Choose the month whose appropriation should be charged. This may differ from the actual expense or disbursement date.</p>

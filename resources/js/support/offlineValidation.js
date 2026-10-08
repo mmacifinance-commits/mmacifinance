@@ -29,7 +29,7 @@ export function offlineValidation(url, data = {}) {
     }
     if (data.method && !['cash', 'check', 'bank_transfer'].includes(data.method)) errors.method = 'Choose a valid payment method.'
     if (data.start_date && data.end_date && data.end_date <= data.start_date) errors.end_date = 'End date must be after the start date.'
-    for (const key of ['receipt_no', 'receipt_type', 'source', 'description', 'name', 'code', 'account_code', 'account_name', 'particular', 'pay_to']) {
+    for (const key of ['receipt_no', 'receipt_type', 'source', 'description', 'name', 'code', 'account_code', 'account_name', 'particular', 'particulars', 'pay_to']) {
         const max = ['receipt_no', 'receipt_type'].includes(key) ? 100 : section === 'departments' && key === 'code' ? 10 : 255
         if (data[key] != null && String(data[key]).length > max) errors[key] = `${label(key)} must not exceed ${max} characters.`
     }

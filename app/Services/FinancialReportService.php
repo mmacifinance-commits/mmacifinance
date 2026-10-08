@@ -81,6 +81,7 @@ class FinancialReportService
                 'department_id' => $item->particular?->department_id,
                 'responsibility_center' => $item->particular?->department?->name ?? 'Unassigned',
                 'category' => $item->category?->name ?? 'Uncategorized', 'account_title' => $item->particular?->particular ?? 'Untitled',
+                'particulars' => $item->particulars,
                 'appropriation' => $appropriation, 'expenditure' => $paid, 'balance' => round($appropriation - $paid, 2),
                 'utilization_rate' => $appropriation > 0 ? round($paid / $appropriation * 100, 2) : 0];
         });
@@ -93,6 +94,7 @@ class FinancialReportService
             'amount' => (float) $row->amount, 'receipt_date' => $row->date_encoded?->toDateString()])->values();
         $disbursementRows = $posted->map(fn ($row) => ['id' => $row->id, 'disbursement_no' => $row->disbursement_no,
             'expense_ref' => $row->expense?->ref_no, 'allocation_month' => $row->expense?->budgetItem?->allocation_month?->format('F Y'),
+            'particulars' => $row->expense?->budgetItem?->particulars,
             'expense_date' => $row->expense?->date_encoded?->toDateString(), 'disbursement_date' => $row->date_encoded?->toDateString(),
             'pay_to' => $row->pay_to, 'amount' => (float) $row->amount, 'status' => $row->status])->values();
         // Cash balances must use all institutional payments, not a department subset.
@@ -109,14 +111,14 @@ class FinancialReportService
             'pendingCommitments' => round((float) $dateFilter($pending)->sum('amount'), 2),
             'income' => round((float) $incomes->sum('amount'), 2)];
 
-        $budgetSection = $this->section('Budget Utilization', ['Allocation Month', 'Monthly Ref.', 'Responsibility Center', 'Category', 'Account Title', 'Appropriation', 'Posted Payments in Range', 'Budget Balance', '% Utilization'],
-            $budgetRows->map(fn ($r) => [$r['allocation_month'], $r['ref_no'], $r['responsibility_center'], $r['category'], $r['account_title'], $r['appropriation'], $r['expenditure'], $r['balance'], $r['utilization_rate']])->all(), [5,6,7], 8);
-        $budgetSection['balanceColumns'] = [5,6,7];
+        $budgetSection = $this->section('Budget Utilization', ['Allocation Month', 'Monthly Ref.', 'Responsibility Center', 'Category', 'Account Title', 'Particulars', 'Appropriation', 'Posted Payments in Range', 'Budget Balance', '% Utilization'],
+            $budgetRows->map(fn ($r) => [$r['allocation_month'], $r['ref_no'], $r['responsibility_center'], $r['category'], $r['account_title'], $r['particulars'], $r['appropriation'], $r['expenditure'], $r['balance'], $r['utilization_rate']])->all(), [6,7,8], 9);
+        $budgetSection['balanceColumns'] = [6,7,8];
         $receiptSection = $this->section('Cash Receipts', ['Receipt No.', 'Income No.', 'Receipt Type', 'Source', 'Description', 'Receipt Date', 'Amount'],
             $receiptRows->map(fn ($r) => [$r['receipt_no'], $r['income_no'], $r['receipt_type'], $r['source'], $r['description'], $r['receipt_date'], $r['amount']])->all(), [6]);
         $receiptSection['totalLabel'] = 'TOTAL RECEIPTS';
-        $paymentSection = $this->section('Posted Disbursements', ['DSB No.', 'Expense Ref.', 'Allocation Month', 'Expense Date', 'Disbursement Date', 'Payee', 'Status', 'Amount'],
-            $disbursementRows->map(fn ($r) => [$r['disbursement_no'], $r['expense_ref'], $r['allocation_month'], $r['expense_date'], $r['disbursement_date'], $r['pay_to'], $r['status'], $r['amount']])->all(), [7]);
+        $paymentSection = $this->section('Posted Disbursements', ['DSB No.', 'Expense Ref.', 'Allocation Month', 'Particulars', 'Expense Date', 'Disbursement Date', 'Payee', 'Status', 'Amount'],
+            $disbursementRows->map(fn ($r) => [$r['disbursement_no'], $r['expense_ref'], $r['allocation_month'], $r['particulars'], $r['expense_date'], $r['disbursement_date'], $r['pay_to'], $r['status'], $r['amount']])->all(), [8]);
         $incomeSection = $this->section('Projected Income', ['Income No.', 'Date', 'Source', 'Description', 'Amount'],
             $incomes->map(fn ($r) => [$r->income_no, $r->date_encoded?->toDateString(), $r->source, $r->description, (float) $r->amount])->values()->all(), [4]);
         $comparisonSection = $this->section('Income vs Receipts', ['Description', 'Amount'], [
@@ -179,7 +181,7 @@ class FinancialReportService
                 $balance = round($balance - (float) $payment->amount, 2);
                 $rows[] = [$payment->date_encoded?->toDateString(), $payment->disbursement_no, $payment->expense->ref_no, $payment->pay_to, (float) $payment->amount, $balance];
             }
-            $section = $this->section(($item->particular?->particular ?? 'Untitled').' / '.($item->particular?->department?->name ?? 'Unassigned').' / '.$item->allocation_month?->format('F Y').' / '.$item->ref_no,
+            $section = $this->section(($item->particular?->particular ?? 'Untitled').($item->particulars !== '' ? ' / '.$item->particulars : '').' / '.($item->particular?->department?->name ?? 'Unassigned').' / '.$item->allocation_month?->format('F Y').' / '.$item->ref_no,
                 ['Date / Entry', 'Reference', 'Expense Ref.', 'Payee', 'Posted Payment', 'Budget Balance'], $rows, [4,5]);
             $section['totalLabel'] = null;
             $sections[] = $section;

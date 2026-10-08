@@ -248,7 +248,7 @@ class AnnualBudgetController extends Controller
     protected function resolveOrCreateAccountTitle(array $row, \App\Models\BudgetCategory $category, ?\App\Models\Department $department): \App\Models\BudgetParticular
     {
         $accountCode = trim((string) ($row['account_code'] ?? $row['account code'] ?? ''));
-        $accountName = trim((string) ($row['account_name'] ?? $row['account title'] ?? $row['particular'] ?? ''));
+        $accountName = trim((string) ($row['account_name'] ?? $row['account_title'] ?? $row['account title'] ?? $row['particular'] ?? ''));
         $particular = trim((string) ($row['particular'] ?? $row['account_title'] ?? $accountName));
         $description = trim((string) ($row['description'] ?? ''));
 
@@ -292,7 +292,7 @@ class AnnualBudgetController extends Controller
         $budget = $annualBudget->load(['items.category', 'items.particular.department']);
         $filename = sprintf('annual-budget-%s', $budget->year);
 
-        $rows = [['annual_ref_no', 'fiscal_year', 'fiscal_year_label', 'fiscal_start_date', 'fiscal_end_date', 'allocation_month', 'month', 'budget_category', 'responsibility_center', 'account_code', 'account_title', 'description', 'appropriation']];
+        $rows = [['annual_ref_no', 'fiscal_year', 'fiscal_year_label', 'fiscal_start_date', 'fiscal_end_date', 'allocation_month', 'month', 'budget_category', 'responsibility_center', 'account_code', 'account_title', 'particulars', 'description', 'appropriation']];
 
         foreach ($budget->items as $item) {
             $rows[] = [
@@ -307,6 +307,7 @@ class AnnualBudgetController extends Controller
                 $item->particular?->department?->name,
                 $item->particular?->account_code,
                 $item->particular?->particular,
+                $item->particulars,
                 $item->particular?->description,
                 $item->appropriation,
             ];
@@ -370,6 +371,10 @@ class AnnualBudgetController extends Controller
                 $data[$header] = $row[$index] ?? null;
             }
 
+            $data['particulars'] = trim((string) ($data['particulars'] ?? ''));
+            if (mb_strlen($data['particulars']) > 255) {
+                throw ValidationException::withMessages(['csv_file' => 'Particulars must not exceed 255 characters.']);
+            }
             $amount = $this->parseMoney($data['appropriation'] ?? 0);
             $parsedRows[] = $data;
             $csvTotalAppropriation += $amount;
@@ -434,6 +439,7 @@ class AnnualBudgetController extends Controller
                     'budget_id' => $annualBudget->id,
                     'category_id' => $category->id,
                     'particular_id' => $account->id,
+                    'particulars' => $data['particulars'],
                     'month' => $allocationMonth->month,
                     'allocation_month' => $allocationMonth->toDateString(),
                     'appropriation' => $this->parseMoney($data['appropriation'] ?? 0),
@@ -441,12 +447,13 @@ class AnnualBudgetController extends Controller
 
                 $existing = $annualBudget->items()
                     ->where('particular_id', $account->id)
+                    ->whereRaw('LOWER(particulars) = ?', [mb_strtolower($data['particulars'])])
                     ->whereDate('allocation_month', $allocationMonth->toDateString())
                     ->first();
 
                 if ($existing) {
                     throw ValidationException::withMessages([
-                        'csv_file' => "Duplicate budget row rejected for {$allocationMonth->format('F Y')}, {$category->name}, {$department->name}, {$account->particular}.",
+                        'csv_file' => "Duplicate budget row rejected for {$allocationMonth->format('F Y')}, {$category->name}, {$department->name}, {$account->particular}, particulars: {$data['particulars']}.",
                     ]);
                 }
 
@@ -454,6 +461,7 @@ class AnnualBudgetController extends Controller
                 AuditTrail::log($item, 'imported', auth()->user(), "Monthly Budget Allocation imported for {$allocationMonth->format('F Y')}.", [
                     'budget_id' => $annualBudget->id,
                     'appropriation' => (float) $itemData['appropriation'],
+                    'particulars' => $item->particulars,
                 ]);
 
                 if ($item->wasRecentlyCreated) {
@@ -645,6 +653,7 @@ class AnnualBudgetController extends Controller
             'category_id' => 'required|exists:budget_categories,id',
             'department_id' => 'required|exists:departments,id',
             'particular_id' => 'required|exists:budget_particulars,id',
+            'particulars' => 'nullable|string|max:255',
             'allocation_month' => 'nullable|date|required_without:month',
             'month' => 'nullable|integer|between:1,12|required_without:allocation_month',
             'appropriation' => 'required|numeric|min:0',
@@ -685,7 +694,7 @@ class AnnualBudgetController extends Controller
             return $item;
         });
 
-        AuditTrail::log($item, 'created', auth()->user(), "Added Monthly Budget Allocation item {$item->ref_no}");
+        AuditTrail::log($item, 'created', auth()->user(), "Added Monthly Budget Allocation item {$item->ref_no}", ['particulars' => $item->particulars]);
 
         if ($request->header('X-Offline-Sync')) {
             return response()->json(['id' => $item->id, 'resource' => 'budget', 'record' => $item->fresh()], 201);
@@ -703,6 +712,7 @@ class AnnualBudgetController extends Controller
             'category_id' => 'required|exists:budget_categories,id',
             'department_id' => 'required|exists:departments,id',
             'particular_id' => 'required|exists:budget_particulars,id',
+            'particulars' => 'nullable|string|max:255',
             'allocation_month' => 'nullable|date|required_without:month',
             'month' => 'nullable|integer|between:1,12|required_without:allocation_month',
             'appropriation' => 'required|numeric|min:0',
@@ -727,6 +737,7 @@ class AnnualBudgetController extends Controller
         $month = $allocationMonth->month;
         $duplicateExists = $annualBudget->items()
             ->where('particular_id', $validated['particular_id'])
+            ->whereRaw('LOWER(particulars) = ?', [mb_strtolower(trim((string) ($validated['particulars'] ?? $item->particulars)))])
             ->whereDate('allocation_month', $allocationMonth->toDateString())
             ->whereKeyNot($item->id)
             ->exists();
@@ -751,12 +762,13 @@ class AnnualBudgetController extends Controller
         $validated['allocation_month'] = $allocationMonth->toDateString();
         unset($validated['department_id']);
 
+        $previousParticulars = $item->particulars;
         DB::transaction(function () use ($item, $validated) {
             $item->update($validated);
             $this->reallocateBudgetItemIncome($item, (float) $validated['appropriation']);
         });
 
-        AuditTrail::log($item, 'modified', auth()->user(), "Updated Monthly Budget Allocation item {$item->ref_no}");
+        AuditTrail::log($item, 'modified', auth()->user(), "Updated Monthly Budget Allocation item {$item->ref_no}", ['previous_particulars' => $previousParticulars, 'particulars' => $item->particulars]);
 
         if ($request->header('X-Offline-Sync')) {
             return response()->json(['id' => $item->id, 'resource' => 'budget', 'record' => $item->fresh()]);
