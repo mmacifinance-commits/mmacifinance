@@ -6,7 +6,7 @@ import Modal from '@/Components/Modal.vue'
 import SystemAlert from '@/Components/SystemAlert.vue'
 import ImportPreviewPanel from '@/Components/ImportPreviewPanel.vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 
 const props = defineProps({
     receipts: Object,
@@ -20,6 +20,16 @@ const PESO = '\u20b1'
 const selectedFiscalPeriod = ref(props.filters?.fiscal_period_id || '')
 const selectedTerm = ref(props.filters?.term || '')
 const searchQuery = ref(props.filters?.search || '')
+let searchTimer
+onBeforeUnmount(() => clearTimeout(searchTimer))
+function scheduleSearch() {
+    clearTimeout(searchTimer)
+    searchTimer = setTimeout(applyFilters, 300)
+}
+function filterByType(type) {
+    selectedTerm.value = selectedTerm.value === type ? '' : type
+    applyFilters()
+}
 const showImportModal = ref(false)
 const showReceiptModal = ref(false)
 const editingReceiptId = ref(null)
@@ -42,11 +52,12 @@ function fmt(value) {
 }
 
 function applyFilters() {
+    clearTimeout(searchTimer)
     router.get('/receipts', {
         fiscal_period_id: selectedFiscalPeriod.value,
         term: selectedTerm.value,
         search: searchQuery.value,
-    }, { preserveState: true, replace: true })
+    }, { preserveState: true, preserveScroll: true, replace: true })
 }
 
 function resetFilters() {
@@ -168,7 +179,8 @@ function deleteReceipt(item) {
             </div>
             <div class="space-y-1">
                 <label class="block text-[11px] font-bold uppercase tracking-wide text-gray-700">Search</label>
-                <input v-model="searchQuery" @input="applyFilters" type="text" placeholder="Search receipt no, income no, source, or description..." class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm" />
+                <input v-model="searchQuery" @input="scheduleSearch" @keydown.enter.prevent="applyFilters" type="search" aria-label="Search receipt records" placeholder="Search receipt no, income no, source, or description..." class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm" />
+                <p class="text-xs text-gray-500">Searches all pages within the selected fiscal year and receipt type.</p>
             </div>
         </div>
     </div>
@@ -216,22 +228,24 @@ function deleteReceipt(item) {
         </div>
     </div>
 
-    <div v-if="summary?.byType?.length" class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div class="bg-navy-dark px-5 py-3">
-            <h3 class="text-sm font-bold uppercase tracking-wider text-white">Receipt Summary by Type</h3>
-        </div>
-        <div class="grid divide-y md:grid-cols-5 md:divide-x md:divide-y-0">
-            <div v-for="item in summary.byType" :key="item.type" class="p-4">
-                <p class="truncate text-xs font-bold uppercase tracking-wide text-gray-500">{{ item.type }}</p>
-                <p class="mt-1 text-lg font-extrabold text-gray-900">{{ PESO }}{{ fmt(item.amount) }}</p>
-                <p class="mt-1 text-xs text-gray-500">{{ item.count }} record(s)</p>
+    <details v-if="summary?.byType?.length" class="mb-4 rounded-lg border border-gray-200 bg-white shadow-sm">
+        <summary class="cursor-pointer px-4 py-2 text-sm font-semibold text-navy-dark">
+            Receipt Summary by Type <span class="font-normal text-gray-500">({{ summary.byType.length }}) — expand to view</span>
+        </summary>
+        <div class="max-h-48 overflow-y-auto border-t border-gray-100 p-3">
+            <div class="flex flex-wrap gap-2">
+                <button v-for="item in summary.byType" :key="item.type" type="button" @click="filterByType(item.type)" :aria-pressed="selectedTerm === item.type" class="w-full rounded-lg border px-3 py-2 text-left hover:bg-slate-50 sm:w-64" :class="selectedTerm === item.type ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'">
+                    <span class="block break-words text-xs font-semibold text-gray-700">{{ item.type }}</span>
+                    <span class="mt-1 flex flex-wrap justify-between gap-2 text-sm"><strong>{{ PESO }}{{ fmt(item.amount) }}</strong><span class="text-xs text-gray-500">{{ item.count }} record(s)</span></span>
+                </button>
             </div>
         </div>
-    </div>
+    </details>
 
     <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <div class="bg-navy-dark px-5 py-3">
             <h3 class="text-sm font-bold uppercase tracking-wider text-white">Cash Receipt Records</h3>
+            <p class="mt-1 text-xs text-slate-200">Showing {{ receipts?.from || 0 }}–{{ receipts?.to || 0 }} of {{ receipts?.total || 0 }} matching records</p>
         </div>
         <div class="divide-y">
             <div class="hidden grid-cols-[1fr_1fr_2fr_0.9fr_0.9fr_auto] items-center gap-4 px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-gray-500 md:grid">
