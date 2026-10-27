@@ -504,11 +504,10 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                         </td>
                         <td class="px-5 py-4 text-right font-mono text-sm font-bold text-gray-900 align-middle">{{ PESO }}{{ fmt(d.amount) }}</td>
                         <td class="px-5 py-4 text-center text-xs align-middle">
-                            <span class="px-2.5 py-1 rounded bg-slate-100 text-slate-700 font-medium border border-slate-200">
+                            <div class="text-sm font-medium text-slate-800">
                                 {{ methodLabels[d.method] || d.method }}
-                            </span>
-                            <div class="mt-2 text-[11px] text-gray-500">Payment Reference</div>
-                            <div class="mt-0.5 max-w-48 break-all font-mono text-xs text-gray-800 mx-auto">{{ d.payment_reference || 'Not provided' }}</div>
+                            </div>
+                            <div v-if="d.payment_reference" class="mt-1 max-w-48 break-all text-xs text-slate-500 mx-auto"><span>Ref: </span><span class="font-mono">{{ d.payment_reference }}</span></div>
                         </td>
                         <td class="px-5 py-4 text-center align-middle">
                             <span :class="[statusBadgeStyles[d.status] || 'bg-gray-100 text-gray-800', 'inline-flex items-center rounded-full px-3 py-1 text-xs font-bold border shadow-2xs']">
