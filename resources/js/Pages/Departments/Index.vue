@@ -165,8 +165,8 @@ function importCsv() {
             v-if="!canManage"
             class="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800"
         >
-            Head of Finance and Budget Monitoring Officer can add, edit, or delete responsibility
-            centers.
+            Head of Finance and Budget Monitoring Officer can add or edit responsibility
+            centers. Only Head of Finance can delete records.
         </div>
 
         <!-- Table -->
@@ -298,7 +298,7 @@ function importCsv() {
                                         Edit
                                     </button>
 
-                                    <button
+                                    <button v-if="perms.isSuperAdmin"
                                         @click="remove(department.id)"
                                         class="rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-sm transition-all duration-150 hover:bg-rose-100"
                                     >

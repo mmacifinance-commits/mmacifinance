@@ -129,7 +129,9 @@ class ReceiptPageTest extends TestCase
             ->where('receipts.data.0.audit_trails.0.metadata.changes.amount', 3000)
             ->where('receipts.data.0.audit_trails.1.action', 'created'));
 
-        $this->actingAs($user)
+        $this->deleteJson("/receipts/{$receipt->id}")->assertForbidden();
+        $admin = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+        $this->actingAs($admin)
             ->delete("/receipts/{$receipt->id}")
             ->assertRedirect('/receipts')
             ->assertSessionHasNoErrors();
@@ -141,7 +143,7 @@ class ReceiptPageTest extends TestCase
             'auditable_type' => Income::class,
             'auditable_id' => $receipt->id,
             'action' => 'deleted',
-            'user_id' => $user->id,
+            'user_id' => $admin->id,
         ]);
     }
 

@@ -96,9 +96,11 @@ class BulkFinancialDeletionTest extends TestCase
 
     public function test_role_restrictions_and_closed_periods(): void
     {
-        $this->actingAs(User::factory()->create(['role' => 'auditor']));
-        foreach (['income', 'receipts', 'expenses', 'disbursements'] as $module) {
-            $this->postJson("/financial-records/{$module}/bulk-delete", ['scope' => 'all'])->assertForbidden();
+        foreach (['auditor', 'cashier', 'budget_officer', 'disbursement_officer'] as $role) {
+            $this->actingAs(User::factory()->create(['role' => $role]));
+            foreach (['income', 'receipts', 'expenses', 'disbursements'] as $module) {
+                $this->postJson("/financial-records/{$module}/bulk-delete", ['scope' => 'all'])->assertForbidden();
+            }
         }
         $this->actingAs(User::factory()->create(['role' => 'super_admin']));
         $this->income('LOCKED');
@@ -148,8 +150,8 @@ class BulkFinancialDeletionTest extends TestCase
         $this->actingAs(User::factory()->create(['role' => 'cashier']));
         $expense = $this->expense();
         $payment = Disbursement::create(['disbursement_no' => 'DSB-LOCK', 'expense_id' => $expense->id, 'description' => 'Test', 'source' => 'Expense', 'pay_to' => 'Vendor', 'amount' => 50, 'method' => 'cash', 'date_encoded' => '2026-08-02', 'status' => 'posted']);
-        $token = $this->preview('disbursements', ['scope' => 'all']);
-        $this->postJson('/financial-records/disbursements/bulk-delete', ['scope' => 'all', 'token' => $token, 'confirmation' => 'DELETE'])->assertForbidden();
+        $this->postJson('/financial-records/disbursements/bulk-delete', ['scope' => 'all'])->assertForbidden();
+        $this->postJson('/financial-records/disbursements/bulk-delete', ['scope' => 'all', 'confirmation' => 'DELETE'])->assertForbidden();
         $this->assertDatabaseHas('disbursements', ['id' => $payment->id]);
         $this->postJson('/financial-records/income/bulk-delete', ['scope' => 'all'])->assertForbidden();
     }

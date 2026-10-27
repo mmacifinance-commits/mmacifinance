@@ -58,7 +58,7 @@ async function submit() {
 </script>
 
 <template>
-    <div>
+    <div v-if="$page.props.permissions?.isSuperAdmin">
         <button type="button" @click="open" class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-100">Delete Records</button>
         <p v-if="success" role="status" class="mt-2 text-sm text-emerald-700">{{ success }}</p>
         <Modal :show="opened" title="Delete Records" max-width="2xl" @close="close">

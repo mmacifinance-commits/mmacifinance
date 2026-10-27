@@ -195,7 +195,7 @@ function importCsv() {
                 </div>
                 <div v-if="perms.canManageIncome" class="flex items-center gap-2 sm:justify-self-end sm:self-center">
                     <button @click="openEdit(item)" class="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-md text-xs font-semibold border border-indigo-200">Edit</button>
-                    <button @click="remove(item.id)" class="px-3 py-1.5 bg-rose-50 text-rose-700 rounded-md text-xs font-semibold border border-rose-200">Delete</button>
+                    <button v-if="perms.isSuperAdmin" @click="remove(item.id)" class="px-3 py-1.5 bg-rose-50 text-rose-700 rounded-md text-xs font-semibold border border-rose-200">Delete</button>
                 </div>
             </div>
             <div v-if="!incomeItems?.length" class="px-5 py-8 text-center text-gray-400">No income records found.</div>

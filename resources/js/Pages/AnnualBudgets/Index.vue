@@ -97,7 +97,7 @@ function utilRate(items) {
                                 <button v-if="perms.canManageBudget" @click="openEditPeriod(budget)" class="px-3 py-1.5 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-md text-xs font-semibold shadow-sm transition-all duration-150 border border-amber-200">
                                     Edit Period
                                 </button>
-                                <button v-if="perms.canManageBudget" @click="removeBudget(budget.id)" class="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-md text-xs font-semibold shadow-sm transition-all duration-150 border border-rose-200">
+                                <button v-if="perms.isSuperAdmin" @click="removeBudget(budget.id)" class="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-md text-xs font-semibold shadow-sm transition-all duration-150 border border-rose-200">
                                     Delete
                                 </button>
                             </div>

@@ -63,7 +63,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/receipts/import-csv', [ReceiptController::class, 'importCsv'])->name('receipts.import-csv');
         Route::post('/receipts', [ReceiptController::class, 'store'])->name('receipts.store');
         Route::put('/receipts/{receipt}', [ReceiptController::class, 'update'])->name('receipts.update');
-        Route::delete('/receipts/{receipt}', [ReceiptController::class, 'destroy'])->name('receipts.destroy');
+        Route::delete('/receipts/{receipt}', [ReceiptController::class, 'destroy'])->name('receipts.destroy')->middleware('role:super_admin');
     });
     Route::redirect('/revenue', '/iaeo', 301);
 
@@ -81,21 +81,21 @@ Route::middleware('auth')->group(function () {
         Route::put('/annual-budgets/{annual_budget}/period', [AnnualBudgetController::class, 'updatePeriod'])->name('annual-budgets.period.update');
         Route::post('/annual-budgets/{annual_budget}/close', [AnnualBudgetController::class, 'close'])->name('annual-budgets.close');
         Route::post('/annual-budgets/{annual_budget}/reopen', [AnnualBudgetController::class, 'reopen'])->name('annual-budgets.reopen');
-        Route::delete('/annual-budgets/{annual_budget}', [AnnualBudgetController::class, 'destroy'])->name('annual-budgets.destroy');
+        Route::delete('/annual-budgets/{annual_budget}', [AnnualBudgetController::class, 'destroy'])->name('annual-budgets.destroy')->middleware('role:super_admin');
         Route::post('annual-budgets/{annual_budget}/items', [AnnualBudgetController::class, 'storeItem'])->name('annual-budgets.items.store');
         Route::put('annual-budgets/{annual_budget}/items/{item}', [AnnualBudgetController::class, 'updateItem'])->name('annual-budgets.items.update');
-        Route::delete('annual-budgets/{annual_budget}/items/{item}', [AnnualBudgetController::class, 'destroyItem'])->name('annual-budgets.items.destroy');
+        Route::delete('annual-budgets/{annual_budget}/items/{item}', [AnnualBudgetController::class, 'destroyItem'])->name('annual-budgets.items.destroy')->middleware('role:super_admin');
         Route::post('annual-budgets/{annual_budget}/import-csv', [AnnualBudgetController::class, 'importCsv'])->name('annual-budgets.import-csv');
 
         Route::post('/budget-categories', [BudgetCategoryController::class, 'store']);
         Route::put('/budget-categories/{budget_category}', [BudgetCategoryController::class, 'update']);
-        Route::delete('/budget-categories/{budget_category}', [BudgetCategoryController::class, 'destroy']);
+        Route::delete('/budget-categories/{budget_category}', [BudgetCategoryController::class, 'destroy'])->middleware('role:super_admin');
         Route::get('/budget-categories/export-csv', [BudgetCategoryController::class, 'exportCsv'])->name('budget-categories.export-csv');
         Route::post('/budget-categories/import-csv', [BudgetCategoryController::class, 'importCsv'])->name('budget-categories.import-csv');
 
         Route::post('/budget-particulars', [BudgetParticularController::class, 'store']);
         Route::put('/budget-particulars/{budget_particular}', [BudgetParticularController::class, 'update']);
-        Route::delete('/budget-particulars/{budget_particular}', [BudgetParticularController::class, 'destroy']);
+        Route::delete('/budget-particulars/{budget_particular}', [BudgetParticularController::class, 'destroy'])->middleware('role:super_admin');
         Route::get('/budget-particulars/export-csv', [BudgetParticularController::class, 'exportCsv'])->name('budget-particulars.export-csv');
         Route::post('/budget-particulars/import-csv', [BudgetParticularController::class, 'importCsv'])->name('budget-particulars.import-csv');
     });
@@ -109,7 +109,7 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:super_admin,budget_officer')->group(function () {
         Route::post('/departments', [DepartmentController::class, 'store'])->name('departments.store');
         Route::put('/departments/{department}', [DepartmentController::class, 'update'])->name('departments.update');
-        Route::delete('/departments/{department}', [DepartmentController::class, 'destroy'])->name('departments.destroy');
+        Route::delete('/departments/{department}', [DepartmentController::class, 'destroy'])->name('departments.destroy')->middleware('role:super_admin');
         Route::get('/departments/export-csv', [DepartmentController::class, 'exportCsv'])->name('departments.export-csv');
         Route::post('/departments/import-csv', [DepartmentController::class, 'importCsv'])->name('departments.import-csv');
     });
@@ -121,7 +121,7 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:super_admin,disbursement_officer,cashier')->group(function () {
         Route::post('/expenses', [ExpenseController::class, 'store']);
         Route::put('/expenses/{expense}', [ExpenseController::class, 'update']);
-        Route::delete('/expenses/{expense}', [ExpenseController::class, 'destroy']);
+        Route::delete('/expenses/{expense}', [ExpenseController::class, 'destroy'])->middleware('role:super_admin');
     });
 
     Route::middleware('role:super_admin,disbursement_officer,cashier')->group(function () {
@@ -136,7 +136,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/disbursements/import-csv', [DisbursementController::class, 'importCsv'])->name('disbursements.import-csv');
         Route::post('/disbursements', [DisbursementController::class, 'store']);
         Route::put('/disbursements/{disbursement}', [DisbursementController::class, 'update']);
-        Route::delete('/disbursements/{disbursement}', [DisbursementController::class, 'destroy']);
+        Route::delete('/disbursements/{disbursement}', [DisbursementController::class, 'destroy'])->middleware('role:super_admin');
         Route::post('/disbursements/{disbursement}/submit', [DisbursementController::class, 'submitForApproval'])->name('disbursements.submit');
     });
 
@@ -146,7 +146,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/income/import-csv', [IncomeController::class, 'importCsv'])->name('income.import-csv');
         Route::post('/income', [IncomeController::class, 'store'])->name('income.store');
         Route::put('/income/{income}', [IncomeController::class, 'update'])->name('income.update');
-        Route::delete('/income/{income}', [IncomeController::class, 'destroy'])->name('income.destroy');
+        Route::delete('/income/{income}', [IncomeController::class, 'destroy'])->name('income.destroy')->middleware('role:super_admin');
     });
 
     // Head of Finance (Super Admin) approval & posting operations

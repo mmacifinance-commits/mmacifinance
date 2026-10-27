@@ -561,7 +561,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                                 </button>
 
                                 <!-- Standard Delete Button -->
-                                <button v-if="d.status !== 'posted' || perms.isSuperAdmin"
+                                <button v-if="perms.isSuperAdmin"
                                     @click="remove(d.id)"
                                     class="px-2.5 py-1 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded text-xs font-semibold border border-rose-200 shadow-2xs transition">
                                     Delete

@@ -11,13 +11,7 @@ class BulkFinancialDeletionController extends Controller
 {
     public function __invoke(Request $request, string $module)
     {
-        $roles = match ($module) {
-            'income' => ['super_admin'],
-            'receipts' => ['super_admin', 'budget_officer', 'disbursement_officer', 'cashier'],
-            'expenses', 'disbursements' => ['super_admin', 'disbursement_officer', 'cashier'],
-            default => [],
-        };
-        abort_unless(in_array($request->user()->role, $roles), 403);
+        abort_unless($request->user()?->isSuperAdmin(), 403);
         $data = $request->validate([
             'scope' => 'required|in:selected,all',
             'ids' => 'required_if:scope,selected|array|max:500',

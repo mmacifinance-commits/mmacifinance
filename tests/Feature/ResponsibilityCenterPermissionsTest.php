@@ -37,9 +37,12 @@ class ResponsibilityCenterPermissionsTest extends TestCase
         ])->assertRedirect('/departments')->assertSessionHasNoErrors();
         $this->assertDatabaseHas('departments', ['name' => 'Imported Center', 'code' => 'IMP']);
 
-        $this->delete("/departments/{$department->id}")->assertRedirect('/departments');
-        $this->assertDatabaseMissing('departments', ['id' => $department->id]);
+        $this->deleteJson("/departments/{$department->id}")->assertForbidden();
+        $this->assertDatabaseHas('departments', ['id' => $department->id]);
         $this->getJson('/system/backup/export')->assertForbidden();
+        $this->actingAs(User::factory()->create(['role' => 'super_admin']))
+            ->delete("/departments/{$department->id}")->assertRedirect('/departments');
+        $this->assertDatabaseMissing('departments', ['id' => $department->id]);
     }
 
     public function test_other_staff_remain_read_only(): void

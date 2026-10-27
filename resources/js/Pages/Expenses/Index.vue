@@ -558,7 +558,7 @@ function splitDate(d) {
                                 <button v-if="perms.canManageExpenses" @click="openEdit(e)" class="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md text-xs font-semibold shadow-sm transition-all duration-150 border border-indigo-200" :disabled="e._offline">
                                     Edit
                                 </button>
-                                <button v-if="perms.canManageExpenses" @click="remove(e.id)" class="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-md text-xs font-semibold shadow-sm transition-all duration-150 border border-rose-200">
+                                <button v-if="perms.isSuperAdmin" @click="remove(e.id)" class="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-md text-xs font-semibold shadow-sm transition-all duration-150 border border-rose-200">
                                     Delete
                                 </button>
                             </div>

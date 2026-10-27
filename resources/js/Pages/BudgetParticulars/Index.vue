@@ -133,7 +133,7 @@ function importCsv() {
                                 <button @click="openEdit(p)" class="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md text-xs font-semibold shadow-sm transition-all duration-150 border border-indigo-200">
                                     Edit
                                 </button>
-                                <button @click="remove(p.id)" class="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-md text-xs font-semibold shadow-sm transition-all duration-150 border border-rose-200">
+                                <button v-if="perms.isSuperAdmin" @click="remove(p.id)" class="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-md text-xs font-semibold shadow-sm transition-all duration-150 border border-rose-200">
                                     Delete
                                 </button>
                             </div>

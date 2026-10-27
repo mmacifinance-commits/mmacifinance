@@ -32,6 +32,9 @@ class RoleRouteCoverageTest extends TestCase
                 $rule = collect($route->gatherMiddleware())->first(fn ($rule) => str_starts_with($rule, 'role:'));
                 if (!$rule) continue;
                 $roles = explode(',', substr($rule, 5));
+                if (in_array('DELETE', $route->methods(), true)) {
+                    $roles = ['super_admin'];
+                }
                 $uri = '/'.preg_replace_callback('/\{([^}]+)\}/', fn ($m) => $params[$m[1]] ?? 1, $route->uri());
                 if (!in_array($role, $roles, true)) {
                     $this->json($route->methods()[0], $uri)->assertForbidden();

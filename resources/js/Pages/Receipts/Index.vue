@@ -283,7 +283,7 @@ function deleteReceipt(item) {
                 <div class="flex flex-wrap justify-start gap-2 md:justify-end">
                     <button @click="selectedAuditReceiptId = item.id" class="rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">Audit Trail</button>
                     <button @click="openEditReceipt(item)" class="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">Edit</button>
-                    <button @click="deleteReceipt(item)" class="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100">Delete</button>
+                    <button v-if="$page.props.permissions?.isSuperAdmin" @click="deleteReceipt(item)" class="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100">Delete</button>
                 </div>
             </div>
             <div v-if="!receiptItems.length" class="px-5 py-8 text-center text-gray-400">No receipt records found.</div>

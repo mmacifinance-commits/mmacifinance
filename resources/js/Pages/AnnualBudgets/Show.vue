@@ -359,7 +359,7 @@ function catBalancePercent(group) {
                                 <button @click="openEditItem(item)" class="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded text-xs font-semibold shadow-sm transition border border-indigo-200">
                                     Edit
                                 </button>
-                                <button @click="removeItem(item.id)" class="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded text-xs font-semibold shadow-sm transition border border-rose-200">
+                                <button v-if="perms.isSuperAdmin" @click="removeItem(item.id)" class="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded text-xs font-semibold shadow-sm transition border border-rose-200">
                                     Delete
                                 </button>
                             </div>
