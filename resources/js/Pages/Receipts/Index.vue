@@ -253,8 +253,8 @@ function deleteReceipt(item) {
             <h3 class="text-sm font-bold uppercase tracking-wider text-white">Cash Receipt Records</h3>
             <p class="mt-1 text-xs text-slate-200">Showing {{ receipts?.from || 0 }}–{{ receipts?.to || 0 }} of {{ receipts?.total || 0 }} matching records</p>
         </div>
-        <div class="divide-y">
-            <div class="hidden grid-cols-[1fr_1fr_2fr_0.9fr_0.9fr_auto] items-center gap-4 px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-gray-500 md:grid">
+        <div class="divide-y md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_auto] md:gap-x-4">
+            <div class="hidden items-center gap-4 px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-gray-500 md:col-span-6 md:grid md:grid-cols-subgrid">
                 <div>Receipt No.</div>
                 <div>Income No.</div>
                 <div>Source / Description</div>
@@ -262,10 +262,10 @@ function deleteReceipt(item) {
                 <div class="text-right">Amount</div>
                 <div class="text-right">Actions</div>
             </div>
-            <div v-for="item in receiptItems" :key="item.id" class="grid grid-cols-1 gap-3 px-5 py-4 md:grid-cols-[1fr_1fr_2fr_0.9fr_0.9fr_auto] md:items-center md:gap-4">
+            <div v-for="item in receiptItems" :key="item.id" class="grid grid-cols-1 gap-3 px-5 py-4 md:col-span-6 md:grid-cols-subgrid md:items-center md:gap-4">
                 <div>
                     <p class="text-sm font-bold text-gray-900">{{ item.receipt_no }}</p>
-                    <p class="mt-1 inline-flex border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">{{ item.receipt_type }}</p>
+                    <p class="mt-1 text-xs text-slate-500">{{ item.receipt_type }}</p>
                 </div>
                 <div>
                     <p class="text-sm font-semibold text-gray-800">{{ item.income_no }}</p>
@@ -278,7 +278,7 @@ function deleteReceipt(item) {
                 <div class="hidden text-sm text-gray-600 md:block">{{ item.date_encoded }}</div>
                 <div class="md:text-right">
                     <p class="text-sm font-bold tabular-nums text-gray-900">{{ PESO }}{{ fmt(item.amount) }}</p>
-                    <p class="mt-1 text-xs text-gray-500">{{ item.notes || 'No notes' }}</p>
+                    <p v-if="item.notes" class="mt-1 break-words text-xs text-gray-500">{{ item.notes }}</p>
                 </div>
                 <div class="flex flex-wrap justify-start gap-2 md:justify-end">
                     <button @click="selectedAuditReceiptId = item.id" class="rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">Audit Trail</button>
@@ -286,7 +286,7 @@ function deleteReceipt(item) {
                     <button v-if="$page.props.permissions?.isSuperAdmin" @click="deleteReceipt(item)" class="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100">Delete</button>
                 </div>
             </div>
-            <div v-if="!receiptItems.length" class="px-5 py-8 text-center text-gray-400">No receipt records found.</div>
+            <div v-if="!receiptItems.length" class="px-5 py-8 text-center text-gray-400 md:col-span-6">No receipt records found.</div>
         </div>
     </div>
 
