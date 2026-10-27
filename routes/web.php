@@ -52,6 +52,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
     Route::get('/reports/generate', [ReportController::class, 'generate'])->name('reports.generate');
     Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
+    Route::get('/reports/pdf', [ReportController::class, 'pdf'])->name('reports.pdf');
     Route::get('/income', [IncomeController::class, 'index'])->name('income.index');
     Route::get('/iaeo', [RevenueController::class, 'index'])->name('iaeo.index');
     Route::get('/receipts', [ReceiptController::class, 'index'])
@@ -99,9 +100,13 @@ Route::middleware('auth')->group(function () {
         Route::post('/budget-particulars/import-csv', [BudgetParticularController::class, 'importCsv'])->name('budget-particulars.import-csv');
     });
 
-    // Responsibility centers are organization-wide setup data. Head of Finance only.
+    // System backups remain restricted to Head of Finance.
     Route::middleware('role:super_admin')->group(function () {
         Route::get('/system/backup/export', [SystemBackupController::class, 'export'])->name('system.backup.export');
+    });
+
+    // Head of Finance and Budget Officer can manage responsibility centers.
+    Route::middleware('role:super_admin,budget_officer')->group(function () {
         Route::post('/departments', [DepartmentController::class, 'store'])->name('departments.store');
         Route::put('/departments/{department}', [DepartmentController::class, 'update'])->name('departments.update');
         Route::delete('/departments/{department}', [DepartmentController::class, 'destroy'])->name('departments.destroy');

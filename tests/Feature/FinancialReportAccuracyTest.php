@@ -46,6 +46,22 @@ class FinancialReportAccuracyTest extends TestCase
         return app(FinancialReportService::class)->build($request);
     }
 
+    public function test_all_report_types_produce_private_printable_pdfs_and_preserve_filters(): void
+    {
+        [$period] = $this->fixture();
+        foreach (array_keys(FinancialReportService::TYPES) as $type) {
+            $response = $this->get('/reports/pdf?'.http_build_query(['report_type' => $type, 'fiscal_period_id' => $period->id]))
+                ->assertOk()->assertHeader('Content-Type', 'application/pdf');
+            $this->assertStringStartsWith('%PDF-', $response->getContent());
+            $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
+        }
+        $filters = ['report_type' => 'budget_utilization', 'fiscal_period_id' => $period->id, 'allocation_month' => '2026-08-01'];
+        $this->get('/reports/generate?'.http_build_query($filters))->assertInertia(fn ($page) => $page->where('pdfUrl', route('reports.pdf', $filters)));
+        $this->get('/reports/pdf?report_type=unknown')->assertSessionHasErrors('report_type');
+        auth()->logout();
+        $this->get('/reports/pdf')->assertRedirect('/login');
+    }
+
     public function test_filters_and_cash_scope_reconcile_across_page_and_print(): void
     {
         [$period, $items] = $this->fixture();

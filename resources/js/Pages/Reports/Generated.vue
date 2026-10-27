@@ -1,10 +1,10 @@
 <script setup>
 import FinancialReportTables from '@/Components/FinancialReportTables.vue'
 import { Head, Link } from '@inertiajs/vue3'
-import { nextTick } from 'vue'
 
 const props = defineProps({
     reportType: String,
+    pdfUrl: String,
     sections: Array,
     accountTitleLabel: String,
     reportLabel: String,
@@ -34,14 +34,6 @@ const generatedDate = () => {
 }
 
 
-const printReport = async () => {
-    await nextTick()
-
-    requestAnimationFrame(() => {
-        window.focus()
-        window.print()
-    })
-}
 
 </script>
 
@@ -53,13 +45,14 @@ const printReport = async () => {
             <Link href="/reports" class="border border-slate-600 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">
                 Back to Reports
             </Link>
-            <button
-                type="button"
-                @click="printReport"
+            <a
+                :href="pdfUrl"
+                target="_blank"
+                rel="noopener"
                 class="border border-mustard bg-mustard px-4 py-2 text-sm font-bold text-navy-dark hover:bg-[#c99a2c]"
             >
                 Print / Save PDF
-            </button>
+            </a>
         </div>
 
         <main class="report-sheet mx-auto my-6 min-h-[210mm] w-[297mm] bg-white p-[10mm] shadow-2xl print:m-0 print:min-h-0 print:w-auto print:shadow-none">

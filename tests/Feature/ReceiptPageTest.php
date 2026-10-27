@@ -121,6 +121,14 @@ class ReceiptPageTest extends TestCase
             'notes' => 'Updated from receipts page',
         ]);
 
+        $this->get('/receipts')->assertOk()->assertInertia(fn ($page) => $page
+            ->has('receipts.data.0.audit_trails', 2)
+            ->where('receipts.data.0.audit_trails.0.action', 'modified')
+            ->where('receipts.data.0.audit_trails.0.user_name', $user->name)
+            ->where('receipts.data.0.audit_trails.0.user_role', 'Cashier')
+            ->where('receipts.data.0.audit_trails.0.metadata.changes.amount', 3000)
+            ->where('receipts.data.0.audit_trails.1.action', 'created'));
+
         $this->actingAs($user)
             ->delete("/receipts/{$receipt->id}")
             ->assertRedirect('/receipts')
@@ -128,6 +136,12 @@ class ReceiptPageTest extends TestCase
 
         $this->assertDatabaseMissing('incomes', [
             'id' => $receipt->id,
+        ]);
+        $this->assertDatabaseHas('audit_trails', [
+            'auditable_type' => Income::class,
+            'auditable_id' => $receipt->id,
+            'action' => 'deleted',
+            'user_id' => $user->id,
         ]);
     }
 

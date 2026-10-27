@@ -4,7 +4,7 @@ import { spawn, execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { unlinkSync } from 'node:fs'
+import { unlinkSync, writeFileSync } from 'node:fs'
 
 const database = join(tmpdir(), `finance-browser-${randomUUID().replaceAll('-', '')}.sqlite`)
 const env = { ...process.env, FINANCE_BROWSER_DATABASE: database }
@@ -20,6 +20,14 @@ try {
     await page.goto('http://127.0.0.1:8138/__test/login/super_admin')
     await page.goto('http://127.0.0.1:8138/reports/generate?report_type=budget_utilization')
     await page.locator('.report-table tbody tr').first().waitFor()
+    const pdfLink = page.getByRole('link', { name: 'Print / Save PDF' })
+    const pdfResponse = await page.request.get(await pdfLink.getAttribute('href'))
+    assert.equal(pdfResponse.status(), 200)
+    assert.match(pdfResponse.headers()['content-type'], /application\/pdf/)
+    const pdfBytes = await pdfResponse.body()
+    assert.equal(pdfBytes.subarray(0, 5).toString(), '%PDF-')
+    writeFileSync(join(tmpdir(), 'finance-report-print-check.pdf'), pdfBytes)
+    console.log('PASS print action opens a server-generated PDF without browser headers')
     await page.locator('.report-table tbody tr').first().evaluate(row => {
         row.children[5].textContent = 'LAPTOP FOR FINANCE DIRECTOR, BUDGET OFFICER, AND ACCOUNTING SUPERVISOR'
         row.children[6].textContent = '₱111,000.00'

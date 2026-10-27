@@ -33,6 +33,11 @@ function filterByType(type) {
 }
 const showImportModal = ref(false)
 const showReceiptModal = ref(false)
+const selectedAuditReceiptId = ref(null)
+const auditReceipt = computed(() => receiptItems.value.find(item => item.id === selectedAuditReceiptId.value))
+function formatAuditDate(value) {
+    return value ? new Date(value).toLocaleString('en-PH') : 'Unknown date'
+}
 const editingReceiptId = ref(null)
 const importForm = useForm({ csv_file: null })
 const receiptForm = useForm({
@@ -275,7 +280,8 @@ function deleteReceipt(item) {
                     <p class="text-sm font-bold tabular-nums text-gray-900">{{ PESO }}{{ fmt(item.amount) }}</p>
                     <p class="mt-1 text-xs text-gray-500">{{ item.notes || 'No notes' }}</p>
                 </div>
-                <div class="flex justify-start gap-2 md:justify-end">
+                <div class="flex flex-wrap justify-start gap-2 md:justify-end">
+                    <button @click="selectedAuditReceiptId = item.id" class="rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">Audit Trail</button>
                     <button @click="openEditReceipt(item)" class="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">Edit</button>
                     <button @click="deleteReceipt(item)" class="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100">Delete</button>
                 </div>
@@ -295,6 +301,32 @@ function deleteReceipt(item) {
             :class="link.active ? 'border-navy-dark bg-navy-dark text-white' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50'"
         />
     </div>
+
+    <Modal :show="Boolean(auditReceipt)" title="Receipt Audit Trail" :subtitle="auditReceipt ? `History for receipt ${auditReceipt.receipt_no}` : ''" max-width="2xl" @close="selectedAuditReceiptId = null">
+        <div class="space-y-3">
+            <div v-for="log in (auditReceipt?.audit_trails || [])" :key="log.id" class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <span class="font-semibold capitalize text-navy-dark">{{ log.action }}</span>
+                    <time :datetime="log.created_at" class="text-xs text-gray-500">{{ formatAuditDate(log.created_at) }}</time>
+                </div>
+                <p class="mt-1 font-medium text-gray-800">{{ log.user_name }} <span class="font-normal text-gray-500">({{ log.user_role }})</span></p>
+                <p v-if="log.remarks" class="mt-2 text-gray-600">{{ log.remarks }}</p>
+                <details v-if="log.metadata?.changes" class="mt-3">
+                    <summary class="cursor-pointer text-xs font-semibold text-indigo-700">Saved changes</summary>
+                    <dl class="mt-2 space-y-1 text-xs">
+                        <div v-for="(value, field) in log.metadata.changes" :key="field" class="grid grid-cols-2 gap-3">
+                            <dt class="capitalize text-gray-500">{{ field.replaceAll('_', ' ') }}</dt>
+                            <dd class="break-words text-gray-800">{{ value ?? '—' }}</dd>
+                        </div>
+                    </dl>
+                </details>
+            </div>
+            <p v-if="!auditReceipt?.audit_trails?.length" class="py-6 text-center text-sm text-gray-500">No audit trail entries recorded for this receipt yet.</p>
+        </div>
+        <template #footer>
+            <button type="button" @click="selectedAuditReceiptId = null" class="rounded-lg bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-300">Close</button>
+        </template>
+    </Modal>
 
     <Modal :show="showReceiptModal" :title="editingReceiptId ? 'Edit Receipt' : 'Add Receipt'" subtitle="Receipt number and receipt type are required." max-width="2xl" @close="showReceiptModal = false">
         <form @submit.prevent="saveReceipt" class="space-y-4">

@@ -19,7 +19,7 @@ class DepartmentController extends Controller
                 ->orderBy('name')
                 ->paginate(25)
                 ->withQueryString(),
-            'canManageResponsibilityCenters' => $request->user()?->isSuperAdmin() ?? false,
+            'canManageResponsibilityCenters' => $request->user()?->canManageBudget() ?? false,
         ]);
     }
 
@@ -145,6 +145,6 @@ class DepartmentController extends Controller
 
     private function authorizeManagement(Request $request): void
     {
-        abort_unless($request->user()?->isSuperAdmin(), 403);
+        abort_unless($request->user()?->canManageBudget(), 403);
     }
 }

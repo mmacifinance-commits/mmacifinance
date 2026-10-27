@@ -40,6 +40,7 @@ class ReceiptController extends Controller
             ->all();
 
         $receipts = $query
+            ->with(['auditTrails' => fn ($query) => $query->orderByDesc('id')])
             ->latest('date_encoded')
             ->latest('id')
             ->paginate(25)
@@ -55,6 +56,7 @@ class ReceiptController extends Controller
                 'date_encoded' => $income->date_encoded?->toDateString(),
                 'notes' => $income->notes,
                 'updated_at' => $income->updated_at?->toISOString(),
+                'audit_trails' => $income->auditTrails,
             ]);
 
         $typeOptions = Income::query()

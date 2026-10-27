@@ -49,8 +49,8 @@ class ImportPreviewController extends Controller
     {
         $user = $request->user();
         $allowed = match ($module) {
-            'budget-categories', 'account-titles', 'annual-budget-items' => $user?->canManageBudget(),
-            'departments', 'income' => $user?->isSuperAdmin(),
+            'departments', 'budget-categories', 'account-titles', 'annual-budget-items' => $user?->canManageBudget(),
+            'income' => $user?->isSuperAdmin(),
             'receipts' => in_array($user?->role, ['super_admin', 'budget_officer', 'disbursement_officer', 'cashier'], true),
             'expenses', 'disbursements' => $user?->canManageDisbursements(),
             default => false,

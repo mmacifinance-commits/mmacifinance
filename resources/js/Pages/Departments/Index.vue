@@ -165,7 +165,7 @@ function importCsv() {
             v-if="!canManage"
             class="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800"
         >
-            Head of Finance only can add, edit, or delete responsibility
+            Head of Finance and Budget Monitoring Officer can add, edit, or delete responsibility
             centers.
         </div>
 

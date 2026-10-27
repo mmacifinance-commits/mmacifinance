@@ -240,7 +240,24 @@ class ReportController extends Controller
 
     public function generate(Request $request, \App\Services\FinancialReportService $reports)
     {
-        return Inertia::render('Reports/Generated', $reports->build($request));
+        return Inertia::render('Reports/Generated', $reports->build($request) + [
+            'pdfUrl' => route('reports.pdf', $request->only(['report_type', 'fiscal_period_id', 'year', 'month', 'allocation_month', 'start_date', 'end_date', 'department_id', 'category_id', 'account_title_id'])),
+        ]);
+    }
+
+    public function pdf(Request $request, \App\Services\FinancialReportService $reports)
+    {
+        $report = $reports->build($request);
+        $pdf = new \Dompdf\Dompdf(['isRemoteEnabled' => false, 'isPhpEnabled' => false, 'defaultFont' => 'DejaVu Sans']);
+        $pdf->setPaper('A4', 'landscape');
+        $pdf->loadHtml(view('reports.pdf', $report)->render());
+        $pdf->render();
+
+        return response($pdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$report['reportType'].'-report.pdf"',
+            'Cache-Control' => 'private, no-store',
+        ]);
     }
 
     private function applyItemDimensions($query, ?int $departmentId, ?int $categoryId, ?int $accountTitleId): void
