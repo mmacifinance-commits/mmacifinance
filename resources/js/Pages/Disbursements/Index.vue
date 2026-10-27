@@ -113,6 +113,7 @@ const filteredDisbursements = computed(() => {
             ((d.disbursement_no || '').toLowerCase().includes(filterSearch.value.toLowerCase()) ||
              (d.description || '').toLowerCase().includes(filterSearch.value.toLowerCase()) ||
              (d.pay_to || '').toLowerCase().includes(filterSearch.value.toLowerCase()) ||
+             (d.payment_reference || '').toLowerCase().includes(filterSearch.value.toLowerCase()) ||
              (d.expense?.ref_no || '').toLowerCase().includes(filterSearch.value.toLowerCase()) ||
              (d.expense?.budget_item?.particulars || '').toLowerCase().includes(filterSearch.value.toLowerCase())) : true
         const matchMethod = filterMethod.value ? d.method === filterMethod.value : true
@@ -451,7 +452,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
 
     <!-- Filters -->
     <div class="flex flex-col sm:flex-row gap-4 mb-6">
-        <input v-model="filterSearch" type="text" placeholder="Search DSB no, pay to, description, expense ref..." class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm w-full max-w-sm shadow-sm" />
+        <input v-model="filterSearch" type="text" placeholder="Search DSB no, payment ref, payee, expense ref..." class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm w-full max-w-sm shadow-sm" />
         <select v-model="filterYear" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 min-w-[140px] shadow-sm">
             <option value="all">All Years</option>
             <option v-for="period in (fiscalPeriods || [])" :key="period.id" :value="String(period.id)">{{ period.fiscal_year_label }}</option>
@@ -506,6 +507,8 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                             <span class="px-2.5 py-1 rounded bg-slate-100 text-slate-700 font-medium border border-slate-200">
                                 {{ methodLabels[d.method] || d.method }}
                             </span>
+                            <div class="mt-2 text-[11px] text-gray-500">Payment Reference</div>
+                            <div class="mt-0.5 max-w-48 break-all font-mono text-xs text-gray-800 mx-auto">{{ d.payment_reference || 'Not provided' }}</div>
                         </td>
                         <td class="px-5 py-4 text-center align-middle">
                             <span :class="[statusBadgeStyles[d.status] || 'bg-gray-100 text-gray-800', 'inline-flex items-center rounded-full px-3 py-1 text-xs font-bold border shadow-2xs']">
