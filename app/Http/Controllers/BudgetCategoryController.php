@@ -14,10 +14,14 @@ class BudgetCategoryController extends Controller
     /**
      * Display budget categories.
      */
-    public function index()
+    public function index(Request $request)
     {
+        $search = trim((string) $request->query('search', ''));
         return Inertia::render('BudgetCategories/Index', [
+            'filters' => ['search' => $search],
             'categories' => BudgetCategory::with('particulars')
+                ->when($search !== '', fn ($query) => $query->where(fn ($query) => $query
+                    ->where('name', 'like', "%{$search}%")->orWhere('description', 'like', "%{$search}%")))
                 ->withCount('particulars', 'budgetItems')
                 ->latest()
                 ->paginate(25)

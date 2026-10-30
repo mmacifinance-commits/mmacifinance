@@ -1,12 +1,14 @@
 <script setup>
 import { summaryMessages } from '@/support/validationMessages'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import RecordSearch from '@/Components/RecordSearch.vue'
 import Modal from '@/Components/Modal.vue'
 import ImportPreviewPanel from '@/Components/ImportPreviewPanel.vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
 
 const props = defineProps({
+    filters: Object,
     categories: { type: [Array, Object], default: () => ({}) }
 })
 
@@ -154,6 +156,7 @@ function importCsv() {
         </div>
 
         <!-- Table -->
+        <RecordSearch url="/budget-categories" :search="filters?.search" placeholder="Search category name or description..." />
         <div class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
             <div class="overflow-x-auto">
                 <table class="w-full min-w-[900px] table-fixed text-sm">

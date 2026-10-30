@@ -1,5 +1,6 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
+import RecordSearch from '@/Components/RecordSearch.vue'
 import Modal from '@/Components/Modal.vue'
 import ImportPreviewPanel from '@/Components/ImportPreviewPanel.vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
@@ -8,6 +9,7 @@ import { ref, computed } from 'vue'
 const perms = computed(() => usePage().props.permissions || {})
 
 const props = defineProps({
+    filters: Object,
     departments: {
         type: [Array, Object],
         default: () => ({}),
@@ -170,6 +172,7 @@ function importCsv() {
         </div>
 
         <!-- Table -->
+        <RecordSearch url="/departments" :search="filters?.search" placeholder="Search responsibility center or code..." />
         <div
             class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
         >

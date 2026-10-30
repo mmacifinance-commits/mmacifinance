@@ -13,8 +13,12 @@ class DepartmentController extends Controller
 {
     public function index(Request $request)
     {
+        $search = trim((string) $request->query('search', ''));
         return Inertia::render('Departments/Index', [
+            'filters' => ['search' => $search],
             'departments' => Department::with('particulars')
+                ->when($search !== '', fn ($query) => $query->where(fn ($query) => $query
+                    ->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%")))
                 ->withCount('particulars')
                 ->orderBy('name')
                 ->paginate(25)

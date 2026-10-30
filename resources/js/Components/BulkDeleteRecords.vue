@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { router } from '@inertiajs/vue3'
 import Modal from '@/Components/Modal.vue'
 import { requestErrorMessage } from '@/support/requestErrors'
@@ -13,7 +13,6 @@ const confirmation = ref('')
 const busy = ref(false)
 const error = ref('')
 const success = ref('')
-const sharedIncome = computed(() => ['income', 'receipts'].includes(props.module))
 watch(() => props.records, () => { selected.value = []; preview.value = null })
 watch([selected, scope], () => { preview.value = null; confirmation.value = ''; error.value = '' }, { deep: true })
 
@@ -65,7 +64,6 @@ async function submit() {
             <div class="space-y-4 text-sm">
                 <div class="border border-amber-200 bg-amber-50 p-3 text-amber-900">
                     Deletion is permanent and changes report totals. Export a copy first if needed. Protected records stop the entire batch; no partial deletion.
-                    <p v-if="sharedIncome" class="mt-2 font-semibold">Income and Receipts share records. Deleting here also removes the matching entry from the other page.</p>
                     <p v-if="module === 'disbursements'" class="mt-2">Deleting posted payments reverses expenditure totals. Only the Head of Finance can delete approved or posted payments.</p>
                 </div>
                 <div v-if="error" role="alert" class="border border-red-200 bg-red-50 p-3 text-red-700">{{ error }}</div>
