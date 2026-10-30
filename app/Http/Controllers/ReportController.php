@@ -232,7 +232,7 @@ class ReportController extends Controller
                 'generated_by' => $report['generatedBy']['name'], 'generated_at' => $report['generatedAt'],
                 'total_receipts' => $report['totals']['receipts'], 'available_cash' => $report['totals']['cashOnHand'],
                 'department' => $report['departmentLabel'], 'category' => $report['categoryLabel'],
-                'account_title' => $report['accountTitleLabel'], 'notes' => $report['reportNotes'],
+                'account_title' => $report['accountTitleLabel'],
             ],
             $report['sections']
         );
