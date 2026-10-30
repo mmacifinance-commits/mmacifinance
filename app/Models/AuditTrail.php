@@ -8,6 +8,17 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class AuditTrail extends Model
 {
+    protected $with = ['user:id,name'];
+
+    protected $hidden = ['user'];
+
+    protected $appends = ['display_user_name'];
+
+    public function getDisplayUserNameAttribute(): string
+    {
+        return $this->user?->name ?? $this->user_name ?? 'System';
+    }
+
     protected $fillable = [
         'auditable_type',
         'auditable_id',

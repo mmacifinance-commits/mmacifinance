@@ -670,7 +670,7 @@ function splitDate(d) {
                         <div class="text-xs text-gray-500">{{ fmtDate(log.created_at) }}</div>
                     </div>
                     <div class="mt-1 text-xs text-gray-600">
-                        <span class="font-semibold text-gray-800">{{ log.user_name }}</span>
+                        <span class="font-semibold text-gray-800">{{ (log.display_user_name ?? log.user_name) }}</span>
                         <span class="mx-1">•</span>
                         <span>{{ log.user_role }}</span>
                     </div>

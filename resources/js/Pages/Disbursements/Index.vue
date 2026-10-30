@@ -804,7 +804,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
             <div class="space-y-2">
                 <div v-for="log in (selectedDsb?.audit_trails || [])" :key="log.id" class="p-3 rounded-md bg-gray-50 border border-gray-200 text-xs">
                     <div class="flex justify-between items-center font-semibold text-gray-900 mb-1">
-                        <span class="capitalize text-navy">{{ log.action }} by {{ log.user_name }} ({{ log.user_role }})</span>
+                        <span class="capitalize text-navy">{{ log.action }} by {{ (log.display_user_name ?? log.user_name) }} ({{ log.user_role }})</span>
                         <span class="text-gray-500 text-[11px]">{{ fmtDate(log.created_at) }}</span>
                     </div>
                     <p class="text-gray-600 italic" v-if="log.remarks">"{{ log.remarks }}"</p>

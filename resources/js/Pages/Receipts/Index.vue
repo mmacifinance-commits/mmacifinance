@@ -309,7 +309,7 @@ function deleteReceipt(item) {
                     <span class="font-semibold capitalize text-navy-dark">{{ log.action }}</span>
                     <time :datetime="log.created_at" class="text-xs text-gray-500">{{ formatAuditDate(log.created_at) }}</time>
                 </div>
-                <p class="mt-1 font-medium text-gray-800">{{ log.user_name }} <span class="font-normal text-gray-500">({{ log.user_role }})</span></p>
+                <p class="mt-1 font-medium text-gray-800">{{ (log.display_user_name ?? log.user_name) }} <span class="font-normal text-gray-500">({{ log.user_role }})</span></p>
                 <p v-if="log.remarks" class="mt-2 text-gray-600">{{ log.remarks }}</p>
                 <details v-if="log.metadata?.changes" class="mt-3">
                     <summary class="cursor-pointer text-xs font-semibold text-indigo-700">Saved changes</summary>
