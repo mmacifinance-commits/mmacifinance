@@ -119,10 +119,17 @@ class IncomeController extends Controller
             'source' => 'required|string|max:255',
             'description' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
+            'student_count' => 'nullable|required_with:fee_per_student|integer|min:0|max:1000000',
+            'fee_per_student' => 'nullable|required_with:student_count|numeric|min:0|max:9999999.99',
             'date_encoded' => 'required|date',
             'notes' => 'nullable|string',
         ]);
 
+        $validated += ['student_count' => null, 'fee_per_student' => null];
+        if (isset($validated['student_count'], $validated['fee_per_student'])) {
+            $validated['fee_per_student'] = round((float) $validated['fee_per_student'], 2);
+            $validated['amount'] = round($validated['student_count'] * $validated['fee_per_student'], 2);
+        }
         unset($validated['receipt_no'], $validated['receipt_type']);
         app(FiscalPeriodLockService::class)->ensureDateOpen($validated['date_encoded']);
         $validated['income_no'] = app(\App\Services\ReferenceNumberService::class)->next('incomes', 'income_no', 'INC-'.date('Y').'-');
@@ -147,10 +154,17 @@ class IncomeController extends Controller
             'source' => 'required|string|max:255',
             'description' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
+            'student_count' => 'nullable|required_with:fee_per_student|integer|min:0|max:1000000',
+            'fee_per_student' => 'nullable|required_with:student_count|numeric|min:0|max:9999999.99',
             'date_encoded' => 'required|date',
             'notes' => 'nullable|string',
         ]);
 
+        $validated += ['student_count' => null, 'fee_per_student' => null];
+        if (isset($validated['student_count'], $validated['fee_per_student'])) {
+            $validated['fee_per_student'] = round((float) $validated['fee_per_student'], 2);
+            $validated['amount'] = round($validated['student_count'] * $validated['fee_per_student'], 2);
+        }
         unset($validated['receipt_no'], $validated['receipt_type']);
         app(FiscalPeriodLockService::class)->ensureDateOpen($income->date_encoded);
         app(FiscalPeriodLockService::class)->ensureDateOpen($validated['date_encoded']);
@@ -266,6 +280,8 @@ class IncomeController extends Controller
             $income->source = $source;
             $income->description = $description;
             $income->amount = $amount;
+            $income->student_count = null;
+            $income->fee_per_student = null;
             $income->date_encoded = $dateEncoded;
             $income->notes = $notes !== '' ? $notes : null;
             if ($isNew) {

@@ -18,7 +18,7 @@ class HardeningCoverageTest extends TestCase
 
     public function test_import_preview_reports_missing_invalid_and_duplicate_rows(): void
     {
-        $user = User::factory()->create(['role' => User::ROLE_CASHIER]);
+        $user = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
         $csv = implode("\n", [
             'receipt_no,receipt_type,source,description,amount,date_encoded',
             'OR-1,Enrollment,Collections,Valid receipt,100,2026-08-01',

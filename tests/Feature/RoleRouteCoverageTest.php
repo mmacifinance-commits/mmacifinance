@@ -31,7 +31,10 @@ class RoleRouteCoverageTest extends TestCase
             foreach (Route::getRoutes() as $route) {
                 $rule = collect($route->gatherMiddleware())->first(fn ($rule) => str_starts_with($rule, 'role:'));
                 if (!$rule) continue;
-                $roles = explode(',', substr($rule, 5));
+                $roles = ['super_admin', 'budget_officer', 'disbursement_officer', 'cashier', 'auditor'];
+                foreach ($route->gatherMiddleware() as $middleware) {
+                    if (str_starts_with($middleware, 'role:')) $roles = array_values(array_intersect($roles, explode(',', substr($middleware, 5))));
+                }
                 if (in_array('DELETE', $route->methods(), true)) {
                     $roles = ['super_admin'];
                 }

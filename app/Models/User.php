@@ -64,7 +64,7 @@ class User extends Authenticatable
 
     public function canManageBudget(): bool
     {
-        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_BUDGET_OFFICER]);
+        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_BUDGET_OFFICER, self::ROLE_DISBURSEMENT_OFFICER]);
     }
 
     public function canManageIncome(): bool
@@ -74,17 +74,17 @@ class User extends Authenticatable
 
     public function canManageExpenses(): bool
     {
-        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_DISBURSEMENT_OFFICER, self::ROLE_CASHIER]);
+        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_DISBURSEMENT_OFFICER, self::ROLE_BUDGET_OFFICER]);
     }
 
     public function canSubmitExpenses(): bool
     {
-        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_DISBURSEMENT_OFFICER, self::ROLE_CASHIER]);
+        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_DISBURSEMENT_OFFICER, self::ROLE_BUDGET_OFFICER]);
     }
 
     public function canManageDisbursements(): bool
     {
-        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_DISBURSEMENT_OFFICER, self::ROLE_CASHIER]);
+        return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_DISBURSEMENT_OFFICER, self::ROLE_BUDGET_OFFICER, self::ROLE_CASHIER]);
     }
 
     public function canApproveDisbursements(): bool

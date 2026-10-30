@@ -15,7 +15,7 @@ class ReceiptPageTest extends TestCase
 
     public function test_receipts_page_lists_cash_receipt_income_records(): void
     {
-        $user = User::factory()->create(['role' => User::ROLE_CASHIER]);
+        $user = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
         $period = AnnualBudget::create([
             'year' => 2026,
             'start_date' => '2026-08-01',
@@ -77,7 +77,7 @@ class ReceiptPageTest extends TestCase
 
     public function test_receipts_can_be_created_updated_and_deleted(): void
     {
-        $user = User::factory()->create(['role' => User::ROLE_CASHIER]);
+        $user = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
 
         $this->actingAs($user)
             ->post('/receipts', [
@@ -125,11 +125,11 @@ class ReceiptPageTest extends TestCase
             ->has('receipts.data.0.audit_trails', 2)
             ->where('receipts.data.0.audit_trails.0.action', 'modified')
             ->where('receipts.data.0.audit_trails.0.user_name', $user->name)
-            ->where('receipts.data.0.audit_trails.0.user_role', 'Cashier')
+            ->where('receipts.data.0.audit_trails.0.user_role', 'Head of Finance')
             ->where('receipts.data.0.audit_trails.0.metadata.changes.amount', 3000)
             ->where('receipts.data.0.audit_trails.1.action', 'created'));
 
-        $this->deleteJson("/receipts/{$receipt->id}")->assertForbidden();
+        $this->actingAs(User::factory()->create(['role' => User::ROLE_CASHIER]))->deleteJson("/receipts/{$receipt->id}")->assertForbidden();
         $admin = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
         $this->actingAs($admin)
             ->delete("/receipts/{$receipt->id}")
@@ -149,7 +149,7 @@ class ReceiptPageTest extends TestCase
 
     public function test_receipt_number_is_required_and_unique_for_receipt_crud(): void
     {
-        $user = User::factory()->create(['role' => User::ROLE_CASHIER]);
+        $user = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
         Income::create([
             'income_no' => 'INC-DUPLICATE',
             'receipt_no' => 'OR-DUPLICATE',
@@ -199,7 +199,7 @@ class ReceiptPageTest extends TestCase
 
     public function test_receipts_can_be_exported_and_imported(): void
     {
-        $user = User::factory()->create(['role' => User::ROLE_CASHIER]);
+        $user = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
         AnnualBudget::create([
             'year' => 2026,
             'start_date' => '2026-08-01',

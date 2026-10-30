@@ -1,11 +1,12 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
+import IncomeBreakdown from '@/Components/IncomeBreakdown.vue'
 import BulkDeleteRecords from '@/Components/BulkDeleteRecords.vue'
 import Modal from '@/Components/Modal.vue'
 import SystemAlert from '@/Components/SystemAlert.vue'
 import ImportPreviewPanel from '@/Components/ImportPreviewPanel.vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 const page = usePage()
 const perms = computed(() => page.props.permissions || {})
@@ -23,7 +24,10 @@ const incomeItems = computed(() => props.incomeRecords?.data || props.incomeReco
 const showModal = ref(false)
 const showImportModal = ref(false)
 const editing = ref(null)
-const form = useForm({ source: '', description: '', amount: 0, date_encoded: '', notes: '' })
+const form = useForm({ source: '', description: '', amount: 0, student_count: null, fee_per_student: null, date_encoded: '', notes: '' })
+watch(() => [form.student_count, form.fee_per_student], ([count, fee]) => {
+    if (count !== null && count !== '' && fee !== null && fee !== '') form.amount = Math.round(Number(count) * Number(fee) * 100) / 100
+})
 const importForm = useForm({ csv_file: null })
 const formErrorMessages = computed(() => Object.values(form.errors || {}).flat().filter(Boolean))
 const importErrorMessages = computed(() => Object.values(importForm.errors || {}).flat().filter(Boolean))
@@ -69,6 +73,8 @@ function openEdit(item) {
     form.clearErrors()
     form.source = item.source
     form.description = item.description
+    form.student_count = item.student_count ?? null
+    form.fee_per_student = item.fee_per_student ?? null
     form.amount = item.amount
     form.date_encoded = item.date_encoded?.slice?.(0, 10) || ''
     form.notes = item.notes || ''
@@ -153,7 +159,7 @@ function importCsv() {
     </div>
 
     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4 mb-6">
-        <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden"><div class="h-1 bg-navy-dark"></div><div class="p-4"><p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Total Income</p><p class="text-xl font-extrabold text-navy-dark mt-0.5">{{ PESO }}{{ fmt(stats?.totalRevenue) }}</p></div></div>
+        <IncomeBreakdown :periods="fiscalPeriods" :filters="filters" class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden"><div class="h-1 bg-navy-dark"></div><div class="p-4"><p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Total Income</p><p class="text-xl font-extrabold text-navy-dark mt-0.5">{{ PESO }}{{ fmt(stats?.totalRevenue) }}</p><p class="mt-1 text-xs text-indigo-700">View income breakdown</p></div></IncomeBreakdown>
         <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden"><div class="h-1 bg-slate-700"></div><div class="p-4"><p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Remaining Income After Appropriation</p><p class="text-xl font-extrabold text-slate-800 mt-0.5">{{ PESO }}{{ fmt(stats?.remainingIncome) }}</p><p class="mt-1 text-xs text-gray-500">Income less approved appropriation.</p></div></div>
         <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden"><div class="h-1 bg-amber-500"></div><div class="p-4"><p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Remaining Income After Expense</p><p class="text-xl font-extrabold text-amber-700 mt-0.5">{{ PESO }}{{ fmt(stats?.remainingIncomeAfterExpense) }}</p><p class="mt-1 text-xs text-gray-500">Income less posted expenditures.</p></div></div>
         <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden"><div class="h-1 bg-emerald-500"></div><div class="p-4"><p class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Income Records</p><p class="text-xl font-extrabold text-slate-800 mt-0.5">{{ stats?.recordCount || 0 }}</p></div></div>
@@ -219,7 +225,12 @@ function importCsv() {
             <SystemAlert v-if="formErrorMessages.length" class="mb-4" tone="error" title="The income record could not be saved" :messages="formErrorMessages" />
             <div class="grid gap-4 sm:grid-cols-2">
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Source</label><input v-model="form.source" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
-                <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Amount</label><input v-model.number="form.amount" type="number" step="0.01" min="0" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
+                <div class="sm:col-span-2 rounded-lg border bg-slate-50 p-3">
+                    <p class="mb-2 text-sm font-semibold">Student-based projection (optional)</p>
+                    <p class="mb-3 text-xs text-gray-600">Enter the student count and fee for this income source. The date determines its fiscal year. Leave both blank for a manually entered amount.</p>
+                    <div class="grid gap-3 sm:grid-cols-2"><label class="text-sm">Student count<input v-model.number="form.student_count" type="number" min="0" step="1" class="mt-1 w-full border p-2" /></label><label class="text-sm">Fee per student (₱)<input v-model.number="form.fee_per_student" type="number" min="0" step="0.01" class="mt-1 w-full border p-2" /></label></div>
+                </div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Amount</label><input v-model.number="form.amount" :readonly="form.student_count !== null && form.student_count !== '' && form.fee_per_student !== null && form.fee_per_student !== ''" type="number" step="0.01" min="0" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Date</label><input v-model="form.date_encoded" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
                 <div class="sm:col-span-2"><label class="block text-sm font-medium text-gray-700 mb-1.5">Description</label><input v-model="form.description" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
                 <div class="sm:col-span-2"><label class="block text-sm font-medium text-gray-700 mb-1.5">Notes</label><textarea v-model="form.notes" rows="3" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"></textarea></div>

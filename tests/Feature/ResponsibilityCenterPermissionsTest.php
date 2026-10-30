@@ -48,7 +48,7 @@ class ResponsibilityCenterPermissionsTest extends TestCase
     public function test_other_staff_remain_read_only(): void
     {
         $department = Department::create(['name' => 'Protected Center', 'code' => 'PROT']);
-        foreach (['cashier', 'disbursement_officer', 'auditor'] as $role) {
+        foreach (['cashier', 'auditor'] as $role) {
             $this->actingAs(User::factory()->create(['role' => $role]));
             $this->get('/departments')->assertOk()->assertInertia(fn ($page) => $page
                 ->where('canManageResponsibilityCenters', false));

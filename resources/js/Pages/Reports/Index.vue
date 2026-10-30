@@ -1,5 +1,6 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
+import IncomeBreakdown from '@/Components/IncomeBreakdown.vue'
 import Modal from '@/Components/Modal.vue'
 import { Head, router } from '@inertiajs/vue3'
 import { computed, ref } from 'vue'
@@ -264,6 +265,7 @@ const activeReportLabel = computed(() => {
 <template>
 <Head title="Financial Reports" />
 <AppLayout>
+    <IncomeBreakdown :periods="fiscalPeriods" :filters="filters" class="mb-4 rounded-lg border border-indigo-200 bg-white px-4 py-3 font-semibold text-indigo-700">Projected Income vs Actual Receipts — View Summary</IncomeBreakdown>
     <div class="flex items-center justify-between mb-6">
         <div>
             <h2 class="text-xl font-bold text-gray-900">Financial Reports & Performance</h2>

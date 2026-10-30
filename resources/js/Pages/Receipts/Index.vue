@@ -1,6 +1,7 @@
 <script setup>
 import { summaryMessages } from '@/support/validationMessages'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import IncomeBreakdown from '@/Components/IncomeBreakdown.vue'
 import BulkDeleteRecords from '@/Components/BulkDeleteRecords.vue'
 import Modal from '@/Components/Modal.vue'
 import SystemAlert from '@/Components/SystemAlert.vue'
@@ -156,9 +157,9 @@ function deleteReceipt(item) {
         </div>
         <div class="flex flex-wrap gap-2">
             <BulkDeleteRecords module="receipts" :records="receiptItems" />
-            <button @click="openCreateReceipt" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-navy">Add Receipt</button>
+            <button v-if="$page.props.permissions?.isSuperAdmin" @click="openCreateReceipt" class="rounded-lg bg-navy-dark px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-navy">Add Receipt</button>
             <button @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">Export XLSX</button>
-            <button @click="openImport" class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Import XLSX</button>
+            <button v-if="$page.props.permissions?.isSuperAdmin" @click="openImport" class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Import XLSX</button>
         </div>
     </div>
 
@@ -191,6 +192,7 @@ function deleteReceipt(item) {
         </div>
     </div>
 
+    <IncomeBreakdown :periods="fiscalPeriods" :filters="filters" class="mb-4 font-semibold text-indigo-700">View receipts and projected income breakdown</IncomeBreakdown>
     <div class="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div class="h-1 bg-navy-dark"></div>
@@ -282,7 +284,7 @@ function deleteReceipt(item) {
                 </div>
                 <div class="flex flex-wrap justify-start gap-2 md:justify-end">
                     <button @click="selectedAuditReceiptId = item.id" class="rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">Audit Trail</button>
-                    <button @click="openEditReceipt(item)" class="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">Edit</button>
+                    <button v-if="$page.props.permissions?.isSuperAdmin" @click="openEditReceipt(item)" class="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">Edit</button>
                     <button v-if="$page.props.permissions?.isSuperAdmin" @click="deleteReceipt(item)" class="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100">Delete</button>
                 </div>
             </div>

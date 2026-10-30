@@ -118,7 +118,7 @@ class BudgetAndDisbursementEnhancementTest extends TestCase
 
     public function test_complete_workflow_preserves_actors_blocks_unauthorized_actions_and_posts_only_once(): void
     {
-        $this->actingAs($this->cashier)->post("/expenses/{$this->expense->id}/submit")
+        $this->actingAs($this->superAdmin)->post("/expenses/{$this->expense->id}/submit")
             ->assertSessionHasNoErrors();
         $this->actingAs($this->superAdmin)->post("/expenses/{$this->expense->id}/approve")
             ->assertSessionHasNoErrors();
@@ -242,7 +242,8 @@ class BudgetAndDisbursementEnhancementTest extends TestCase
 
     public function test_expense_audit_history_keeps_the_actual_actor_for_each_action(): void
     {
-        $this->actingAs($this->cashier)->post("/expenses/{$this->expense->id}/submit", [
+        $officer = User::factory()->create(['role' => 'budget_officer']);
+        $this->actingAs($officer)->post("/expenses/{$this->expense->id}/submit", [
             'user_id' => $this->superAdmin->id,
             'user_name' => $this->superAdmin->name,
             'user_role' => 'Head of Finance',
@@ -251,7 +252,7 @@ class BudgetAndDisbursementEnhancementTest extends TestCase
         $this->actingAs($this->superAdmin)->post("/expenses/{$this->expense->id}/approve")
             ->assertSessionHasNoErrors();
 
-        foreach (['submitted' => $this->cashier, 'approved' => $this->superAdmin] as $action => $actor) {
+        foreach (['submitted' => $officer, 'approved' => $this->superAdmin] as $action => $actor) {
             $this->assertDatabaseHas('audit_trails', [
                 'auditable_type' => Expense::class,
                 'auditable_id' => $this->expense->id,
@@ -263,11 +264,11 @@ class BudgetAndDisbursementEnhancementTest extends TestCase
         }
 
         // History retains the identity and role at the time of the action.
-        $originalName = $this->cashier->name;
-        $this->cashier->update(['name' => 'Renamed User', 'role' => User::ROLE_AUDITOR]);
+        $originalName = $officer->name;
+        $officer->update(['name' => 'Renamed User', 'role' => User::ROLE_AUDITOR]);
         $entry = $this->expense->auditTrails()->where('action', 'submitted')->firstOrFail();
         $this->assertSame($originalName, $entry->user_name);
-        $this->assertSame('Cashier', $entry->user_role);
+        $this->assertSame('Budget Monitoring Officer', $entry->user_role);
     }
 
     public function test_cashier_cannot_approve_or_post_disbursements()

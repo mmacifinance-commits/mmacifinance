@@ -15,6 +15,8 @@ class Income extends Model
     }
 
     protected $fillable = [
+        'student_count',
+        'fee_per_student',
         'income_no',
         'receipt_no',
         'receipt_type',
@@ -27,6 +29,8 @@ class Income extends Model
     ];
 
     protected $casts = [
+        'student_count' => 'integer',
+        'fee_per_student' => 'decimal:2',
         'amount' => 'decimal:2',
         'date_encoded' => 'date',
     ];
