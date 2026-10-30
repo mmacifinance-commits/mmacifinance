@@ -53,6 +53,16 @@ try {
         assert.match(result.font, /Arial/)
         console.log(`PASS ${media}: readable particulars and unbroken currency`)
     }
+    for (const [type, heading] of [['account_title_ledger', 'Account Title Summary'], ['closing_report', 'Fiscal Year Closing Status']]) {
+        await page.emulateMedia({ media: 'screen' })
+        await page.goto(`http://127.0.0.1:8138/reports/generate?report_type=${type}`)
+        await page.locator('.report-table').first().waitFor()
+        assert.match(await page.locator('.report-table').first().innerText(), new RegExp(heading, 'i'))
+        const overflowing = await page.locator('.report-number').evaluateAll(cells => cells.filter(cell => cell.scrollWidth > cell.clientWidth + 1).length)
+        assert.equal(overflowing, 0, `${type}: currency must fit its columns`)
+        await page.screenshot({ path: join(tmpdir(), `${type}-layout.png`), fullPage: true })
+        console.log(`PASS ${type}: summary layout and currency fit`)
+    }
 } finally {
     await browser?.close()
     server.kill()

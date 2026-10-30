@@ -100,10 +100,27 @@ class FinancialReportAccuracyTest extends TestCase
         [$period, $items] = $this->fixture();
         $report = $this->data(['report_type' => 'account_title_ledger', 'fiscal_period_id' => $period->id,
             'account_title_id' => $items[0]->particular_id, 'start_date' => '2026-09-01', 'end_date' => '2026-09-30']);
-        $this->assertCount(1, $report['sections']);
-        $this->assertSame(900.0, $report['sections'][0]['rows'][0][5]);
-        $this->assertSame(700.0, $report['sections'][0]['rows'][1][5]);
+        $this->assertCount(2, $report['sections']);
+        $this->assertSame('Account Title Summary', $report['sections'][0]['title']);
+        $this->assertSame(900.0, $report['sections'][0]['rows'][0][4]);
+        $this->assertSame(200.0, $report['sections'][0]['rows'][0][5]);
+        $this->assertSame(700.0, $report['sections'][0]['rows'][0][6]);
+        $this->assertCount(1, $report['sections'][1]['rows']);
+    }
+
+    public function test_account_title_groups_particulars_and_preserves_separate_accounts(): void
+    {
+        [$period, $items] = $this->fixture();
+        BudgetItem::create(['budget_id' => $period->id, 'category_id' => $items[0]->category_id,
+            'particular_id' => $items[0]->particular_id, 'particulars' => 'Laptop',
+            'allocation_month' => '2026-09-01', 'appropriation' => 500]);
+        $report = $this->data(['report_type' => 'account_title_ledger', 'fiscal_period_id' => $period->id]);
+        $this->assertCount(3, $report['sections']);
         $this->assertCount(2, $report['sections'][0]['rows']);
+        $this->assertCount(2, $report['sections'][1]['rows']);
+        $this->assertSame(1500.0, $report['sections'][0]['rows'][0][3]);
+        $this->assertSame(1200.0, $report['sections'][0]['rows'][0][6]);
+        $this->assertSame(1900.0, $report['sections'][0]['totals'][6]);
     }
 
     public function test_all_nine_exports_contain_the_same_sections_and_numeric_totals_as_print(): void
@@ -156,6 +173,14 @@ class FinancialReportAccuracyTest extends TestCase
         [$period] = $this->fixture();
         $report = $this->data(['report_type' => 'closing_report', 'fiscal_period_id' => $period->id]);
         $this->assertStringContainsString('PROVISIONAL', implode(' ', $report['reportNotes']));
+        $this->assertStringContainsString('PROVISIONAL', $report['sections'][0]['rows'][1][1]);
+        $this->assertSame(1400.0, $report['sections'][1]['rows'][2][1]);
+        $this->assertSame(60.0, $report['sections'][1]['rows'][3][1]);
+        $this->assertSame(1899.0, $report['sections'][2]['rows'][2][1]);
+        $this->assertNull($report['sections'][1]['totalLabel']);
+        $period->update(['closed_at' => now()]);
+        $closed = $this->data(['report_type' => 'closing_report', 'fiscal_period_id' => $period->id]);
+        $this->assertSame('CLOSED', $closed['sections'][0]['rows'][1][1]);
         $this->get('/reports/generate?'.http_build_query(['report_type' => 'closing_report', 'fiscal_period_id' => $period->id, 'start_date' => '2026-09-01']))
             ->assertSessionHasErrors('report_type');
     }

@@ -142,8 +142,8 @@ class FinancialReportService
             'budget_utilization' => [$budgetSection], 'income_vs_receipts' => [$comparisonSection, $incomeSection, $receiptSection],
             'fund_balance' => [$fundSection, $receiptSection, $paymentSection],
             'responsibility_center' => [$centerSection, $budgetSection],
-            'account_title_ledger' => $this->ledger($items, $posted, $detailPayments, $start),
-            'closing_report' => [$fundSection, $budgetSection, $receiptSection, $paymentSection],
+            'account_title_ledger' => $this->accountSections($items, $posted, $detailPayments, $start),
+            'closing_report' => [...$this->closingSections($period, $totals), $centerSection, $this->accountSections($items, $posted, $detailPayments, null)[0]],
             default => [$budgetSection, $receiptSection, $paymentSection],
         };
         if ($type === 'income_vs_receipts') $notes[] = 'Income is projected. Receipts are actual collections, not additional projected income. The difference is a comparison, not a list of unpaid debts.';
@@ -169,23 +169,58 @@ class FinancialReportService
         return compact('title', 'headers', 'rows', 'money', 'percent', 'totals') + ['type' => 'unified', 'totalLabel' => 'TOTAL'];
     }
 
-    private function ledger($items, $posted, $query, ?string $start): array
+    private function accountSections($items, $posted, $query, ?string $start): array
     {
         $prior = $start ? (clone $query)->whereDate('date_encoded', '<', $start)->with('expense')->get()
             ->groupBy(fn ($r) => $r->expense->budget_item_id)->map(fn ($rows) => (float) $rows->sum('amount')) : collect();
-        $sections = [];
-        foreach ($items as $item) {
-            $balance = round((float) $item->appropriation - ($prior[$item->id] ?? 0), 2);
-            $rows = [['Opening budget balance', $item->ref_no, '', '', 0, $balance]];
-            foreach ($posted->filter(fn ($r) => $r->expense->budget_item_id === $item->id) as $payment) {
-                $balance = round($balance - (float) $payment->amount, 2);
-                $rows[] = [$payment->date_encoded?->toDateString(), $payment->disbursement_no, $payment->expense->ref_no, $payment->pay_to, (float) $payment->amount, $balance];
-            }
-            $section = $this->section(($item->particular?->particular ?? 'Untitled').($item->particulars !== '' ? ' / '.$item->particulars : '').' / '.($item->particular?->department?->name ?? 'Unassigned').' / '.$item->allocation_month?->format('F Y').' / '.$item->ref_no,
-                ['Date / Entry', 'Reference', 'Expense Ref.', 'Payee', 'Posted Payment', 'Budget Balance'], $rows, [4,5]);
-            $section['totalLabel'] = null;
-            $sections[] = $section;
+        $paid = $posted->groupBy(fn ($r) => $r->expense->budget_item_id)->map(fn ($rows) => (float) $rows->sum('amount'));
+        $summary = [];
+        $details = [];
+        foreach ($items->groupBy('particular_id') as $allocations) {
+            $first = $allocations->first();
+            $title = $first->particular?->particular ?? 'Untitled';
+            $center = $first->particular?->department?->name ?? 'Unassigned';
+            $category = $first->category?->name ?? 'Uncategorized';
+            $rows = $allocations->map(function ($item) use ($prior, $paid) {
+                $opening = round((float) $item->appropriation - ($prior[$item->id] ?? 0), 2);
+                $payments = round($paid[$item->id] ?? 0, 2);
+                return [$item->particulars ?: 'Unspecified', $item->allocation_month?->format('F Y'), $item->ref_no,
+                    (float) $item->appropriation, $opening, $payments, round($opening - $payments, 2)];
+            })->values()->all();
+            $detail = $this->section($title.' — '.$center.' — '.$category,
+                ['Particulars', 'Allocation Month', 'Monthly Ref.', 'Appropriation', 'Opening Budget Balance', 'Posted Payments in Range', 'Closing Budget Balance'], $rows, [3,4,5,6]);
+            $summary[] = [$title, $center, $category, $detail['totals'][3], $detail['totals'][4], $detail['totals'][5], $detail['totals'][6]];
+            $details[] = $detail;
         }
-        return $sections ?: [$this->section('Account Title Report', ['Date / Entry', 'Reference', 'Expense Ref.', 'Payee', 'Posted Payment', 'Budget Balance'], [], [4,5])];
+        return [$this->section('Account Title Summary',
+            ['Account Title', 'Responsibility Center', 'Category', 'Appropriation', 'Opening Budget Balance', 'Posted Payments in Range', 'Closing Budget Balance'], $summary, [3,4,5,6]), ...$details];
+    }
+
+    private function closingSections(?AnnualBudget $period, array $totals): array
+    {
+        $status = $this->section('Fiscal Year Closing Status', ['Item', 'Status'], [
+            ['Fiscal Period', $period?->period_label ?? 'No fiscal period selected'],
+            ['Closing Status', $period?->closed_at ? 'CLOSED' : 'PROVISIONAL — fiscal period is still open'],
+            ['Record Basis', 'Current stored records as of generation time'],
+            ['Outstanding Commitments', $totals['pendingCommitments'] > 0 ? 'Unposted commitments remain for review' : 'No unposted commitments'],
+        ], []);
+        $status['totalLabel'] = null;
+        $budget = $this->section('Year-End Budget Summary', ['Description', 'Amount'], [
+            ['Total Appropriation', $totals['appropriation']],
+            ['Less: Posted Disbursements', $totals['postedDisbursements']],
+            ['Remaining Budget Balance', $totals['balance']],
+            ['Unposted Commitments', $totals['pendingCommitments']],
+            ['Budget Balance after Commitments', round($totals['balance'] - $totals['pendingCommitments'], 2)],
+        ], [1]);
+        $budget['totalLabel'] = null;
+        $cash = $this->section('Fiscal Year Cash Summary', ['Description', 'Amount'], [
+            ['Cash Receipts during Fiscal Year', $totals['receipts']],
+            ['Less: Posted Disbursements', $totals['institutionalPostedDisbursements']],
+            ['Net Cash Movement (Receipts less Payments)', $totals['cashOnHand']],
+            ['Unposted Commitments', $totals['pendingCommitments']],
+            ['Net Cash Movement after Commitments', round($totals['cashOnHand'] - $totals['pendingCommitments'], 2)],
+        ], [1]);
+        $cash['totalLabel'] = null;
+        return [$status, $budget, $cash];
     }
 }
