@@ -33,17 +33,18 @@ class IncomeBreakdownController extends Controller
             ->groupByRaw('LOWER(TRIM(source))')->orderBy('source_key')->toBase()->get()
             ->map(fn ($row) => ['source' => $row->source, 'projected' => round((float) $row->projected, 2),
                 'actual' => round((float) $row->actual, 2), 'difference' => round((float) $row->projected - (float) $row->actual, 2)]);
-        $quotas = IncomeQuota::where('annual_budget_id', $period?->id ?? 0)->pluck('amount', 'source');
-        $rows = $rows->keyBy(fn ($row) => mb_strtolower(trim($row['source'])));
-        foreach ($quotas as $source => $amount) {
-            if (!$rows->has($source)) $rows[$source] = ['source' => $source, 'projected' => 0, 'actual' => 0, 'difference' => 0];
-        }
-        $rows = $rows->map(function ($row, $key) use ($quotas) {
-            $quota = isset($quotas[$key]) ? (float) $quotas[$key] : null;
-            return $row + ['quota' => $quota,
-                'collection_rate' => $quota > 0 ? round($row['actual'] / $quota * 100, 2) : null,
-                'quota_remaining' => $quota !== null ? round(max(0, $quota - $row['actual']), 2) : null];
-        })->sortBy('source')->values();
-        return response()->json(['rows' => $rows]);
+        $quota = IncomeQuota::where('annual_budget_id', $period?->id ?? 0)
+            ->where('source', IncomeQuota::OVERALL_SOURCE)->value('amount');
+        $quota = $quota !== null ? (float) $quota : null;
+        $rows = $rows->map(fn ($row) => $row + ['collection_rate' => $row['projected'] > 0
+            ? round($row['actual'] / $row['projected'] * 100, 2) : null])->values();
+        $projected = round((float) $rows->sum('projected'), 2);
+        $actual = round((float) $rows->sum('actual'), 2);
+        return response()->json(['rows' => $rows, 'overall' => [
+            'projected' => $projected, 'actual' => $actual, 'quota' => $quota,
+            'collection_rate' => $projected > 0 ? round($actual / $projected * 100, 2) : null,
+            'quota_progress' => $quota > 0 ? round($actual / $quota * 100, 2) : null,
+            'quota_remaining' => $quota !== null ? round(max(0, $quota - $actual), 2) : null,
+        ]]);
     }
 }
