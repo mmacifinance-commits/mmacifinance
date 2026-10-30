@@ -39,6 +39,29 @@ class FinancialReportAccuracyTest extends TestCase
         return [$period, $items];
     }
 
+    public function test_dashboard_aggregates_posted_payments_and_only_loads_allocated_account_options(): void
+    {
+        [$period, $items] = $this->fixture();
+        BudgetParticular::create(['category_id' => $items[0]->category_id,
+            'department_id' => $items[0]->particular->department_id,
+            'account_code' => 'UNUSED', 'account_name' => 'Unused', 'particular' => 'Unused']);
+        $this->get('/?fiscal_period_id='.$period->id)->assertOk()->assertInertia(fn ($page) => $page
+            ->where('stats.totalAppropriation', fn ($v) => (float) $v === 2000.0)
+            ->where('stats.totalExpenditure', fn ($v) => (float) $v === 600.0)
+            ->where('stats.totalTransactions', 4)
+            ->has('accountTitles', 2)
+            ->missing('accountTitles.0.description')
+            ->where('categoryStats.0.expenditure', fn ($v) => (float) $v === 600.0)
+            ->has('recentDisbursements', 4)
+            ->missing('recentDisbursements.0.expense'));
+        $this->get('/?'.http_build_query(['fiscal_period_id' => $period->id,
+            'account_title_id' => $items[0]->particular_id, 'start_date' => '2026-09-01', 'end_date' => '2026-09-30']))
+            ->assertOk()->assertInertia(fn ($page) => $page
+                ->where('stats.totalAppropriation', fn ($v) => (float) $v === 1000.0)
+                ->where('stats.totalExpenditure', fn ($v) => (float) $v === 200.0)
+                ->where('stats.totalTransactions', 1));
+    }
+
     private function data(array $filters): array
     {
         $request = Request::create('/reports/generate', 'GET', $filters);

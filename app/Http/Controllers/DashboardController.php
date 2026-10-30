@@ -28,7 +28,6 @@ class DashboardController extends Controller
         $accountTitleId = $request->integer('account_title_id') ?: null;
 
         $itemsQuery = BudgetItem::query()
-            ->with(['budget:id,year,start_date,end_date', 'category:id,name', 'particular.department'])
             ->when($selectedBudget, fn ($query) => $query->where('budget_id', $selectedBudget->id))
             ->when(! $selectedBudget, fn ($query) => $query->whereRaw('1 = 0'))
             ->when($allocationMonth, fn ($query) => $query->whereDate('allocation_month', $allocationMonth))
@@ -39,9 +38,9 @@ class DashboardController extends Controller
                 fn ($particularQuery) => $particularQuery->where('department_id', $departmentId)
             ));
 
-        $budgetItems = $itemsQuery->get();
-        BudgetItem::hydrateDerivedTotals($budgetItems);
-        $totalAppropriation = (float) $budgetItems->sum('appropriation');
+        $appropriationByCategory = (clone $itemsQuery)->selectRaw('category_id, SUM(appropriation) as total')
+            ->groupBy('category_id')->pluck('total', 'category_id');
+        $totalAppropriation = (float) $appropriationByCategory->sum();
         $annualAppropriation = $selectedBudget
             ? (float) BudgetItem::where('budget_id', $selectedBudget->id)->sum('appropriation')
             : 0.0;
@@ -55,22 +54,25 @@ class DashboardController extends Controller
                 $departmentId,
                 $categoryId,
                 $accountTitleId
-            )->with('expense.budgetItem')
+            )
             : Disbursement::query()->whereRaw('1 = 0');
 
-        $postedDisbursements = $disbQuery->get();
-        $totalExpenditure = (float) $postedDisbursements->sum('amount');
+        $paymentStats = (clone $disbQuery)
+            ->join('expenses', 'disbursements.expense_id', '=', 'expenses.id')
+            ->join('budget_items', 'expenses.budget_item_id', '=', 'budget_items.id')
+            ->selectRaw('budget_items.category_id, SUM(disbursements.amount) as total, COUNT(*) as transactions')
+            ->groupBy('budget_items.category_id')->toBase()->get();
+        $expenditureByCategory = $paymentStats->pluck('total', 'category_id');
+        $totalExpenditure = (float) $expenditureByCategory->sum();
         $remainingBalance = $totalAppropriation - $totalExpenditure;
         $utilizationRate = $totalAppropriation > 0
             ? round(($totalExpenditure / $totalAppropriation) * 100, 2)
             : 0;
 
         $categories = BudgetCategory::all();
-        $categoryStats = $categories->map(function ($category) use ($budgetItems, $postedDisbursements) {
-            $appropriation = (float) $budgetItems->where('category_id', $category->id)->sum('appropriation');
-            $expenditure = (float) $postedDisbursements->filter(
-                fn ($disbursement) => (int) ($disbursement->expense?->budgetItem?->category_id ?? 0) === (int) $category->id
-            )->sum('amount');
+        $categoryStats = $categories->map(function ($category) use ($appropriationByCategory, $expenditureByCategory) {
+            $appropriation = (float) ($appropriationByCategory[$category->id] ?? 0);
+            $expenditure = (float) ($expenditureByCategory[$category->id] ?? 0);
 
             if ($appropriation <= 0 && $expenditure <= 0) {
                 return null;
@@ -176,7 +178,11 @@ class DashboardController extends Controller
             'availableYears' => $budgets->pluck('year')->all(),
             'departments' => Department::all(),
             'categories' => $categories,
-            'accountTitles' => BudgetParticular::all(),
+            'accountTitles' => BudgetParticular::query()
+                ->whereHas('budgetItems', fn ($query) => $query->where('budget_id', $selectedBudget?->id ?? 0))
+                ->when($departmentId, fn ($query) => $query->where('department_id', $departmentId))
+                ->when($categoryId, fn ($query) => $query->where('category_id', $categoryId))
+                ->orderBy('particular')->get(['id', 'particular']),
             'filters' => [
                 'fiscal_period_id' => $selectedBudget?->id,
                 'year' => $selectedBudget?->year,
@@ -194,7 +200,7 @@ class DashboardController extends Controller
                 'totalExpenditure' => $totalExpenditure,
                 'balance' => $remainingBalance,
                 'utilizationRate' => $utilizationRate,
-                'totalTransactions' => $postedDisbursements->count(),
+                'totalTransactions' => (int) $paymentStats->sum('transactions'),
                 'pendingExpenses' => $pendingExpenses,
                 'pendingDisbursements' => $pendingDisbursements,
             ],
