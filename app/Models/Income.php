@@ -15,6 +15,8 @@ class Income extends Model
     }
 
     protected $fillable = [
+        'budget_category_id',
+        'department_id',
         'student_count',
         'fee_per_student',
         'income_no',

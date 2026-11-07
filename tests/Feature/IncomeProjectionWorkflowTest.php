@@ -10,6 +10,35 @@ class IncomeProjectionWorkflowTest extends TestCase
 {
     use SafeRefreshDatabase;
 
+    public function test_budget_category_breakdown_preserves_uncategorized_records_and_combines_sources(): void
+    {
+        $this->actingAs(User::factory()->create(['role' => 'super_admin']));
+        $period = AnnualBudget::create(['year' => 2026, 'start_date' => '2026-08-01', 'end_date' => '2027-07-31']);
+        $category = \App\Models\BudgetCategory::create(['name' => 'Trust Fund']);
+        $center = \App\Models\Department::create(['name' => 'Finance', 'code' => 'FIN']);
+        foreach ([['Development', 1000, null], ['Research', 2000, null], ['Collected funds', 1500, 'OR-C']] as $i => [$source, $amount, $receipt]) {
+            Income::create(['income_no' => 'CATEGORY-'.$i, 'budget_category_id' => $category->id, 'department_id' => $center->id,
+                'source' => $source, 'description' => $source, 'amount' => $amount,
+                'receipt_no' => $receipt, 'date_encoded' => '2026-09-01']);
+        }
+        Income::create(['income_no' => 'LEGACY', 'source' => 'Old source', 'description' => 'Keep me', 'amount' => 400, 'date_encoded' => '2026-09-01']);
+        $response = $this->getJson('/income-breakdown?fiscal_period_id='.$period->id)->assertOk()->assertJsonCount(2, 'rows');
+        $row = collect($response->json('rows'))->firstWhere('source', 'Trust Fund');
+        $this->assertEquals(3000, $row['projected']);
+        $this->assertEquals(1500, $row['actual']);
+        $this->assertEquals(50, $row['collection_rate']);
+        $response->assertJsonPath('overall.projected', 3400);
+        $this->getJson('/income-breakdown?fiscal_period_id='.$period->id.'&department_id='.$center->id)
+            ->assertOk()->assertJsonCount(1, 'rows')->assertJsonPath('overall.projected', 3000)->assertJsonPath('overall.actual', 1500);
+        $this->getJson('/income-breakdown?department_id=999999')->assertUnprocessable();
+        $payload = ['budget_category_id' => $category->id, 'department_id' => $center->id, 'source' => 'New source', 'description' => 'Projection', 'amount' => 700, 'date_encoded' => '2026-09-01'];
+        $this->post('/income', $payload)->assertSessionHasNoErrors();
+        $income = Income::where('source', 'New source')->firstOrFail();
+        $this->assertEquals($category->id, $income->budget_category_id);
+        $this->put('/income/'.$income->id, array_replace($payload, ['budget_category_id' => 999999]))->assertSessionHasErrors('budget_category_id');
+        $this->assertDatabaseHas('incomes', ['income_no' => 'LEGACY', 'amount' => 400, 'description' => 'Keep me']);
+    }
+
     public function test_student_calculation_and_filtered_comparison_keep_receipts_separate(): void
     {
         $this->actingAs(User::factory()->create(['role' => 'super_admin']));

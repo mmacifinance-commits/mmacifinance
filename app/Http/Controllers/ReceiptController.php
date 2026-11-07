@@ -50,6 +50,8 @@ class ReceiptController extends Controller
                 'income_no' => $income->income_no,
                 'receipt_no' => $income->receipt_no,
                 'receipt_type' => $this->receiptType($income),
+                'budget_category_id' => $income->budget_category_id,
+                'department_id' => $income->department_id,
                 'source' => $income->source,
                 'description' => $income->description,
                 'amount' => (float) $income->amount,
@@ -73,6 +75,8 @@ class ReceiptController extends Controller
             ->all();
 
         return Inertia::render('Receipts/Index', [
+            'departments' => \App\Models\Department::orderBy('name')->get(['id', 'name']),
+            'budgetCategories' => \App\Models\BudgetCategory::orderBy('name')->get(['id', 'name']),
             'receipts' => $receipts,
             'fiscalPeriods' => $fiscalPeriods->options($periods),
             'filters' => [
@@ -215,6 +219,8 @@ class ReceiptController extends Controller
         $validated = $request->validate([
             'receipt_no' => ['required', 'string', 'max:100', Rule::unique('incomes', 'receipt_no')],
             'receipt_type' => ['required', 'string', 'max:100'],
+            'budget_category_id' => 'nullable|integer|exists:budget_categories,id',
+            'department_id' => 'nullable|integer|exists:departments,id',
             'source' => 'required|string|max:255',
             'description' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
@@ -241,6 +247,8 @@ class ReceiptController extends Controller
         $validated = $request->validate([
             'receipt_no' => ['required', 'string', 'max:100', Rule::unique('incomes', 'receipt_no')->ignore($receipt->id)],
             'receipt_type' => ['required', 'string', 'max:100'],
+            'budget_category_id' => 'nullable|integer|exists:budget_categories,id',
+            'department_id' => 'nullable|integer|exists:departments,id',
             'source' => 'required|string|max:255',
             'description' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',

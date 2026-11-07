@@ -88,6 +88,8 @@ class IncomeController extends Controller
         $remainingIncomeAfterExpense = $totalRevenue - $totalExpense;
 
         return Inertia::render('Income/Index', [
+            'departments' => \App\Models\Department::orderBy('name')->get(['id', 'name']),
+            'budgetCategories' => \App\Models\BudgetCategory::orderBy('name')->get(['id', 'name']),
             'incomeRecords' => $incomeRecords,
             'availableYears' => $periods->pluck('year')->all(),
             'fiscalPeriods' => $fiscalPeriods->options($periods),
@@ -116,6 +118,8 @@ class IncomeController extends Controller
         $validated = $request->validate([
             'receipt_no' => 'prohibited',
             'receipt_type' => 'prohibited',
+            'budget_category_id' => 'nullable|integer|exists:budget_categories,id',
+            'department_id' => 'nullable|integer|exists:departments,id',
             'source' => 'required|string|max:255',
             'description' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
@@ -151,6 +155,8 @@ class IncomeController extends Controller
         $validated = $request->validate([
             'receipt_no' => 'prohibited',
             'receipt_type' => 'prohibited',
+            'budget_category_id' => 'nullable|integer|exists:budget_categories,id',
+            'department_id' => 'nullable|integer|exists:departments,id',
             'source' => 'required|string|max:255',
             'description' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',

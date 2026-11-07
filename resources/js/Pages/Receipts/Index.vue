@@ -11,6 +11,8 @@ import { Head, router, useForm } from '@inertiajs/vue3'
 import { computed, onBeforeUnmount, ref } from 'vue'
 
 const props = defineProps({
+    budgetCategories: Array,
+    departments: Array,
     receipts: Object,
     fiscalPeriods: Array,
     filters: Object,
@@ -44,7 +46,7 @@ const importForm = useForm({ csv_file: null })
 const receiptForm = useForm({
     receipt_no: '',
     receipt_type: '',
-    source: '',
+    department_id: '', budget_category_id: '', source: '',
     description: '',
     amount: '',
     date_encoded: '',
@@ -112,6 +114,8 @@ function openEditReceipt(item) {
     receiptForm.clearErrors()
     receiptForm.receipt_no = item.receipt_no || ''
     receiptForm.receipt_type = item.receipt_type || ''
+    receiptForm.department_id = item.department_id ?? ''
+    receiptForm.budget_category_id = item.budget_category_id ?? ''
     receiptForm.source = item.source || ''
     receiptForm.description = item.description || ''
     receiptForm.amount = item.amount || ''
@@ -332,6 +336,8 @@ function deleteReceipt(item) {
 
     <Modal :show="showReceiptModal" :title="editingReceiptId ? 'Edit Receipt' : 'Add Receipt'" subtitle="Receipt number and receipt type are required." max-width="2xl" @close="showReceiptModal = false">
         <form @submit.prevent="saveReceipt" class="space-y-4">
+<div><label class="block text-sm font-medium text-gray-700 mb-1.5">Responsibility Center</label><select v-model="receiptForm.department_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"><option value="">Unassigned — select a center</option><option v-for="center in departments" :key="center.id" :value="center.id">{{ center.name }}</option></select><p v-if="receiptForm.errors.department_id" class="text-xs text-red-600">{{ receiptForm.errors.department_id }}</p></div>
+<div><label class="block text-sm font-medium text-gray-700 mb-1.5">Budget Category</label><select v-model="receiptForm.budget_category_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"><option value="">Uncategorized — select a category</option><option v-for="category in budgetCategories" :key="category.id" :value="category.id">{{ category.name }}</option></select><p v-if="receiptForm.errors.budget_category_id" class="text-xs text-red-600">{{ receiptForm.errors.budget_category_id }}</p></div>
             <SystemAlert v-if="receiptErrorMessages.length" tone="error" title="Please correct the following before saving" :messages="receiptErrorMessages" />
 
             <div class="grid gap-4 md:grid-cols-2">

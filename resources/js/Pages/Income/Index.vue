@@ -12,6 +12,8 @@ const page = usePage()
 const perms = computed(() => page.props.permissions || {})
 
 const props = defineProps({
+    budgetCategories: Array,
+    departments: Array,
     incomeRecords: Array,
     availableYears: Array,
     fiscalPeriods: Array,
@@ -24,7 +26,7 @@ const incomeItems = computed(() => props.incomeRecords?.data || props.incomeReco
 const showModal = ref(false)
 const showImportModal = ref(false)
 const editing = ref(null)
-const form = useForm({ source: '', description: '', amount: 0, student_count: null, fee_per_student: null, date_encoded: '', notes: '' })
+const form = useForm({ department_id: '', budget_category_id: '', source: '', description: '', amount: 0, student_count: null, fee_per_student: null, date_encoded: '', notes: '' })
 watch(() => [form.student_count, form.fee_per_student], ([count, fee]) => {
     if (count !== null && count !== '' && fee !== null && fee !== '') form.amount = Math.round(Number(count) * Number(fee) * 100) / 100
 })
@@ -71,6 +73,8 @@ function openCreate() {
 
 function openEdit(item) {
     form.clearErrors()
+    form.department_id = item.department_id ?? ''
+    form.budget_category_id = item.budget_category_id ?? ''
     form.source = item.source
     form.description = item.description
     form.student_count = item.student_count ?? null
@@ -192,6 +196,7 @@ function importCsv() {
                 </div>
                 <div class="min-w-0">
                     <p class="truncate text-sm font-semibold leading-5 text-gray-900">{{ item.source }}</p>
+                    <p class="text-xs text-gray-500">{{ budgetCategories?.find(category => category.id === item.budget_category_id)?.name || 'Uncategorized' }}</p>
                     <p class="truncate text-xs leading-5 text-gray-500">{{ item.description }}</p>
                 </div>
                 <div class="hidden text-sm text-gray-600 sm:block">{{ item.date_encoded?.slice?.(0, 10) }}</div>
@@ -224,6 +229,8 @@ function importCsv() {
         <form @submit.prevent="save">
             <SystemAlert v-if="formErrorMessages.length" class="mb-4" tone="error" title="The income record could not be saved" :messages="formErrorMessages" />
             <div class="grid gap-4 sm:grid-cols-2">
+                <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Responsibility Center</label><select v-model="form.department_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"><option value="">Unassigned — select a center</option><option v-for="center in departments" :key="center.id" :value="center.id">{{ center.name }}</option></select><p v-if="form.errors.department_id" class="text-xs text-red-600">{{ form.errors.department_id }}</p></div>
+<div><label class="block text-sm font-medium text-gray-700 mb-1.5">Budget Category</label><select :required="!editing" v-model="form.budget_category_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"><option value="">Uncategorized — select a category</option><option v-for="category in budgetCategories" :key="category.id" :value="category.id">{{ category.name }}</option></select><p v-if="form.errors.budget_category_id" class="text-xs text-red-600">{{ form.errors.budget_category_id }}</p></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Source</label><input v-model="form.source" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
                 <div class="sm:col-span-2 rounded-lg border bg-slate-50 p-3">
                     <p class="mb-2 text-sm font-semibold">Student-based projection (optional)</p>
