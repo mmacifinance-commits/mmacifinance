@@ -14,6 +14,23 @@ const search = ref('')
 const department = ref('')
 const departments = ref([])
 const rows = ref([])
+const selectedCategory = ref(null)
+const detailRows = ref([])
+const detailBusy = ref(false)
+const detailError = ref('')
+let detailRequestId = 0
+const appliedFilters = ref({})
+async function showCategory(row) {
+    selectedCategory.value = row; detailRows.value = []; detailError.value = ''; detailBusy.value = true
+    const id = ++detailRequestId
+    try {
+        const { data } = await axios.get('/income-breakdown', { params: { ...appliedFilters.value, details: 1, category_id: row.category_id ?? undefined } })
+        if (id === detailRequestId) detailRows.value = data.rows
+    } catch (e) { if (id === detailRequestId) detailError.value = 'Could not load category details. Please try again.' }
+    finally { if (id === detailRequestId) detailBusy.value = false }
+}
+function closeCategory() { selectedCategory.value = null; ++detailRequestId }
+const detailTotals = computed(() => detailRows.value.reduce((sum, row) => ({ projected: sum.projected + row.projected, actual: sum.actual + row.actual, difference: sum.difference + row.difference }), { projected: 0, actual: 0, difference: 0 }))
 const busy = ref(false)
 const error = ref('')
 const overall = ref({})
@@ -35,11 +52,13 @@ const visibleRows = computed(() => rows.value.filter(row => row.source.toLowerCa
 const totals = computed(() => visibleRows.value.reduce((sum, row) => ({ projected: sum.projected + row.projected, actual: sum.actual + row.actual, difference: sum.difference + row.difference }), { projected: 0, actual: 0, difference: 0 }))
 const money = value => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(value)
 async function load() {
+    closeCategory()
     const id = ++requestId
     busy.value = true; error.value = ''; rows.value = []; overall.value = {}
     try {
-        const { data } = await axios.get('/income-breakdown', { params: { department_id: department.value || undefined, fiscal_period_id: fiscal.value || undefined, allocation_month: month.value || undefined, start_date: start.value || undefined, end_date: end.value || undefined } })
-        if (id === requestId) { departments.value = data.departments; rows.value = data.rows; overall.value = data.overall; quotaAmount.value = data.overall.quota ?? '' }
+        const params = { department_id: department.value || undefined, fiscal_period_id: fiscal.value || undefined, allocation_month: month.value || undefined, start_date: start.value || undefined, end_date: end.value || undefined }
+        const { data } = await axios.get('/income-breakdown', { params })
+        if (id === requestId) { appliedFilters.value = params; departments.value = data.departments; rows.value = data.rows; overall.value = data.overall; quotaAmount.value = data.overall.quota ?? '' }
     } catch (e) {
         if (id === requestId) error.value = Object.values(e.response?.data?.errors || {}).flat().join(' ') || 'Could not load the breakdown. Please try again.'
     } finally { if (id === requestId) busy.value = false }
@@ -80,10 +99,22 @@ function reset() { department.value = '';  month.value = ''; start.value = ''; e
         <p v-if="busy" class="py-8 text-center">Calculating breakdown...</p>
         <div v-else class="overflow-x-auto">
             <table class="w-full text-sm"><thead class="bg-navy-dark text-white"><tr><th class="p-3 text-left">Budget Category</th><th class="p-3 text-right">Projected Income</th><th class="p-3 text-right">Actual Receipts</th><th class="p-3 text-right">Difference</th><th class="p-3 text-right">Collection Rate</th></tr></thead>
-                <tbody><tr v-for="row in visibleRows" :key="row.source" class="border-b"><td class="p-3">{{ row.source }}</td><td class="p-3 text-right whitespace-nowrap">{{ money(row.projected) }}</td><td class="p-3 text-right whitespace-nowrap">{{ money(row.actual) }}</td><td class="p-3 text-right whitespace-nowrap">{{ money(row.difference) }}</td><td class="p-3 text-right">{{ row.collection_rate === null ? '—' : row.collection_rate.toFixed(2) + '%' }}</td></tr><tr v-if="!visibleRows.length"><td colspan="5" class="p-6 text-center">No matching records.</td></tr></tbody>
+                <tbody><tr v-for="row in visibleRows" :key="row.source" class="border-b"><td class="p-3"><button type="button" @click="showCategory(row)" class="text-left font-semibold text-indigo-700 underline hover:text-indigo-900" :aria-label="`View breakdown for ${row.source}`">{{ row.source }}</button></td><td class="p-3 text-right whitespace-nowrap">{{ money(row.projected) }}</td><td class="p-3 text-right whitespace-nowrap">{{ money(row.actual) }}</td><td class="p-3 text-right whitespace-nowrap">{{ money(row.difference) }}</td><td class="p-3 text-right">{{ row.collection_rate === null ? '—' : row.collection_rate.toFixed(2) + '%' }}</td></tr><tr v-if="!visibleRows.length"><td colspan="5" class="p-6 text-center">No matching records.</td></tr></tbody>
                 <tfoot class="bg-slate-100 font-bold"><tr><td class="p-3">{{ search ? 'Filtered Total' : 'Total' }}</td><td class="p-3 text-right">{{ money(totals.projected) }}</td><td class="p-3 text-right">{{ money(totals.actual) }}</td><td class="p-3 text-right">{{ money(totals.difference) }}</td><td class="p-3 text-right">{{ collectionRate === null ? '—' : collectionRate.toFixed(2) + '%' }}</td></tr></tfoot>
             </table>
         </div>
+
+        <section v-if="selectedCategory" class="mt-5 rounded-lg border border-indigo-200 p-4" aria-live="polite">
+            <div class="mb-3 flex items-center justify-between gap-3"><h3 class="font-semibold">{{ selectedCategory.source }}: Breakdown by Income Source</h3><button type="button" @click="closeCategory" class="text-sm text-indigo-700 underline">Close breakdown</button></div>
+            <p class="mb-3 text-xs text-gray-500">Uses the applied fiscal year, date and responsibility center filters. Sources are matched by name, ignoring case and surrounding spaces.</p>
+            <p v-if="detailBusy">Loading category breakdown...</p>
+            <div v-else-if="detailError" role="alert">{{ detailError }} <button type="button" @click="showCategory(selectedCategory)" class="underline">Retry</button></div>
+            <div v-else class="overflow-x-auto"><table class="w-full text-sm">
+                <thead class="bg-slate-100"><tr><th class="p-3 text-left">Income Source</th><th class="p-3 text-right">Projected Income</th><th class="p-3 text-right">Actual Receipts</th><th class="p-3 text-right">Difference</th><th class="p-3 text-right">Collection Rate</th></tr></thead>
+                <tbody><tr v-for="row in detailRows" :key="row.source" class="border-b"><td class="p-3">{{ row.source || 'Unnamed source' }}</td><td class="p-3 text-right">{{ money(row.projected) }}</td><td class="p-3 text-right">{{ money(row.actual) }}</td><td class="p-3 text-right">{{ money(row.difference) }}</td><td class="p-3 text-right">{{ row.collection_rate == null ? 'N/A' : row.collection_rate.toFixed(2) + '%' }}</td></tr><tr v-if="!detailRows.length"><td colspan="5" class="p-3 text-center">No records for this category and filter selection.</td></tr></tbody>
+                <tfoot class="bg-slate-100 font-semibold"><tr><td class="p-3">Category Total</td><td class="p-3 text-right">{{ money(detailTotals.projected) }}</td><td class="p-3 text-right">{{ money(detailTotals.actual) }}</td><td class="p-3 text-right">{{ money(detailTotals.difference) }}</td><td class="p-3 text-right">{{ detailTotals.projected > 0 ? (detailTotals.actual / detailTotals.projected * 100).toFixed(2) + '%' : 'N/A' }}</td></tr></tfoot>
+            </table></div>
+        </section>
         <div v-if="$page.props.permissions?.isSuperAdmin" class="mt-4 flex gap-4 text-sm font-semibold text-indigo-700"><Link :href="editLink('/income')">Edit projected income and student calculations</Link><Link :href="editLink('/receipts')">Edit actual receipts</Link></div>
         <p class="mt-3 text-xs text-slate-500">Collection rate = actual receipts ÷ projected income. Overall collection rate includes all categories for the selected dates and responsibility center and does not change when searching. Quota progress = total receipts ÷ the single fiscal-year quota. Date filters do not change the annual quota. Records without an assigned budget category appear under Uncategorized. Difference means projected less received, not unpaid student balances.</p>
     </Modal>

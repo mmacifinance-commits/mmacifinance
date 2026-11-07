@@ -59,6 +59,16 @@ class IncomeProjectionWorkflowTest extends TestCase
         $this->assertEquals(1500, $row['actual']);
         $this->assertEquals(50, $row['collection_rate']);
         $response->assertJsonPath('overall.projected', 3400);
+        $details = $this->getJson('/income-breakdown?details=1&category_id='.$category->id.'&fiscal_period_id='.$period->id.'&department_id='.$center->id)
+            ->assertOk()->assertJsonCount(3, 'rows');
+        $this->assertEquals(3000, collect($details->json('rows'))->sum('projected'));
+        $this->assertEquals(1500, collect($details->json('rows'))->sum('actual'));
+        $this->getJson('/income-breakdown?details=1&fiscal_period_id='.$period->id)->assertOk()
+            ->assertJsonCount(1, 'rows')->assertJsonPath('rows.0.source', 'Old source')->assertJsonPath('rows.0.projected', 400);
+        $this->getJson('/income-breakdown?details=1&category_id='.$category->id.'&allocation_month=2026-10-01&fiscal_period_id='.$period->id)
+            ->assertOk()->assertJsonCount(0, 'rows');
+        $this->getJson('/income-breakdown?details=1&category_id=999999')->assertUnprocessable();
+
         $this->getJson('/income-breakdown?fiscal_period_id='.$period->id.'&department_id='.$center->id)
             ->assertOk()->assertJsonCount(1, 'rows')->assertJsonPath('overall.projected', 3000)->assertJsonPath('overall.actual', 1500);
         $this->getJson('/income-breakdown?department_id=999999')->assertUnprocessable();

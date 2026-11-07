@@ -1,7 +1,6 @@
 <script setup>
 import { summaryMessages } from '@/support/validationMessages'
 import AppLayout from '@/Layouts/AppLayout.vue'
-import IncomeBreakdown from '@/Components/IncomeBreakdown.vue'
 import BulkDeleteRecords from '@/Components/BulkDeleteRecords.vue'
 import Modal from '@/Components/Modal.vue'
 import SystemAlert from '@/Components/SystemAlert.vue'
@@ -196,7 +195,6 @@ function deleteReceipt(item) {
         </div>
     </div>
 
-    <IncomeBreakdown :periods="fiscalPeriods" :filters="filters" class="mb-4 font-semibold text-indigo-700">View receipts and projected income breakdown</IncomeBreakdown>
     <div class="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div class="h-1 bg-navy-dark"></div>
