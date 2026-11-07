@@ -57,6 +57,8 @@ class ReceiptController extends Controller
                 'amount' => (float) $income->amount,
                 'date_encoded' => $income->date_encoded?->toDateString(),
                 'notes' => $income->notes,
+                        $income->budgetCategory?->name,
+                        $income->department?->name,
                 'updated_at' => $income->updated_at?->toISOString(),
                 'audit_trails' => $income->auditTrails,
             ]);
@@ -112,9 +114,9 @@ class ReceiptController extends Controller
         $fileName = 'receipts-export-'.now()->format('Y-m-d_His');
         $query = $this->receiptQuery($selectedPeriod, $search, $term);
 
-        $rows = [['income_no', 'receipt_no', 'receipt_type', 'source', 'description', 'amount', 'date_encoded', 'notes']];
+        $rows = [['income_no', 'receipt_no', 'receipt_type', 'source', 'description', 'amount', 'date_encoded', 'notes', 'budget_category', 'responsibility_center']];
 
-        $query->orderBy('date_encoded')->orderBy('id')->chunk(200, function ($rowsChunk) use (&$rows) {
+        $query->with(['budgetCategory', 'department'])->orderBy('date_encoded')->orderBy('id')->chunk(200, function ($rowsChunk) use (&$rows) {
             foreach ($rowsChunk as $income) {
                 $rows[] = [
                     $income->income_no,
@@ -155,6 +157,16 @@ class ReceiptController extends Controller
         }
 
         $index = array_flip($header);
+        foreach ($rows as $row) {
+            if (!count(array_filter($row, fn ($value) => trim((string) $value) !== ''))) continue;
+            $data = [];
+            foreach ($header as $i => $column) $data[$column] = $row[$i] ?? null;
+            \App\Support\IncomeSpreadsheetFields::attributes($data, false);
+            $existing = filled($data['receipt_no'] ?? null) ? Income::where('receipt_no', trim($data['receipt_no']))->first() : null;
+            if ($existing) $lock->ensureDateOpen($existing->date_encoded, 'csv_file');
+            if (filled($data['date_encoded'] ?? null)) $lock->ensureDateOpen($data['date_encoded'], 'csv_file');
+        }
+
         $created = 0;
         $updated = 0;
         $skipped = [];
@@ -183,6 +195,8 @@ class ReceiptController extends Controller
             $lock->ensureDateOpen($dateEncoded, 'csv_file');
 
             $income = Income::firstOrNew(['receipt_no' => $receiptNo]);
+            $data = [];
+            foreach ($header as $i => $column) $data[$column] = $row[$i] ?? null;
             $isNew = ! $income->exists;
             $income->receipt_type = $receiptType;
             $income->source = $source;
@@ -194,6 +208,7 @@ class ReceiptController extends Controller
                 $income->income_no = app(\App\Services\ReferenceNumberService::class)->next('incomes', 'income_no', 'INC-'.date('Y').'-');
                 $income->created_by_id = auth()->id();
             }
+            $income->fill(\App\Support\IncomeSpreadsheetFields::attributes($data, false));
             $income->save();
             AuditTrail::log($income, 'imported', auth()->user(), $isNew ? 'Receipt created from CSV/Excel.' : 'Receipt updated from CSV/Excel.');
 

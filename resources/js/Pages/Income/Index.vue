@@ -229,8 +229,8 @@ function importCsv() {
         <form @submit.prevent="save">
             <SystemAlert v-if="formErrorMessages.length" class="mb-4" tone="error" title="The income record could not be saved" :messages="formErrorMessages" />
             <div class="grid gap-4 sm:grid-cols-2">
-                <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Responsibility Center</label><select v-model="form.department_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"><option value="">Unassigned — select a center</option><option v-for="center in departments" :key="center.id" :value="center.id">{{ center.name }}</option></select><p v-if="form.errors.department_id" class="text-xs text-red-600">{{ form.errors.department_id }}</p></div>
-<div><label class="block text-sm font-medium text-gray-700 mb-1.5">Budget Category</label><select :required="!editing" v-model="form.budget_category_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"><option value="">Uncategorized — select a category</option><option v-for="category in budgetCategories" :key="category.id" :value="category.id">{{ category.name }}</option></select><p v-if="form.errors.budget_category_id" class="text-xs text-red-600">{{ form.errors.budget_category_id }}</p></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Responsibility Center</label><select v-model="form.department_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"><option value="">Select center</option><option v-for="center in departments" :key="center.id" :value="center.id">{{ center.name }}</option></select><p v-if="form.errors.department_id" class="text-xs text-red-600">{{ form.errors.department_id }}</p></div>
+<div><label class="block text-sm font-medium text-gray-700 mb-1.5">Budget Category</label><select :required="!editing" v-model="form.budget_category_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"><option value="">Select category</option><option v-for="category in budgetCategories" :key="category.id" :value="category.id">{{ category.name }}</option></select><p v-if="form.errors.budget_category_id" class="text-xs text-red-600">{{ form.errors.budget_category_id }}</p></div>
                 <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Source</label><input v-model="form.source" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
                 <div class="sm:col-span-2 rounded-lg border bg-slate-50 p-3">
                     <p class="mb-2 text-sm font-semibold">Student-based projection (optional)</p>
@@ -250,6 +250,7 @@ function importCsv() {
     </Modal>
 
     <Modal :show="showImportModal" title="Import Income XLSX" subtitle="Preview the file before saving income records." max-width="4xl" @close="showImportModal = false">
+        <p class="mb-3 text-sm text-gray-600">Optional columns: budget_category (existing category name), responsibility_center (existing center name or code), student_count, fee_per_student. Omitted columns preserve existing values; blank cells clear them. Export first to get the complete spreadsheet format.</p>
         <ImportPreviewPanel
             module="income"
             :form="importForm"

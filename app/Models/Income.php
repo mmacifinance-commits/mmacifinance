@@ -37,6 +37,16 @@ class Income extends Model
         'date_encoded' => 'date',
     ];
 
+    public function budgetCategory(): BelongsTo
+    {
+        return $this->belongsTo(BudgetCategory::class);
+    }
+
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class);
+    }
+
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_id');

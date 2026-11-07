@@ -154,15 +154,31 @@ class ImportPreviewController extends Controller
 
     private function incomeRow(array $row, int $line): array
     {
-        $key = implode('|', [$row['source'] ?? '', $row['description'] ?? '', $row['date_encoded'] ?? '']);
+        try {
+            $attributes = \App\Support\IncomeSpreadsheetFields::attributes($row, true);
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            return ['valid' => false, 'message' => implode(' ', \Illuminate\Support\Arr::flatten($exception->errors()))];
+        }
+
+        $key = $row['income_no'] ?? implode('|', [$row['source'] ?? '', $row['description'] ?? '', $row['date_encoded'] ?? '', $attributes['budget_category_id'] ?? '', $attributes['department_id'] ?? '']);
         $check = $this->moneyDateRow($row, $line, ['source', 'description', 'date_encoded'], $key);
         if (! $check['valid']) return $check;
-        $exists = Income::projected()->where('source', trim((string) $row['source']))->where('description', trim((string) $row['description']))->whereDate('date_encoded', $row['date_encoded'])->exists();
-        return $this->withAction($check, $exists, 'projected income record');
+        try {
+            $exists = \App\Support\IncomeSpreadsheetFields::findProjected($row) !== null;
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            return ['valid' => false, 'key' => $key, 'message' => implode(' ', \Illuminate\Support\Arr::flatten($exception->errors()))];
+        }
+        return $this->withAction($check, $exists, 'projected income record') + ['amount' => $attributes['amount'] ?? $row['amount']];
     }
 
     private function receiptRow(array $row, int $line): array
     {
+        try {
+            $attributes = \App\Support\IncomeSpreadsheetFields::attributes($row, false);
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            return ['valid' => false, 'message' => implode(' ', \Illuminate\Support\Arr::flatten($exception->errors()))];
+        }
+
         $check = $this->moneyDateRow($row, $line, ['receipt_no', 'receipt_type', 'source', 'description', 'date_encoded'], $row['receipt_no'] ?? null);
         if (! $check['valid']) return $check;
         return $this->withAction($check, Income::where('receipt_no', trim((string) $row['receipt_no']))->exists(), 'receipt');

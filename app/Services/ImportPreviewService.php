@@ -55,7 +55,7 @@ class ImportPreviewService
             if (($result['valid'] ?? false)) {
                 $validCount++;
                 ($result['action'] ?? 'new') === 'update' ? $updateCount++ : $newCount++;
-                $totalAmount += (float) ($data['amount'] ?? $data['appropriation'] ?? 0);
+                $totalAmount += (float) ($result['amount'] ?? $data['amount'] ?? $data['appropriation'] ?? 0);
                 if (count($valid) < $limit) {
                     $valid[] = [
                         'line' => $line,

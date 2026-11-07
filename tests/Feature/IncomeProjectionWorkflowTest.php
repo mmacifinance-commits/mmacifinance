@@ -10,6 +10,37 @@ class IncomeProjectionWorkflowTest extends TestCase
 {
     use SafeRefreshDatabase;
 
+    public function test_spreadsheet_fields_preserve_classification_and_calculations(): void
+    {
+        $this->actingAs(User::factory()->create(['role' => 'super_admin']));
+        $category = \App\Models\BudgetCategory::create(['name' => 'Tuition']);
+        $center = \App\Models\Department::create(['name' => 'College', 'code' => 'COL']);
+        $csv = "source,description,amount,date_encoded,notes,budget_category,responsibility_center,student_count,fee_per_student\nTuition,Projected,1,2026-09-01,,Tuition,COL,10,500\n";
+        $upload = fn ($text) => \Illuminate\Http\UploadedFile::fake()->createWithContent('income.csv', $text);
+        $this->post('/imports/income/preview', ['csv_file' => $upload($csv)])->assertOk()->assertJsonPath('total_amount', 5000);
+        $this->post('/income/import-csv', ['csv_file' => $upload($csv)])->assertSessionHasNoErrors();
+        $income = Income::projected()->firstOrFail();
+        $this->assertEquals($category->id, $income->budget_category_id);
+        $this->assertEquals($center->id, $income->department_id);
+        $this->assertEquals(5000, $income->amount);
+        $export = $this->get('/income/export-csv')->assertDownload();
+        [$headers, $exportRows] = \App\Support\SpreadsheetImportExport::readRows(new \Illuminate\Http\UploadedFile(
+            $export->baseResponse->getFile()->getPathname(), 'income.xlsx', null, null, true));
+        $exported = array_combine($headers, $exportRows[0]);
+        $this->assertEquals('Tuition', $exported['budget_category']);
+        $this->assertEquals('College', $exported['responsibility_center']);
+        $this->assertEquals(10, $exported['student_count']);
+
+        $old = "source,description,amount,date_encoded,notes\nTuition,Projected,1,2026-09-01,Updated\n";
+        $this->post('/income/import-csv', ['csv_file' => $upload($old)])->assertSessionHasNoErrors();
+        $this->assertEquals(10, $income->fresh()->student_count);
+        $this->assertEquals(5000, $income->fresh()->amount);
+        $this->assertEquals($category->id, $income->fresh()->budget_category_id);
+        $bad = str_replace(',Tuition,COL,', ',Unknown,COL,', $csv);
+        $this->post('/imports/income/preview', ['csv_file' => $upload($bad)])->assertOk()->assertJsonPath('invalid_count', 1);
+        $this->post('/income/import-csv', ['csv_file' => $upload($bad)])->assertSessionHasErrors('csv_file');
+    }
+
     public function test_budget_category_breakdown_preserves_uncategorized_records_and_combines_sources(): void
     {
         $this->actingAs(User::factory()->create(['role' => 'super_admin']));

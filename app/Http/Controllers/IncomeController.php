@@ -207,10 +207,10 @@ class IncomeController extends Controller
     public function exportCsv()
     {
         $fileName = 'income-export-'.now()->format('Y-m-d_His');
-        $rows = [['income_no', 'source', 'description', 'amount', 'date_encoded', 'notes']];
+        $rows = [['income_no', 'source', 'description', 'amount', 'date_encoded', 'notes', 'budget_category', 'responsibility_center', 'student_count', 'fee_per_student']];
 
         Income::projected()
-            ->orderBy('date_encoded')
+            ->with(['budgetCategory', 'department'])->orderBy('date_encoded')
             ->orderBy('id')
             ->chunk(200, function ($rowsChunk) use (&$rows) {
                 foreach ($rowsChunk as $income) {
@@ -221,6 +221,10 @@ class IncomeController extends Controller
                         $income->amount,
                         optional($income->date_encoded)->format('Y-m-d'),
                         $income->notes,
+                        $income->budgetCategory?->name,
+                        $income->department?->name,
+                        $income->student_count,
+                        $income->fee_per_student,
                     ];
                 }
             });
@@ -252,6 +256,18 @@ class IncomeController extends Controller
 
         $index = array_flip($header);
         foreach ($rows as $row) {
+            if (!count(array_filter($row, fn ($value) => trim((string) $value) !== ''))) continue;
+            $data = [];
+            foreach ($header as $i => $column) $data[$column] = $row[$i] ?? null;
+            \App\Support\IncomeSpreadsheetFields::attributes($data, true);
+            if (filled($data['date_encoded'] ?? null)) {
+                $existing = \App\Support\IncomeSpreadsheetFields::findProjected($data);
+                if ($existing) $lock->ensureDateOpen($existing->date_encoded, 'csv_file');
+                $lock->ensureDateOpen($data['date_encoded'], 'csv_file');
+            }
+        }
+
+        foreach ($rows as $row) {
             if (filled($row[$index['receipt_no'] ?? -1] ?? null) || filled($row[$index['receipt_type'] ?? -1] ?? null)) {
                 return back()->withErrors(['csv_file' => 'Income is projected income. Import records with receipt details from the Receipts page. No rows were saved.']);
             }
@@ -276,24 +292,27 @@ class IncomeController extends Controller
 
             $lock->ensureDateOpen($dateEncoded, 'csv_file');
 
-            $income = Income::projected()
-                ->where('source', $source)
-                ->where('description', $description)
-                ->whereDate('date_encoded', $dateEncoded)
-                ->first() ?? new Income;
+            $data = [];
+            foreach ($header as $i => $column) $data[$column] = $row[$i] ?? null;
+            $income = \App\Support\IncomeSpreadsheetFields::findProjected($data) ?? new Income;
+            if ($income->exists) $lock->ensureDateOpen($income->date_encoded, 'csv_file');
 
+            $data = [];
+            foreach ($header as $i => $column) $data[$column] = $row[$i] ?? null;
             $isNew = ! $income->exists;
             $income->source = $source;
             $income->description = $description;
             $income->amount = $amount;
-            $income->student_count = null;
-            $income->fee_per_student = null;
+            if (!array_key_exists('student_count', $data) && !array_key_exists('fee_per_student', $data) && $income->student_count !== null && $income->fee_per_student !== null) {
+                $income->amount = round($income->student_count * (float) $income->fee_per_student, 2);
+            }
             $income->date_encoded = $dateEncoded;
             $income->notes = $notes !== '' ? $notes : null;
             if ($isNew) {
                 $income->income_no = app(\App\Services\ReferenceNumberService::class)->next('incomes', 'income_no', 'INC-'.date('Y').'-');
                 $income->created_by_id = auth()->id();
             }
+            $income->fill(\App\Support\IncomeSpreadsheetFields::attributes($data, true));
             $income->save();
             AuditTrail::log($income, 'imported', auth()->user(), $isNew ? 'Income record created from CSV/Excel.' : 'Income record updated from CSV/Excel.');
 

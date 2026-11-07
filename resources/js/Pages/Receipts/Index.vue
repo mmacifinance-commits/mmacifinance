@@ -242,7 +242,7 @@ function deleteReceipt(item) {
 
     <details v-if="summary?.byType?.length" class="mb-4 rounded-lg border border-gray-200 bg-white shadow-sm">
         <summary class="cursor-pointer px-4 py-2 text-sm font-semibold text-navy-dark">
-            Receipt Summary by Type <span class="font-normal text-gray-500">({{ summary.byType.length }}) — expand to view</span>
+            Receipt Summary by Type <span class="font-normal text-gray-500">({{ summary.byType.length }}) â€” expand to view</span>
         </summary>
         <div class="max-h-48 overflow-y-auto border-t border-gray-100 p-3">
             <div class="flex flex-wrap gap-2">
@@ -257,7 +257,7 @@ function deleteReceipt(item) {
     <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <div class="bg-navy-dark px-5 py-3">
             <h3 class="text-sm font-bold uppercase tracking-wider text-white">Cash Receipt Records</h3>
-            <p class="mt-1 text-xs text-slate-200">Showing {{ receipts?.from || 0 }}–{{ receipts?.to || 0 }} of {{ receipts?.total || 0 }} matching records</p>
+            <p class="mt-1 text-xs text-slate-200">Showing {{ receipts?.from || 0 }}â€“{{ receipts?.to || 0 }} of {{ receipts?.total || 0 }} matching records</p>
         </div>
         <div class="divide-y md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_auto] md:gap-x-4">
             <div class="hidden items-center gap-4 px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-gray-500 md:col-span-6 md:grid md:grid-cols-subgrid">
@@ -322,7 +322,7 @@ function deleteReceipt(item) {
                     <dl class="mt-2 space-y-1 text-xs">
                         <div v-for="(value, field) in log.metadata.changes" :key="field" class="grid grid-cols-2 gap-3">
                             <dt class="capitalize text-gray-500">{{ field.replaceAll('_', ' ') }}</dt>
-                            <dd class="break-words text-gray-800">{{ value ?? '—' }}</dd>
+                            <dd class="break-words text-gray-800">{{ value ?? 'â€”' }}</dd>
                         </div>
                     </dl>
                 </details>
@@ -336,8 +336,8 @@ function deleteReceipt(item) {
 
     <Modal :show="showReceiptModal" :title="editingReceiptId ? 'Edit Receipt' : 'Add Receipt'" subtitle="Receipt number and receipt type are required." max-width="2xl" @close="showReceiptModal = false">
         <form @submit.prevent="saveReceipt" class="space-y-4">
-<div><label class="block text-sm font-medium text-gray-700 mb-1.5">Responsibility Center</label><select v-model="receiptForm.department_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"><option value="">Unassigned � select a center</option><option v-for="center in departments" :key="center.id" :value="center.id">{{ center.name }}</option></select><p v-if="receiptForm.errors.department_id" class="text-xs text-red-600">{{ receiptForm.errors.department_id }}</p></div>
-<div><label class="block text-sm font-medium text-gray-700 mb-1.5">Budget Category</label><select v-model="receiptForm.budget_category_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"><option value="">Uncategorized � select a category</option><option v-for="category in budgetCategories" :key="category.id" :value="category.id">{{ category.name }}</option></select><p v-if="receiptForm.errors.budget_category_id" class="text-xs text-red-600">{{ receiptForm.errors.budget_category_id }}</p></div>
+<div><label class="block text-sm font-medium text-gray-700 mb-1.5">Responsibility Center</label><select v-model="receiptForm.department_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"><option value="">Select center</option><option v-for="center in departments" :key="center.id" :value="center.id">{{ center.name }}</option></select><p v-if="receiptForm.errors.department_id" class="text-xs text-red-600">{{ receiptForm.errors.department_id }}</p></div>
+<div><label class="block text-sm font-medium text-gray-700 mb-1.5">Budget Category</label><select v-model="receiptForm.budget_category_id" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"><option value="">Select category</option><option v-for="category in budgetCategories" :key="category.id" :value="category.id">{{ category.name }}</option></select><p v-if="receiptForm.errors.budget_category_id" class="text-xs text-red-600">{{ receiptForm.errors.budget_category_id }}</p></div>
             <SystemAlert v-if="receiptErrorMessages.length" tone="error" title="Please correct the following before saving" :messages="receiptErrorMessages" />
 
             <div class="grid gap-4 md:grid-cols-2">
@@ -402,6 +402,7 @@ function deleteReceipt(item) {
     </Modal>
 
     <Modal :show="showImportModal" title="Import Receipts XLSX" subtitle="Preview the file before saving cash receipts." max-width="4xl" @close="showImportModal = false">
+        <p class="mb-3 text-sm text-gray-600">Optional columns: budget_category (existing category name), responsibility_center (existing center name or code). Omitted columns preserve existing values; blank cells clear them. Export first to get the complete spreadsheet format.</p>
         <ImportPreviewPanel
             module="receipts"
             :form="importForm"

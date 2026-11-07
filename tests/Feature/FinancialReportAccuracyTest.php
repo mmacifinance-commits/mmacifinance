@@ -110,12 +110,14 @@ class FinancialReportAccuracyTest extends TestCase
     {
         [$period] = $this->fixture();
         $report = $this->data(['report_type' => 'income_vs_receipts', 'fiscal_period_id' => $period->id, 'start_date' => '2026-09-01', 'end_date' => '2026-09-30']);
-        $this->assertCount(3, $report['sections']);
+        $this->assertCount(4, $report['sections']);
         $this->assertSame(75.0, $report['totals']['income']);
         $this->assertSame(500.0, $report['totals']['receipts']);
         $this->assertSame([['Projected Income', 75.0], ['Actual Receipts', 500.0], ['Difference (Projected Income less Receipts)', -425.0]], $report['sections'][0]['rows']);
         $this->assertCount(1, $report['sections'][1]['rows']);
         $this->assertCount(1, $report['sections'][2]['rows']);
+        $this->assertCount(1, $report['sections'][3]['rows']);
+        $this->assertSame(['Uncategorized', 75.0, 500.0, -425.0, 666.67], $report['sections'][1]['rows'][0]);
     }
 
     public function test_ledger_carries_prior_payments_into_opening_and_running_budget_balance(): void
