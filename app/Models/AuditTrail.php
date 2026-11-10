@@ -21,10 +21,14 @@ class AuditTrail extends Model
 
     public function getRecordLabelAttribute(): string
     {
-        if (!$this->auditable) return 'System';
+        if (!$this->auditable) {
+            $type = preg_replace('/(?<!^)([A-Z])/', ' $1', class_basename((string) $this->auditable_type));
+            return trim($type ?: 'System').' #'.$this->auditable_id;
+        }
         $record = $this->auditable;
-        return $record->ref_no ?? $record->receipt_no ?? $record->description
-            ?? $record->name ?? ($this->auditable_type.' #'.$this->auditable_id);
+        $label = $record->ref_no ?? $record->receipt_no ?? $record->description ?? $record->name;
+        $type = preg_replace('/(?<!^)([A-Z])/', ' $1', class_basename($this->auditable_type));
+        return $label ? trim($type).' — '.$label : trim($type).' #'.$this->auditable_id;
     }
 
     protected $fillable = [
