@@ -51,6 +51,7 @@ function getActiveSection() {
     if (p.startsWith('/expenses')) return 'expenditures'
     if (p.startsWith('/disbursements')) return 'disbursements'
     if (p.startsWith('/reports')) return 'reports'
+    if (p.startsWith('/login-history')) return 'login-history'
     return 'dashboard'
 }
 
