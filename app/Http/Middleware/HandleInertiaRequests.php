@@ -36,6 +36,7 @@ class HandleInertiaRequests extends Middleware
                 'canManageDisbursements' => $user->canManageDisbursements(),
                 'canManageIncome' => $user->canManageIncome(),
                 'isSuperAdmin' => $user->isSuperAdmin(),
+                'canViewExpenses' => $user->canViewExpenses(),
             ] : [],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),

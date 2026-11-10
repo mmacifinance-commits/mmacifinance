@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\User;
+use App\Models\LoginHistory;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -90,6 +91,14 @@ class TwoFactorController extends Controller
         // Login user
         $remember = $request->session()->get('2fa_remember', false);
         Auth::login($user, $remember);
+        LoginHistory::create([
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'role' => $user->role_label,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'logged_in_at' => now(),
+        ]);
         $request->session()->put('login_web_user_id', $user->id);
 
         // Clear 2FA data from session and DB after login is established

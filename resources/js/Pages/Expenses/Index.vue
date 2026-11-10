@@ -49,6 +49,12 @@ const expenseItems = computed(() => {
     const source = paginatedExpenses.value
     return Array.isArray(source) ? source : (source.data || [])
 })
+function limitStatus(item) {
+    const rate = Number(item?.budget_item?.utilization_rate || 0)
+    if (rate >= 100) return 'LIMIT REACHED'
+    if (rate >= 80) return 'ALMOST AT LIMIT'
+    return 'WITHIN LIMIT'
+}
 const expenseTotalRecords = computed(() => Array.isArray(paginatedExpenses.value) ? expenseItems.value.length : (paginatedExpenses.value.total || 0))
 const expenseFirstRecord = computed(() => Array.isArray(paginatedExpenses.value) ? (expenseItems.value.length ? 1 : 0) : (paginatedExpenses.value.from || 0))
 const expenseLastRecord = computed(() => Array.isArray(paginatedExpenses.value) ? expenseItems.value.length : (paginatedExpenses.value.to || 0))
@@ -484,6 +490,7 @@ function splitDate(d) {
                         <th class="px-5 py-4 text-right font-bold text-xs tracking-wide">Balance</th>
                         <th class="px-5 py-4 text-left font-bold text-xs tracking-wide">Date Encoded</th>
                         <th class="px-5 py-4 text-center font-bold text-xs tracking-wide">Status</th>
+                        <th class="px-5 py-4 text-center font-bold text-xs tracking-wide">Limit Alert</th>
                         <th class="px-5 py-4 text-center font-bold text-xs tracking-wide">Trail</th>
                         <th v-if="perms.canManageExpenses" class="px-5 py-4 text-center font-bold text-xs tracking-wide">Actions</th>
                     </tr>
@@ -527,6 +534,13 @@ function splitDate(d) {
                             <span v-else :class="[statusColors[e.status] || 'bg-gray-100 text-gray-800', 'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold capitalize']">
                                 {{ e.status }}
                             </span>
+                        </td>
+                        <td class="px-5 py-4 text-center align-middle">
+                            <span :class="[
+                                'inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold',
+                                limitStatus(e) === 'LIMIT REACHED' ? 'bg-rose-100 text-rose-700' : limitStatus(e) === 'ALMOST AT LIMIT' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                            ]">{{ limitStatus(e) }}</span>
+                            <div class="mt-1 text-[10px] text-gray-500">{{ Number(e.budget_item?.utilization_rate || 0).toFixed(2) }}%</div>
                         </td>
                         <td class="px-5 py-4 text-center align-middle">
                             <button @click="expenseAuditLogs(e)" class="px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded text-xs font-semibold border border-indigo-200 transition">

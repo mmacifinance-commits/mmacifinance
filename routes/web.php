@@ -47,6 +47,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/financial-records/{module}/bulk-delete', \App\Http\Controllers\BulkFinancialDeletionController::class)
         ->whereIn('module', ['income', 'receipts', 'expenses', 'disbursements']);
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
+    Route::get('/login-history', [\App\Http\Controllers\LoginHistoryController::class, 'index'])
+        ->middleware('role:super_admin')->name('login-history.index');
     Route::post('/imports/{module}/preview', ImportPreviewController::class)->name('imports.preview');
 
     // Everyone can view the dashboard and reports
@@ -117,7 +119,7 @@ Route::middleware('auth')->group(function () {
     });
 
     // --- Expenditures & Disbursements: Super Admin + Disbursement Officer + Cashier can view/CRUD disbursements ---
-    Route::get('/expenses', [ExpenseController::class, 'index'])->name('expenses.index');
+    Route::get('/expenses', [ExpenseController::class, 'index'])->middleware('role:super_admin,budget_officer,disbursement_officer,cashier')->name('expenses.index');
     Route::get('/disbursements', [DisbursementController::class, 'index'])->name('disbursements.index');
 
     Route::middleware('role:super_admin,budget_officer,disbursement_officer,cashier')->group(function () {
@@ -132,7 +134,7 @@ Route::middleware('auth')->group(function () {
 
     // Cashier, Disbursement Officer, and Super Admin can manage disbursements & submit for approval
     Route::middleware('role:super_admin,budget_officer,disbursement_officer,cashier')->group(function () {
-        Route::get('/expenses/export-csv', [ExpenseController::class, 'exportCsv'])->name('expenses.export-csv');
+        Route::get('/expenses/export-csv', [ExpenseController::class, 'exportCsv'])->name('expenses.export-csv')->middleware('role:super_admin,budget_officer,disbursement_officer');
         Route::post('/expenses/import-csv', [ExpenseController::class, 'importCsv'])->name('expenses.import-csv')->middleware('role:super_admin,budget_officer,disbursement_officer');
         Route::get('/disbursements/export-csv', [DisbursementController::class, 'exportCsv'])->name('disbursements.export-csv');
         Route::post('/disbursements/import-csv', [DisbursementController::class, 'importCsv'])->name('disbursements.import-csv');
