@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\User;
 use App\Models\LoginHistory;
+use App\Models\AuditTrail;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -81,6 +82,7 @@ class TwoFactorController extends Controller
         ]);
 
         if (!hash_equals($storedOtp, $submittedOtp) || (!$user->otp_expires_at || now()->greaterThan($user->otp_expires_at))) {
+            AuditTrail::systemLog('login_failed_otp', $user, 'Login failed: invalid or expired two-factor code.', ['ip_address' => $request->ip()]);
             Log::warning('2FA verify failed', [
                 'email' => $user->email,
                 'expired' => !$user->otp_expires_at || now()->greaterThan($user->otp_expires_at),
@@ -91,6 +93,7 @@ class TwoFactorController extends Controller
         // Login user
         $remember = $request->session()->get('2fa_remember', false);
         Auth::login($user, $remember);
+        AuditTrail::systemLog('login', $user, 'User signed in successfully after two-factor verification.', ['ip_address' => $request->ip()]);
         LoginHistory::create([
             'user_id' => $user->id,
             'email' => $user->email,
@@ -149,6 +152,8 @@ class TwoFactorController extends Controller
             $user->otp_expires_at = now()->addMinutes(10);
             $user->otp_sent_at = now();
             $user->save();
+
+            AuditTrail::systemLog('otp_resent', $user, 'A new two-factor verification code was requested.', ['ip_address' => $request->ip()]);
 
             Log::info('2FA code regenerated.', ['user_id' => $user->id]);
 

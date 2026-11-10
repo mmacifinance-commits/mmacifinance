@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Illuminate\Support\Str;
 use App\Models\User;
+use App\Models\AuditTrail;
 use App\Mail\TwoFactorOtpMail;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
@@ -137,12 +138,15 @@ class LoginController extends Controller
             }
 
             $user->save();
+            AuditTrail::systemLog('login_failed', $user, 'Login failed: invalid credentials.', ['ip_address' => $request->ip()]);
             $remaining = 5 - $user->failed_login_attempts;
 
             return back()->withErrors([
                 'email' => "The provided credentials do not match our records. You have {$remaining} attempts remaining before lockout.",
             ])->onlyInput('email');
         }
+
+        AuditTrail::systemLog('login_failed', null, 'Login failed: credentials did not match a user account.', ['ip_address' => $request->ip(), 'email' => $request->email]);
 
         return back()->withErrors([
             'email' => 'The provided credentials do not match our records.',
@@ -151,6 +155,8 @@ class LoginController extends Controller
 
     public function logout(Request $request)
     {
+        $user = $request->user();
+        AuditTrail::systemLog('logout', $user, 'User signed out.', ['ip_address' => $request->ip()]);
         Auth::logout();
 
         $request->session()->invalidate();

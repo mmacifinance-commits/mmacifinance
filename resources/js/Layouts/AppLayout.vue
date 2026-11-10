@@ -20,7 +20,7 @@ const mainNavItems = computed(() => [
     ...(page.props.permissions?.canViewExpenses ? [{ href: '/expenses', label: 'EXPENDITURES', icon: '', section: 'expenditures' }] : []),
     { href: '/disbursements', label: 'DISBURSEMENTS', icon: '', section: 'disbursements' },
     { href: '/reports', label: 'FINANCIAL REPORTS', icon: '', section: 'reports' },
-    ...(page.props.permissions?.isSuperAdmin ? [{ href: '/login-history', label: 'LOGIN HISTORY', icon: '', section: 'login-history' }] : []),
+    ...(page.props.permissions?.isSuperAdmin ? [{ href: '/login-history', label: 'LOG HISTORY', icon: '', section: 'login-history' }] : []),
 ])
 
 const sidebarMenus = {
