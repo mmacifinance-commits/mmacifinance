@@ -17,7 +17,10 @@ class LoginHistoryController extends Controller
             'to' => ['nullable', 'date'],
         ]);
 
-        $query = AuditTrail::with(['user:id,name', 'auditable']);
+        // System audit entries use a virtual auditable_type ("System"), not a
+        // PHP model class. Eager-loading the morph relation would make
+        // Laravel resolve that literal value and throw Class "System" not found.
+        $query = AuditTrail::with(['user:id,name']);
 
         if (!empty($filters['search'])) {
             $search = $filters['search'];
