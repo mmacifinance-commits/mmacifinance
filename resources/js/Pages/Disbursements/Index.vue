@@ -489,6 +489,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                         <th class="px-5 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-white">Payee / Description</th>
                         <th class="px-5 py-3.5 text-right text-xs font-bold uppercase tracking-wider text-white">Disbursement Amount</th>
                         <th class="px-5 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-white">Payment Method</th>
+                        <th class="px-5 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-white">Bank Used</th>
                         <th class="px-5 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-white">Workflow Status</th>
                         <th class="px-5 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-white">Audit Trail</th>
                         <th class="px-5 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-white">Actions</th>
@@ -512,6 +513,9 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                                 {{ methodLabels[d.method] || d.method }}
                             </div>
                             <div v-if="d.payment_reference" class="mt-1 max-w-48 break-all text-xs text-slate-500 mx-auto"><span>Ref: </span><span class="font-mono">{{ d.payment_reference }}</span></div>
+                        </td>
+                        <td class="px-5 py-4 text-center text-sm text-slate-700 align-middle">
+                            {{ d.bank_name || '—' }}
                         </td>
                         <td class="px-5 py-4 text-center align-middle">
                             <span :class="[statusBadgeStyles[d.status] || 'bg-gray-100 text-gray-800', 'inline-flex items-center rounded-full px-3 py-1 text-xs font-bold border shadow-2xs']">
@@ -576,7 +580,7 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                         </td>
                     </tr>
                     <tr v-if="filteredDisbursements.length === 0">
-                        <td colspan="8" class="px-5 py-8 text-center text-sm text-gray-500">No disbursement records found.</td>
+                        <td colspan="9" class="px-5 py-8 text-center text-sm text-gray-500">No disbursement records found.</td>
                     </tr>
                 </tbody>
             </table>
