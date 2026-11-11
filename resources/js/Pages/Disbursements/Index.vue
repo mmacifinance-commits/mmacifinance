@@ -28,6 +28,7 @@ const props = defineProps({
     availableYears: Array,
     defaultYear: [Number, String],
     defaultFiscalPeriodId: [Number, String],
+    bankNames: Array,
     userRole: String,
     userPermissions: Object,
 })
@@ -63,6 +64,7 @@ const form = useForm({
     payment_reference: '',
     amount: 0,
     method: 'check',
+    bank_name: '',
     date_encoded: '',
     status: 'draft',
     notes: '',
@@ -259,6 +261,7 @@ function openEdit(d) {
         payment_reference: d.payment_reference || '',
         amount: d.amount,
         method: d.method,
+        bank_name: d.bank_name || '',
         status: d.status,
         notes: d.notes || '',
         remarks: d.remarks || '',
@@ -294,6 +297,7 @@ async function save() {
         payment_reference: form.payment_reference,
         amount: form.amount,
         method: form.method,
+        bank_name: form.bank_name,
         date_encoded: form.date_encoded,
         status: isOnline.value ? form.status : 'draft',
         notes: form.notes,
@@ -724,6 +728,14 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
                     <div><label class="block text-sm font-medium mb-1.5">Pay To (Payee)</label><input v-model="form.pay_to" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
                     <div><label class="block text-sm font-medium mb-1.5">Disbursement Amount (₱)</label><input v-model.number="form.amount" type="number" step="0.01" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
                     <div><label class="block text-sm font-medium mb-1.5">Payment Method</label><select v-model="form.method" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"><option value="check">Check</option><option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option></select></div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1.5">Bank Used <span class="font-normal text-gray-500">(optional)</span></label>
+                        <input v-model="form.bank_name" list="disbursement-bank-names" maxlength="255" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" placeholder="Enter or select a bank" />
+                        <datalist id="disbursement-bank-names">
+                            <option v-for="bank in (props.bankNames || [])" :key="bank" :value="bank" />
+                        </datalist>
+                        <p v-if="form.errors.bank_name" class="text-red-600 text-xs mt-1">{{ form.errors.bank_name }}</p>
+                    </div>
                     <div><label class="block text-sm font-medium mb-1.5">Date Encoded</label><input v-model="form.date_encoded" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" required /></div>
                     <div>
                         <label class="block text-sm font-medium mb-1.5">Workflow Status</label>

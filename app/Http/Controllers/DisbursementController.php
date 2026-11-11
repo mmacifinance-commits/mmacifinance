@@ -91,6 +91,8 @@ class DisbursementController extends Controller
                 ->whereDate('start_date', '<=', now())
                 ->whereDate('end_date', '>=', now())
                 ->value('id') ?? AnnualBudget::query()->orderByDesc('start_date')->value('id'),
+            'bankNames' => Disbursement::query()->whereNotNull('bank_name')->where('bank_name', '<>', '')
+                ->distinct()->orderBy('bank_name')->pluck('bank_name')->values()->toArray(),
             'availableYears' => $availableYears,
             'defaultYear' => $defaultYear,
             'userRole' => auth()->user()?->role,
@@ -163,6 +165,7 @@ class DisbursementController extends Controller
             'pay_to' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0.01',
             'method' => 'required|in:check,cash,bank_transfer',
+            'bank_name' => ['nullable', 'string', 'max:255'],
             'date_encoded' => 'required|date',
             'status' => 'required|in:'.implode(',', $this->allowedStatuses()),
             'notes' => 'nullable|string',
@@ -239,6 +242,7 @@ class DisbursementController extends Controller
             'pay_to' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0.01',
             'method' => 'required|in:check,cash,bank_transfer',
+            'bank_name' => ['nullable', 'string', 'max:255'],
             'date_encoded' => 'required|date',
             'status' => 'required|in:'.implode(',', $this->allowedStatuses()),
             'notes' => 'nullable|string',
@@ -484,7 +488,7 @@ class DisbursementController extends Controller
     public function exportCsv()
     {
         $fileName = 'disbursements-export-'.now()->format('Y-m-d_His');
-        $rows = [['disbursement_no', 'expense_ref_no', 'description', 'source', 'pay_to', 'amount', 'method', 'date_encoded', 'status', 'notes', 'remarks', 'payment_reference', 'monthly_allocation_ref', 'particulars']];
+        $rows = [['disbursement_no', 'expense_ref_no', 'description', 'source', 'pay_to', 'amount', 'method', 'bank_name', 'date_encoded', 'status', 'notes', 'remarks', 'payment_reference', 'monthly_allocation_ref', 'particulars']];
 
         Disbursement::with('expense.budgetItem')->orderBy('id')->chunk(200, function ($rowsChunk) use (&$rows) {
             foreach ($rowsChunk as $dsb) {
@@ -496,6 +500,7 @@ class DisbursementController extends Controller
                     $dsb->pay_to,
                     $dsb->amount,
                     $dsb->method,
+                    $dsb->bank_name,
                     optional($dsb->date_encoded)->format('Y-m-d'),
                     $dsb->status,
                     $dsb->notes,
@@ -551,6 +556,7 @@ class DisbursementController extends Controller
                 'pay_to' => trim((string) ($row[$index['pay_to']] ?? '')),
                 'amount' => (float) ($row[$index['amount']] ?? 0),
                 'method' => trim((string) ($row[$index['method']] ?? 'check')),
+                'bank_name' => isset($index['bank_name']) ? trim((string) ($row[$index['bank_name']] ?? '')) : null,
                 'date_encoded' => trim((string) ($row[$index['date_encoded']] ?? '')),
                 'status' => strtolower(trim((string) ($row[$index['status']] ?? 'draft'))),
                 'notes' => trim((string) ($row[$index['notes']] ?? '')),
@@ -616,6 +622,7 @@ class DisbursementController extends Controller
                     $disbursement->pay_to = $row['pay_to'];
                     $disbursement->amount = $row['amount'];
                     $disbursement->method = in_array($row['method'], ['check', 'cash', 'bank_transfer'], true) ? $row['method'] : 'check';
+                    $disbursement->bank_name = $row['bank_name'] !== '' ? $row['bank_name'] : null;
                     $disbursement->date_encoded = $row['date_encoded'];
                     $disbursement->status = $row['status'];
                     $disbursement->notes = $row['notes'] !== '' ? $row['notes'] : null;

@@ -19,6 +19,7 @@ class Disbursement extends Model
         'pay_to',
         'amount',
         'method',
+        'bank_name',
         'date_encoded',
         'date_approved',
         'status',
