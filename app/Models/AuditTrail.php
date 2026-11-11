@@ -21,6 +21,13 @@ class AuditTrail extends Model
 
     public function getRecordLabelAttribute(): string
     {
+        // System audit entries are virtual records, not morphable model classes.
+        // Do not access $this->auditable for them because Laravel would try to
+        // resolve the literal auditable_type ("System") as a PHP class.
+        if ($this->auditable_type === 'System') {
+            return 'System #'.$this->auditable_id;
+        }
+
         if (!$this->auditable) {
             $type = preg_replace('/(?<!^)([A-Z])/', ' $1', class_basename((string) $this->auditable_type));
             return trim($type ?: 'System').' #'.$this->auditable_id;
