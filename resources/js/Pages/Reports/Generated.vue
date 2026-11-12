@@ -190,25 +190,25 @@ const printReport = () => window.print()
 /* The desktop preview uses the same geometry as the printed legal page. */
 @media screen and (min-width: 1151px) {
     .report-sheet {
-        box-sizing: border-box;
-        min-height: 216mm;
-        width: 356mm;
-        padding: 8mm;
+        box-sizing: border-box !important;
+        min-height: 216mm !important;
+        width: 356mm !important;
+        padding: 8mm !important;
     }
 
     .report-table {
         border-collapse: collapse;
-        font-size: 10px;
-        inline-size: 100%;
-        max-inline-size: 100%;
-        table-layout: fixed;
-        width: 100%;
+        font-size: 10px !important;
+        inline-size: 100% !important;
+        max-inline-size: 100% !important;
+        table-layout: fixed !important;
+        width: 100% !important;
     }
 
     .report-table th,
     .report-table td {
-        line-height: 1.15;
-        padding: 3.5px;
+        line-height: 1.15 !important;
+        padding: 3.5px !important;
     }
 }
 
