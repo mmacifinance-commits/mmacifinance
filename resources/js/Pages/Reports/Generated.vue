@@ -201,6 +201,16 @@ const printReport = () => window.print()
     vertical-align: top;
 }
 
+/* Keep the on-screen preview as one legal landscape page, matching the first
+   printable page and making clipping visible before the user prints. */
+@media screen and (min-width: 1151px) {
+    .report-sheet {
+        height: 216mm;
+        min-height: 216mm;
+        overflow: hidden;
+    }
+}
+
 @media print {
     @page {
         size: legal landscape;
