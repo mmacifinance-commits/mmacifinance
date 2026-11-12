@@ -4,10 +4,17 @@
     <meta charset="utf-8">
     <title>{{ $reportLabel }}</title>
     <style>
-        @page { margin: 10mm; }
+        @page { size: legal landscape; margin: 10mm; }
         body { font-family: 'DejaVu Sans', sans-serif; font-size: 8pt; color: #111; }
-        .school { text-align: center; border-bottom: 2px solid #18243e; padding-bottom: 8px; }
-        .school img { height: 48px; }
+        .school { width: 100%; border-bottom: 2px solid #111; padding-bottom: 8px; border-collapse: collapse; }
+        .school td { vertical-align: middle; }
+        .school .school-logo { width: 15%; text-align: left; }
+        .school .school-logo img { width: 64px; height: 64px; object-fit: contain; }
+        .school .school-details { width: 70%; text-align: center; }
+        .school .marks { width: 15%; text-align: right; white-space: nowrap; }
+        .iso { display: inline-block; width: 38px; height: 38px; border: 1px solid #09c; text-align: center; font-size: 4.5pt; padding-top: 4px; vertical-align: middle; }
+        .bv { display: inline-block; width: 38px; text-align: center; font-size: 4.5pt; vertical-align: middle; }
+        .bv strong { display: block; font-size: 25pt; line-height: 22px; font-style: italic; }
         h1 { font-size: 14pt; color: #17456e; margin: 4px 0; }
         h2 { font-size: 12pt; text-align: center; margin: 12px 0; }
         p { margin: 3px 0; }
@@ -28,12 +35,18 @@
     </style>
 </head>
 <body>
-    <div class="school">
-        <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/logo.png'))) }}" alt="MMACI">
-        <h1>MERCHANT MARINE ACADEMY OF CARAGA, INC.</h1>
-        <p>North Montilla Boulevard, Brgy. Ong-Yiu, Butuan City, 8600</p>
-        <p>Tel. No: (085) 817 0476 · Mobile: (+63) 917 105 9644</p>
-    </div>
+    <table class="school">
+        <tr>
+            <td class="school-logo"><img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/logo.png'))) }}" alt="MMACI"></td>
+            <td class="school-details">
+                <h1>MERCHANT MARINE ACADEMY OF CARAGA, INC.</h1>
+                <p>North Montilla Boulevard, Brgy. Ong-Yiu, Butuan City, 8600</p>
+                <p>Tel. No: (085) 817 0476 · Mobile: (+63) 917 105 9644 (Globe)</p>
+                <p>E-mail Address: mmaci2018.bxu@gmail.com or schoolpresident@mmacibutuan.edu.ph</p>
+            </td>
+            <td class="marks"><span class="iso">SOCOTEC<br>ISO 9001</span> <span class="bv"><strong>B</strong>BV ACCREDITED CMS<br>ISO 9001</span></td>
+        </tr>
+    </table>
     <h2>{{ $reportLabel }}</h2>
     <table class="metadata">
         <tr>

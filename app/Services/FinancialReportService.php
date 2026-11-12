@@ -117,9 +117,11 @@ class FinancialReportService
         $budgetSection['balanceColumns'] = [6,7,8];
         $receiptSection = $this->section('Cash Receipts', ['Receipt No.', 'Income No.', 'Receipt Type', 'Source', 'Description', 'Receipt Date', 'Amount', 'Budget Category', 'Responsibility Center'],
             $receiptRows->map(fn ($r) => [$r['receipt_no'], $r['income_no'], $r['receipt_type'], $r['source'], $r['description'], $r['receipt_date'], $r['amount'], $r['budget_category'], $r['responsibility_center']])->all(), [6]);
+        $receiptSection['type'] = 'receipts';
         $receiptSection['totalLabel'] = 'TOTAL RECEIPTS';
         $paymentSection = $this->section('Posted Disbursements', ['DSB No.', 'Expense Ref.', 'Allocation Month', 'Particulars', 'Expense Date', 'Disbursement Date', 'Payee', 'Status', 'Amount'],
             $disbursementRows->map(fn ($r) => [$r['disbursement_no'], $r['expense_ref'], $r['allocation_month'], $r['particulars'], $r['expense_date'], $r['disbursement_date'], $r['pay_to'], $r['status'], $r['amount']])->all(), [8]);
+        $paymentSection['type'] = 'disbursements';
         $incomeSection = $this->section('Projected Income', ['Income No.', 'Date', 'Source', 'Description', 'Amount', 'Budget Category', 'Responsibility Center'],
             $incomes->map(fn ($r) => [$r->income_no, $r->date_encoded?->toDateString(), $r->source, $r->description, (float) $r->amount, $r->budgetCategory?->name ?? 'Uncategorized', $r->department?->name ?? 'Unassigned'])->values()->all(), [4]);
         $comparisonSection = $this->section('Income vs Receipts', ['Description', 'Amount'], [
@@ -143,7 +145,7 @@ class FinancialReportService
             $a = (float) $rows->sum('appropriation'); $p = (float) $rows->sum('expenditure');
             return [$rows->first()['responsibility_center'], $a, $p, round($a-$p, 2), $a > 0 ? round($p/$a*100, 2) : 0];
         })->values()->all();
-        $centerSection = $this->section('Responsibility Center Summary', ['Responsibility Center', 'Appropriation', 'Posted Payments in Range', 'Budget Balance', '% Utilization'], $centers, [1,2,3], 4);
+        $centerSection = $this->section('Responsibility Center Summary', ['Responsibility Center', 'Total Budget', 'Total Expenditure', 'Total Remaining', '% Utilization'], $centers, [1,2,3], 4);
         $centerSection['balanceColumns'] = [1,2,3];
         $sections = match ($type) {
             'cash_receipts' => [$receiptSection], 'disbursements' => [$paymentSection],
@@ -152,7 +154,7 @@ class FinancialReportService
             'responsibility_center' => [$centerSection, $budgetSection],
             'account_title_ledger' => $this->accountSections($items, $posted, $detailPayments, $start),
             'closing_report' => [...$this->closingSections($period, $totals), $centerSection, $this->accountSections($items, $posted, $detailPayments, null)[0]],
-            default => [$budgetSection, $receiptSection, $paymentSection],
+            default => [$centerSection, $budgetSection, $receiptSection, $paymentSection],
         };
         if ($type === 'income_vs_receipts') $notes[] = 'Income is projected. Receipts are actual collections, not additional projected income. The difference is a comparison, not a list of unpaid debts.';
         if ($type === 'account_title_ledger') $notes[] = 'Account Title Report: appropriation less posted disbursements. Opening balance includes disbursements before the selected start date.';

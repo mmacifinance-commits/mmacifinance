@@ -249,7 +249,7 @@ class ReportController extends Controller
     {
         $report = $reports->build($request);
         $pdf = new \Dompdf\Dompdf(['isRemoteEnabled' => false, 'isPhpEnabled' => false, 'defaultFont' => 'DejaVu Sans']);
-        $pdf->setPaper('A4', 'landscape');
+        $pdf->setPaper('legal', 'landscape');
         $pdf->loadHtml(view('reports.pdf', $report)->render());
         $pdf->render();
 

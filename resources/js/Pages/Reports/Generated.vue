@@ -55,7 +55,7 @@ const generatedDate = () => {
             </a>
         </div>
 
-        <main class="report-sheet mx-auto my-6 min-h-[210mm] w-[297mm] bg-white p-[10mm] shadow-2xl print:m-0 print:min-h-0 print:w-auto print:shadow-none">
+        <main class="report-sheet mx-auto my-6 min-h-[216mm] w-[356mm] bg-white p-[10mm] shadow-2xl print:m-0 print:min-h-0 print:w-auto print:shadow-none">
             <header class="grid grid-cols-[110px_1fr_150px] items-center gap-4 border-b-[3px] border-black pb-2">
                 <div>
                     <img src="/images/logo.png" alt="MMACI Logo" class="h-[92px] w-[92px] object-contain" />
@@ -202,7 +202,7 @@ const generatedDate = () => {
 
 @media print {
     @page {
-        size: A4 landscape;
+        size: legal landscape;
         margin: 0;
     }
 
@@ -210,15 +210,15 @@ const generatedDate = () => {
     body {
         background: #fff !important;
         overflow: visible !important;
-        width: 297mm !important;
+        width: 356mm !important;
     }
 
     .report-sheet {
         box-sizing: border-box !important;
-        min-height: 210mm !important;
+        min-height: 216mm !important;
         overflow: visible !important;
         padding: 8mm !important;
-        width: 297mm !important;
+        width: 356mm !important;
     }
 
     .report-table {
