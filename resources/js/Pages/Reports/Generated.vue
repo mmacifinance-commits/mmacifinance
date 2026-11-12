@@ -187,6 +187,31 @@ const printReport = () => window.print()
     }
 }
 
+/* The desktop preview uses the same geometry as the printed legal page. */
+@media screen and (min-width: 1151px) {
+    .report-sheet {
+        box-sizing: border-box;
+        min-height: 216mm;
+        width: 356mm;
+        padding: 8mm;
+    }
+
+    .report-table {
+        border-collapse: collapse;
+        font-size: 10px;
+        inline-size: 100%;
+        max-inline-size: 100%;
+        table-layout: fixed;
+        width: 100%;
+    }
+
+    .report-table th,
+    .report-table td {
+        line-height: 1.15;
+        padding: 3.5px;
+    }
+}
+
 .report-table {
     inline-size: 100%;
     max-inline-size: 100%;
