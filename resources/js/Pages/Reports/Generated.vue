@@ -33,6 +33,8 @@ const generatedDate = () => {
     })
 }
 
+const printReport = () => window.print()
+
 
 
 </script>
@@ -45,14 +47,13 @@ const generatedDate = () => {
             <Link href="/reports" class="border border-slate-600 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">
                 Back to Reports
             </Link>
-            <a
-                :href="pdfUrl"
-                target="_blank"
-                rel="noopener"
+            <button
+                type="button"
+                @click="printReport"
                 class="border border-mustard bg-mustard px-4 py-2 text-sm font-bold text-navy-dark hover:bg-[#c99a2c]"
             >
                 Print / Save PDF
-            </a>
+            </button>
         </div>
 
         <main class="report-sheet mx-auto my-6 min-h-[216mm] w-[356mm] bg-white p-[10mm] shadow-2xl print:m-0 print:min-h-0 print:w-auto print:shadow-none">
