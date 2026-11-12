@@ -4,8 +4,11 @@
     <meta charset="utf-8">
     <title>{{ $reportLabel }}</title>
     <style>
-        @page { size: legal landscape; margin: 10mm; }
+        /* Keep the server PDF on the same legal-landscape canvas as the browser print preview. */
+        @page { size: legal landscape; margin: 0; }
         body { font-family: 'DejaVu Sans', sans-serif; font-size: 10px; color: #06122a; }
+        body { width: 356mm; margin: 0; }
+        .sheet { box-sizing: border-box; width: 356mm; min-height: 216mm; padding: 8mm; }
         .school { width: 100%; border-bottom: 2px solid #111; padding-bottom: 8px; border-collapse: collapse; }
         .school td { vertical-align: middle; }
         .school .school-logo { width: 15%; text-align: left; }
@@ -21,8 +24,8 @@
         .metadata { width: 100%; margin-bottom: 12px; border-collapse: collapse; }
         .metadata td { width: 25%; padding: 8px; border: 1px solid #ccd3dc; vertical-align: top; }
         .label { font-size: 9px; color: #64748b; }
-        .report { width: 100%; table-layout: fixed; border-collapse: collapse; margin-bottom: 16px; }
-        .report th, .report td { border: 1px solid #111; padding: 6px 5px; vertical-align: top; overflow-wrap: break-word; }
+        .report { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 5mm; margin-bottom: 0; }
+        .report th, .report td { border: 1px solid #111; padding: 3.5px; line-height: 1.15; vertical-align: top; overflow-wrap: break-word; }
         .report th { font-size: 10px; text-align: left; background: #fff; }
         .report td { font-size: 10px; }
         .report .number { white-space: nowrap; text-align: right; }
@@ -34,7 +37,7 @@
         .signatures p { border-top: 1px solid #333; padding-top: 6px; }
     </style>
 </head>
-<body>
+<body><div class="sheet">
     <table class="school">
         <tr>
             <td class="school-logo"><img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/logo.png'))) }}" alt="MMACI"></td>
@@ -89,5 +92,6 @@
         </table>
     @endforeach
     <table class="signatures"><tr><td><p>Prepared by</p></td><td><p>Reviewed / Approved by</p></td></tr></table>
+</div>
 </body>
 </html>
