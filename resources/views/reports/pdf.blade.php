@@ -5,26 +5,26 @@
     <title>{{ $reportLabel }}</title>
     <style>
         @page { size: legal landscape; margin: 10mm; }
-        body { font-family: 'DejaVu Sans', sans-serif; font-size: 8pt; color: #111; }
+        body { font-family: 'DejaVu Sans', sans-serif; font-size: 10px; color: #06122a; }
         .school { width: 100%; border-bottom: 2px solid #111; padding-bottom: 8px; border-collapse: collapse; }
         .school td { vertical-align: middle; }
         .school .school-logo { width: 15%; text-align: left; }
-        .school .school-logo img { width: 64px; height: 64px; object-fit: contain; }
+        .school .school-logo img { width: 92px; height: 92px; object-fit: contain; }
         .school .school-details { width: 70%; text-align: center; }
         .school .marks { width: 15%; text-align: right; white-space: nowrap; }
         .iso { display: inline-block; width: 38px; height: 38px; border: 1px solid #09c; text-align: center; font-size: 4.5pt; padding-top: 4px; vertical-align: middle; }
         .bv { display: inline-block; width: 38px; text-align: center; font-size: 4.5pt; vertical-align: middle; }
         .bv strong { display: block; font-size: 25pt; line-height: 22px; font-style: italic; }
-        h1 { font-size: 14pt; color: #17456e; margin: 4px 0; }
-        h2 { font-size: 12pt; text-align: center; margin: 12px 0; }
+        h1 { font-size: 22px; color: #17456e; margin: 4px 0; }
+        h2 { font-size: 18px; text-align: center; margin: 16px 0; letter-spacing: 1px; }
         p { margin: 3px 0; }
         .metadata { width: 100%; margin-bottom: 12px; border-collapse: collapse; }
-        .metadata td { width: 25%; padding: 6px; border: 1px solid #ccd3dc; vertical-align: top; }
-        .label { font-size: 6.5pt; color: #555; }
-        .report { width: 100%; table-layout: fixed; border-collapse: collapse; margin-bottom: 14px; }
-        .report th, .report td { border: 1px solid #333; padding: 5px 4px; vertical-align: top; overflow-wrap: break-word; }
-        .report th { font-size: 7pt; text-align: left; background: #f1f3f5; }
-        .report td { font-size: 7pt; }
+        .metadata td { width: 25%; padding: 8px; border: 1px solid #ccd3dc; vertical-align: top; }
+        .label { font-size: 9px; color: #64748b; }
+        .report { width: 100%; table-layout: fixed; border-collapse: collapse; margin-bottom: 16px; }
+        .report th, .report td { border: 1px solid #111; padding: 6px 5px; vertical-align: top; overflow-wrap: break-word; }
+        .report th { font-size: 10px; text-align: left; background: #fff; }
+        .report td { font-size: 10px; }
         .report .number { white-space: nowrap; text-align: right; }
         thead { display: table-header-group; }
         tr { page-break-inside: avoid; }
