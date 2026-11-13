@@ -228,8 +228,8 @@ const printReport = () => window.print()
 
 @media print {
     @page {
-        /* Let the printer/browser selected paper size control the page. */
-        size: auto;
+        /* The report is designed for Legal landscape; PDF output still supports Short/A4/Long. */
+        size: legal landscape;
         margin: 0;
     }
 
@@ -237,15 +237,15 @@ const printReport = () => window.print()
     body {
         background: #fff !important;
         overflow: visible !important;
-        width: auto !important;
+        width: 100% !important;
     }
 
     .report-sheet {
         box-sizing: border-box !important;
-        min-height: 0 !important;
+        min-height: 216mm !important;
         overflow: visible !important;
         padding: 8mm !important;
-        width: auto !important;
+        width: 100% !important;
     }
 
     .report-table {
