@@ -54,9 +54,18 @@ class IncomeBreakdownController extends Controller
         $quota = $quota !== null ? (float) $quota : null;
         $rows = $rows->map(fn ($row) => $row + ['collection_rate' => $row['projected'] > 0
             ? round($row['actual'] / $row['projected'] * 100, 2) : null])->values();
+        $centerRows = $query->leftJoin('departments', 'incomes.department_id', '=', 'departments.id')
+            ->selectRaw("incomes.department_id as department_id, COALESCE(departments.name, 'Unassigned') as department,
+                SUM(CASE WHEN receipt_no IS NULL OR receipt_no = '' THEN amount ELSE 0 END) as projected,
+                SUM(CASE WHEN receipt_no IS NOT NULL AND receipt_no <> '' THEN amount ELSE 0 END) as actual")
+            ->groupBy('incomes.department_id', 'departments.name')->orderBy('departments.name')->toBase()->get()
+            ->map(fn ($row) => ['department_id' => $row->department_id, 'department' => $row->department,
+                'projected' => round((float) $row->projected, 2), 'actual' => round((float) $row->actual, 2),
+                'difference' => round((float) $row->projected - (float) $row->actual, 2),
+                'collection_rate' => (float) $row->projected > 0 ? round((float) $row->actual / (float) $row->projected * 100, 2) : null]);
         $projected = round((float) $rows->sum('projected'), 2);
         $actual = round((float) $rows->sum('actual'), 2);
-        return response()->json(['departments' => \App\Models\Department::orderBy('name')->get(['id', 'name']), 'rows' => $rows, 'overall' => [
+        return response()->json(['departments' => \App\Models\Department::orderBy('name')->get(['id', 'name']), 'rows' => $rows, 'center_rows' => $centerRows, 'overall' => [
             'projected' => $projected, 'actual' => $actual, 'quota' => $quota,
             'collection_rate' => $projected > 0 ? round($actual / $projected * 100, 2) : null,
             'quota_progress' => $quota > 0 ? round($actual / $quota * 100, 2) : null,

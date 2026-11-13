@@ -14,6 +14,7 @@ const search = ref('')
 const department = ref('')
 const departments = ref([])
 const rows = ref([])
+const centerRows = ref([])
 const selectedCategory = ref(null)
 const detailRows = ref([])
 const detailBusy = ref(false)
@@ -54,11 +55,11 @@ const money = value => new Intl.NumberFormat('en-PH', { style: 'currency', curre
 async function load() {
     closeCategory()
     const id = ++requestId
-    busy.value = true; error.value = ''; rows.value = []; overall.value = {}
+    busy.value = true; error.value = ''; rows.value = []; centerRows.value = []; overall.value = {}
     try {
         const params = { department_id: department.value || undefined, fiscal_period_id: fiscal.value || undefined, allocation_month: month.value || undefined, start_date: start.value || undefined, end_date: end.value || undefined }
         const { data } = await axios.get('/income-breakdown', { params })
-        if (id === requestId) { appliedFilters.value = params; departments.value = data.departments; rows.value = data.rows; overall.value = data.overall; quotaAmount.value = data.overall.quota ?? '' }
+        if (id === requestId) { appliedFilters.value = params; departments.value = data.departments; rows.value = data.rows; centerRows.value = data.center_rows || []; overall.value = data.overall; quotaAmount.value = data.overall.quota ?? '' }
     } catch (e) {
         if (id === requestId) error.value = Object.values(e.response?.data?.errors || {}).flat().join(' ') || 'Could not load the breakdown. Please try again.'
     } finally { if (id === requestId) busy.value = false }
@@ -103,6 +104,12 @@ function reset() { department.value = '';  month.value = ''; start.value = ''; e
                 <tfoot class="bg-slate-100 font-bold"><tr><td class="p-3">{{ search ? 'Filtered Total' : 'Total' }}</td><td class="p-3 text-right">{{ money(totals.projected) }}</td><td class="p-3 text-right">{{ money(totals.actual) }}</td><td class="p-3 text-right">{{ money(totals.difference) }}</td><td class="p-3 text-right">{{ collectionRate === null ? '—' : collectionRate.toFixed(2) + '%' }}</td></tr></tfoot>
             </table>
         </div>
+        <section v-if="!busy && !error" class="mt-5">
+            <h3 class="mb-2 text-base font-bold text-slate-800">Summary by Responsibility Center</h3>
+            <div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-700 text-white"><tr><th class="p-3 text-left">Responsibility Center</th><th class="p-3 text-right">Projected Income</th><th class="p-3 text-right">Actual Receipts</th><th class="p-3 text-right">Difference</th><th class="p-3 text-right">Collection Rate</th></tr></thead>
+                <tbody><tr v-for="row in centerRows" :key="row.department_id ?? 'unassigned'" class="border-b"><td class="p-3">{{ row.department }}</td><td class="p-3 text-right whitespace-nowrap">{{ money(row.projected) }}</td><td class="p-3 text-right whitespace-nowrap">{{ money(row.actual) }}</td><td class="p-3 text-right whitespace-nowrap">{{ money(row.difference) }}</td><td class="p-3 text-right">{{ row.collection_rate === null ? '—' : row.collection_rate.toFixed(2) + '%' }}</td></tr><tr v-if="!centerRows.length"><td colspan="5" class="p-6 text-center">No responsibility center data.</td></tr></tbody>
+            </table></div>
+        </section>
 
         <section v-if="selectedCategory" class="mt-5 rounded-lg border border-indigo-200 p-4" aria-live="polite">
             <div class="mb-3 flex items-center justify-between gap-3"><h3 class="font-semibold">{{ selectedCategory.source }}: Breakdown by Income Source</h3><button type="button" @click="closeCategory" class="text-sm text-indigo-700 underline">Close breakdown</button></div>
