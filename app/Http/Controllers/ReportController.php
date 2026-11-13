@@ -25,7 +25,7 @@ class ReportController extends Controller
     ) {
         $report = app(\App\Services\FinancialReportService::class)->build($request);
         $validated = $request->validate([
-            'report_type' => ['nullable', 'string', 'in:overall_financial,budget_utilization,cash_receipts,disbursements,income_vs_receipts,fund_balance,responsibility_center,account_title_ledger,closing_report'],
+            'report_type' => ['nullable', 'string', 'in:overall_financial,budget_utilization,budget_category,cash_receipts,disbursements,income_vs_receipts,fund_balance,responsibility_center,account_title_ledger,closing_report'],
             'fiscal_period_id' => ['nullable', 'integer', 'exists:annual_budgets,id'],
             'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
             'allocation_month' => ['nullable', 'date_format:Y-m-d'],
@@ -310,6 +310,7 @@ class ReportController extends Controller
         return [
             ['value' => 'overall_financial', 'label' => 'Overall Financial Report'],
             ['value' => 'budget_utilization', 'label' => 'Budget Utilization Report'],
+            ['value' => 'budget_category', 'label' => 'Budget Category Report'],
             ['value' => 'cash_receipts', 'label' => 'Cash Receipts Report'],
             ['value' => 'disbursements', 'label' => 'Disbursement Report'],
             ['value' => 'income_vs_receipts', 'label' => 'Income vs Receipts Report'],

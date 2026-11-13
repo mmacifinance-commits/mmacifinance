@@ -10,7 +10,7 @@ use Illuminate\Validation\ValidationException;
 class FinancialReportService
 {
     public const TYPES = [
-        'overall_financial' => 'Overall Financial Report', 'budget_utilization' => 'Budget Utilization Report',
+        'overall_financial' => 'Overall Financial Report', 'budget_utilization' => 'Budget Utilization Report', 'budget_category' => 'Budget Category Report',
         'cash_receipts' => 'Cash Receipts Report', 'disbursements' => 'Disbursement Report',
         'income_vs_receipts' => 'Income vs Receipts Report', 'fund_balance' => 'Fund Balance Report',
         'responsibility_center' => 'Responsibility Center Report', 'account_title_ledger' => 'Account Title Report',
@@ -147,9 +147,15 @@ class FinancialReportService
         })->values()->all();
         $centerSection = $this->section('Responsibility Center Summary', ['Responsibility Center', 'Total Budget', 'Total Expenditure', 'Total Remaining', '% Utilization'], $centers, [1,2,3], 4);
         $centerSection['balanceColumns'] = [1,2,3];
+        $categories = $budgetRows->groupBy('category')->map(function ($rows) {
+            $a = (float) $rows->sum('appropriation'); $p = (float) $rows->sum('expenditure');
+            return [$rows->first()['category'], $a, $p, round($a - $p, 2), $a > 0 ? round($p / $a * 100, 2) : 0];
+        })->values()->all();
+        $categorySection = $this->section('Budget Category Summary', ['Budget Category', 'Total Budget', 'Total Expenditure', 'Total Remaining', '% Utilization'], $categories, [1,2,3], 4);
+        $categorySection['balanceColumns'] = [1,2,3];
         $sections = match ($type) {
             'cash_receipts' => [$receiptSection], 'disbursements' => [$paymentSection],
-            'budget_utilization' => [$budgetSection], 'income_vs_receipts' => [$comparisonSection, $categoryComparison, $incomeSection, $receiptSection],
+            'budget_utilization' => [$budgetSection], 'budget_category' => [$categorySection, $budgetSection], 'income_vs_receipts' => [$comparisonSection, $categoryComparison, $incomeSection, $receiptSection],
             'fund_balance' => [$fundSection, $receiptSection, $paymentSection],
             'responsibility_center' => [$centerSection, $budgetSection],
             'account_title_ledger' => $this->accountSections($items, $posted, $detailPayments, $start),
