@@ -2,6 +2,7 @@
 defineProps({ sections: { type: Array, default: () => [] } })
 const money = value => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(value || 0))
 function display(section, column, value) {
+    if (value === null || value === undefined) return '—'
     if (section.percent === column) return `${Number(value || 0).toFixed(2)}%`
     return section.money.includes(column) ? money(value) : value
 }

@@ -135,6 +135,11 @@ class FinancialReportService
             ['Difference (Projected Income less Receipts)', round($totals['income'] - $cashReceipts, 2)],
         ], [1]);
         $comparisonSection['totalLabel'] = null;
+        $comparisonSummarySection = $this->section('Income vs Receipts Summary', ['Projected Income', 'Actual Receipts', 'Difference', 'Collection Rate (%)'], [
+            [$totals['income'], $cashReceipts, round($totals['income'] - $cashReceipts, 2), $totals['income'] > 0 ? round($cashReceipts / $totals['income'] * 100, 2) : null],
+        ], [0, 1, 2], 3);
+        $comparisonSummarySection['totalLabel'] = 'TOTAL';
+        $comparisonSummarySection['totals'][3] = $totals['income'] > 0 ? round($cashReceipts / $totals['income'] * 100, 2) : null;
         $categoryComparison = $this->section('Income vs Receipts by Budget Category', ['Budget Category', 'Projected Income', 'Actual Receipts', 'Difference', 'Collection Rate (%)'],
             $records->groupBy(fn ($record) => $record->budget_category_id ?? 'unassigned')->map(function ($rows) {
                 $projected = (float) $rows->filter(fn ($record) => blank($record->receipt_no))->sum('amount');
@@ -170,7 +175,7 @@ class FinancialReportService
         $sections = match ($type) {
             'cash_receipts' => [$receiptSection], 'disbursements' => [$paymentSection],
             'projected_income' => [$incomeSummarySection, $incomeSection],
-            'budget_utilization' => [$budgetSection], 'budget_category' => [$categorySection, $budgetSection], 'income_vs_receipts' => [$comparisonSection, $categoryComparison, $incomeSection, $receiptSection],
+            'budget_utilization' => [$budgetSection], 'budget_category' => [$categorySection, $budgetSection], 'income_vs_receipts' => [$comparisonSummarySection, $comparisonSection, $categoryComparison, $incomeSection, $receiptSection],
             'fund_balance' => [$fundSection, $receiptSection, $paymentSection],
             'responsibility_center' => [$centerSection, $budgetSection],
             'account_title_ledger' => [...$this->accountSections($items, $posted, $detailPayments, $start), $paymentSection],
