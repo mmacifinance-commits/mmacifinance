@@ -159,7 +159,7 @@ class FinancialReportService
             'budget_utilization' => [$budgetSection], 'budget_category' => [$categorySection, $budgetSection], 'income_vs_receipts' => [$comparisonSection, $categoryComparison, $incomeSection, $receiptSection],
             'fund_balance' => [$fundSection, $receiptSection, $paymentSection],
             'responsibility_center' => [$centerSection, $budgetSection],
-            'account_title_ledger' => [$accountTitleSection],
+            'account_title_ledger' => $this->accountSections($items, $posted, $detailPayments, $start),
             'closing_report' => [...$this->closingSections($period, $totals), $centerSection, $this->accountSections($items, $posted, $detailPayments, null)[0]],
             default => [$centerSection, $budgetSection, $receiptSection, $paymentSection],
         };
