@@ -156,8 +156,8 @@ class FinancialReportService
         $categorySection['balanceColumns'] = [1,2,3];
         $accountTitleSection = $this->accountSections($items, $posted, $detailPayments, $start)[0];
         $accountTitleSummarySection = $this->section('Account Title Summary',
-            ['Account Title', 'Appropriation', 'Opening Budget Balance', 'Posted Payments in Range', 'Closing Budget Balance'],
-            array_map(fn ($row) => [$row[0], $row[3], $row[4], $row[5], $row[6]], $accountTitleSection['rows']), [1,2,3,4]);
+            ['Account Title', 'Appropriation', 'Opening Budget Balance', 'Posted Payments in Range', 'Closing Budget Balance', '% Utilization'],
+            array_map(fn ($row) => [$row[0], $row[3], $row[4], $row[5], $row[6], $row[3] > 0 ? round($row[5] / $row[3] * 100, 2) : 0], $accountTitleSection['rows']), [1,2,3,4], 5);
         $sections = match ($type) {
             'cash_receipts' => [$receiptSection], 'disbursements' => [$paymentSection],
             'budget_utilization' => [$budgetSection], 'budget_category' => [$categorySection, $budgetSection], 'income_vs_receipts' => [$comparisonSection, $categoryComparison, $incomeSection, $receiptSection],
