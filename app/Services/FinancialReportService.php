@@ -192,7 +192,7 @@ class FinancialReportService
             ->groupBy(fn ($r) => $r->expense->budget_item_id)->map(fn ($rows) => (float) $rows->sum('amount')) : collect();
         $paid = $posted->groupBy(fn ($r) => $r->expense->budget_item_id)->map(fn ($rows) => (float) $rows->sum('amount'));
         $summary = [];
-        $details = [];
+        $detailRows = [];
         foreach ($items->groupBy(fn ($item) => $this->accountTitleKey($item->particular?->particular)) as $allocations) {
             $first = $allocations->first();
             $title = $first->particular?->particular ?? 'Untitled';
@@ -212,10 +212,13 @@ class FinancialReportService
             $detail = $this->section($title.' — '.$center.' — '.$category,
                 ['Particulars', 'Allocation Month', 'Monthly Ref.', 'Appropriation', 'Opening Budget Balance', 'Posted Payments in Range', 'Closing Budget Balance'], $rows, [3,4,5,6]);
             $summary[] = [$title, $center, $category, $detail['totals'][3], $detail['totals'][4], $detail['totals'][5], $detail['totals'][6]];
-            $details[] = $detail;
+            foreach ($rows as $row) $detailRows[] = [$title, ...$row];
         }
+        $breakdown = $this->section('Account Title Breakdown',
+            ['Account Title', 'Particulars', 'Allocation Month', 'Monthly Ref.', 'Appropriation', 'Opening Budget Balance', 'Posted Payments in Range', 'Closing Budget Balance'],
+            $detailRows, [4,5,6,7]);
         return [$this->section('Account Title Summary',
-            ['Account Title', 'Responsibility Center', 'Category', 'Appropriation', 'Opening Budget Balance', 'Posted Payments in Range', 'Closing Budget Balance'], $summary, [3,4,5,6]), ...$details];
+            ['Account Title', 'Responsibility Center', 'Category', 'Appropriation', 'Opening Budget Balance', 'Posted Payments in Range', 'Closing Budget Balance'], $summary, [3,4,5,6]), $breakdown];
     }
 
     private function accountTitleKey(?string $title): string
