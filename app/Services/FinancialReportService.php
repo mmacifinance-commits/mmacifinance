@@ -226,9 +226,12 @@ class FinancialReportService
         $breakdown = $this->section('Account Title Breakdown',
             ['Account Title', 'Particulars', 'Allocation Month', 'Monthly Ref.', 'Appropriation', 'Opening Budget Balance', 'Posted Payments in Range', 'Closing Budget Balance'],
             $detailRows, [4,5,6,7]);
-        return [$this->section('Account Title Summary',
+        $summarySection = $this->section('Account Title Summary',
             ['Account Title', 'Responsibility Center', 'Category', 'Appropriation', 'Opening Budget Balance', 'Posted Payments in Range', 'Closing Budget Balance', '% Utilization'],
-            array_map(fn ($row) => [...$row, $row[3] > 0 ? round($row[5] / $row[3] * 100, 2) : 0], $summary), [3,4,5,6], 7), $breakdown];
+            array_map(fn ($row) => [...$row, $row[3] > 0 ? round($row[5] / $row[3] * 100, 2) : 0], $summary), [3,4,5,6], 7);
+        $summarySection['totals'][7] = ($summarySection['totals'][3] ?? 0) > 0
+            ? round(($summarySection['totals'][5] ?? 0) / $summarySection['totals'][3] * 100, 2) : 0;
+        return [$summarySection, $breakdown];
     }
 
     private function accountTitleKey(?string $title): string
