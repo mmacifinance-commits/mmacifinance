@@ -218,7 +218,10 @@ class ReportController extends Controller
             'budgets' => $reportBudgets,
             'categories' => BudgetCategory::all(),
             'departments' => Department::all(),
-            'accountTitles' => BudgetParticular::query()->orderBy('particular')->get(['id', 'particular']),
+            'accountTitles' => BudgetParticular::query()->orderBy('particular')->get(['id', 'particular'])
+                ->groupBy(fn ($title) => $this->accountTitleFilterKey($title->particular))
+                ->map(fn ($titles) => ['id' => $titles->first()->id, 'particular' => $titles->first()->particular])
+                ->values()->all(),
             'summaryCards' => $summaryCards,
             'responsibilityCenterSummary' => $responsibilityCenterSummary,
             'budgetCategorySummary' => $budgetCategorySummary,
@@ -305,6 +308,12 @@ class ReportController extends Controller
                 'particular',
                 fn ($particularQuery) => $particularQuery->where('department_id', $departmentId)
             ));
+    }
+
+    private function accountTitleFilterKey(string $title): string
+    {
+        $key = strtolower(trim(preg_replace('/\s+/', ' ', $title)));
+        return preg_replace('/s$/', '', $key);
     }
 
     private function reportTypes(): array
