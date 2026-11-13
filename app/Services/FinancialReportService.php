@@ -155,9 +155,13 @@ class FinancialReportService
         $categorySection = $this->section('Budget Category Summary', ['Budget Category', 'Total Budget', 'Total Expenditure', 'Total Remaining', '% Utilization'], $categories, [1,2,3], 4);
         $categorySection['balanceColumns'] = [1,2,3];
         $accountTitleSection = $this->accountSections($items, $posted, $detailPayments, $start)[0];
+        $accountTitleSection['totals'][7] = ($accountTitleSection['totals'][3] ?? 0) > 0
+            ? round(($accountTitleSection['totals'][5] ?? 0) / $accountTitleSection['totals'][3] * 100, 2) : 0;
         $accountTitleSummarySection = $this->section('Account Title Summary',
             ['Account Title', 'Appropriation', 'Opening Budget Balance', 'Posted Payments in Range', 'Closing Budget Balance', '% Utilization'],
             array_map(fn ($row) => [$row[0], $row[3], $row[4], $row[5], $row[6], $row[3] > 0 ? round($row[5] / $row[3] * 100, 2) : 0], $accountTitleSection['rows']), [1,2,3,4], 5);
+        $accountTitleSummarySection['totals'][5] = ($accountTitleSummarySection['totals'][1] ?? 0) > 0
+            ? round(($accountTitleSummarySection['totals'][3] ?? 0) / $accountTitleSummarySection['totals'][1] * 100, 2) : 0;
         $sections = match ($type) {
             'cash_receipts' => [$receiptSection], 'disbursements' => [$paymentSection],
             'budget_utilization' => [$budgetSection], 'budget_category' => [$categorySection, $budgetSection], 'income_vs_receipts' => [$comparisonSection, $categoryComparison, $incomeSection, $receiptSection],
