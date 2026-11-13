@@ -152,6 +152,19 @@ class ReportController extends Controller
                     'utilization' => $budget > 0 ? round($expenditure / $budget * 100, 2) : 0,
                 ];
             })->sortBy('label')->values();
+        $budgetCategorySummary = $selectedItems
+            ->groupBy(fn (BudgetItem $item) => $item->category_id ?? 0)
+            ->map(function ($items) use ($postedByBudgetItem) {
+                $budget = (float) $items->sum('appropriation');
+                $expenditure = (float) $items->sum(fn ($item) => (float) ($postedByBudgetItem[$item->id] ?? 0));
+                return [
+                    'label' => $items->first()?->category?->name ?? 'Uncategorized',
+                    'budget' => round($budget, 2),
+                    'expenditure' => round($expenditure, 2),
+                    'remaining' => round($budget - $expenditure, 2),
+                    'utilization' => $budget > 0 ? round($expenditure / $budget * 100, 2) : 0,
+                ];
+            })->sortBy('label')->values();
         $yearEndUnusedBalances = $selectedItems
             ->groupBy(fn (BudgetItem $item) => $item->allocation_month?->format('Y-m-d'))
             ->map(function ($items, $month) use ($postedByBudgetItem) {
@@ -206,6 +219,7 @@ class ReportController extends Controller
             'departments' => Department::all(),
             'summaryCards' => $summaryCards,
             'responsibilityCenterSummary' => $responsibilityCenterSummary,
+            'budgetCategorySummary' => $budgetCategorySummary,
             'sections' => $report['sections'],
             'reportNotes' => $report['reportNotes'],
             'receiptRows' => $receiptRows,

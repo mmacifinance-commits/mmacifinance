@@ -25,6 +25,7 @@ const props = defineProps({
     fiscalPeriods: Array,
     filters: Object,
     responsibilityCenterSummary: Array,
+    budgetCategorySummary: Array,
 })
 
 const filterReportType = ref(props.filters.report_type || props.reportType || 'overall_financial')
@@ -375,6 +376,14 @@ const activeReportLabel = computed(() => {
         <div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-navy-dark text-white"><tr><th class="p-3 text-left">Responsibility Center</th><th class="p-3 text-right">Total Budget</th><th class="p-3 text-right">Total Expenditure</th><th class="p-3 text-right">Total Remaining</th><th class="p-3 text-right">% Utilization</th></tr></thead>
             <tbody><tr v-for="row in asArray(responsibilityCenterSummary)" :key="row.label" class="border-b"><td class="p-3 font-semibold">{{ row.label }}</td><td class="p-3 text-right whitespace-nowrap">{{ PESO }}{{ fmt(row.budget) }}</td><td class="p-3 text-right whitespace-nowrap">{{ PESO }}{{ fmt(row.expenditure) }}</td><td class="p-3 text-right whitespace-nowrap">{{ PESO }}{{ fmt(row.remaining) }}</td><td class="p-3 text-right">{{ Number(row.utilization || 0).toFixed(2) }}%</td></tr><tr v-if="!asArray(responsibilityCenterSummary).length"><td colspan="5" class="p-6 text-center text-gray-500">No records match the selected filters.</td></tr></tbody>
             <tfoot v-if="asArray(responsibilityCenterSummary).length" class="bg-slate-100 font-bold"><tr><td class="p-3">TOTAL</td><td class="p-3 text-right">{{ PESO }}{{ fmt(asArray(responsibilityCenterSummary).reduce((sum, row) => sum + Number(row.budget || 0), 0)) }}</td><td class="p-3 text-right">{{ PESO }}{{ fmt(asArray(responsibilityCenterSummary).reduce((sum, row) => sum + Number(row.expenditure || 0), 0)) }}</td><td class="p-3 text-right">{{ PESO }}{{ fmt(asArray(responsibilityCenterSummary).reduce((sum, row) => sum + Number(row.remaining || 0), 0)) }}</td><td class="p-3 text-right">{{ (() => { const budget = asArray(responsibilityCenterSummary).reduce((sum, row) => sum + Number(row.budget || 0), 0); const expenditure = asArray(responsibilityCenterSummary).reduce((sum, row) => sum + Number(row.expenditure || 0), 0); return budget ? (expenditure / budget * 100).toFixed(2) : '0.00' })() }}%</td></tr></tfoot>
+        </table></div>
+    </div>
+
+    <div class="mb-6 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+        <div class="border-b border-gray-200 px-5 py-3"><h3 class="text-sm font-bold uppercase tracking-wider text-gray-800">Budget Category Summary</h3></div>
+        <div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-navy-dark text-white"><tr><th class="p-3 text-left">Budget Category</th><th class="p-3 text-right">Total Budget</th><th class="p-3 text-right">Total Expenditure</th><th class="p-3 text-right">Total Remaining</th><th class="p-3 text-right">% Utilization</th></tr></thead>
+            <tbody><tr v-for="row in asArray(budgetCategorySummary)" :key="row.label" class="border-b"><td class="p-3 font-semibold">{{ row.label }}</td><td class="p-3 text-right whitespace-nowrap">{{ PESO }}{{ fmt(row.budget) }}</td><td class="p-3 text-right whitespace-nowrap">{{ PESO }}{{ fmt(row.expenditure) }}</td><td class="p-3 text-right whitespace-nowrap">{{ PESO }}{{ fmt(row.remaining) }}</td><td class="p-3 text-right">{{ Number(row.utilization || 0).toFixed(2) }}%</td></tr><tr v-if="!asArray(budgetCategorySummary).length"><td colspan="5" class="p-6 text-center text-gray-500">No records match the selected filters.</td></tr></tbody>
+            <tfoot v-if="asArray(budgetCategorySummary).length" class="bg-slate-100 font-bold"><tr><td class="p-3">TOTAL</td><td class="p-3 text-right">{{ PESO }}{{ fmt(asArray(budgetCategorySummary).reduce((sum, row) => sum + Number(row.budget || 0), 0)) }}</td><td class="p-3 text-right">{{ PESO }}{{ fmt(asArray(budgetCategorySummary).reduce((sum, row) => sum + Number(row.expenditure || 0), 0)) }}</td><td class="p-3 text-right">{{ PESO }}{{ fmt(asArray(budgetCategorySummary).reduce((sum, row) => sum + Number(row.remaining || 0), 0)) }}</td><td class="p-3 text-right">{{ (() => { const budget = asArray(budgetCategorySummary).reduce((sum, row) => sum + Number(row.budget || 0), 0); const expenditure = asArray(budgetCategorySummary).reduce((sum, row) => sum + Number(row.expenditure || 0), 0); return budget ? (expenditure / budget * 100).toFixed(2) : '0.00' })() }}%</td></tr></tfoot>
         </table></div>
     </div>
 
