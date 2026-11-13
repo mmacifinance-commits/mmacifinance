@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AnnualBudget;
 use App\Models\BudgetCategory;
 use App\Models\BudgetItem;
+use App\Models\BudgetParticular;
 use App\Models\Department;
 use App\Models\Disbursement;
 use App\Models\Expense;
@@ -217,6 +218,7 @@ class ReportController extends Controller
             'budgets' => $reportBudgets,
             'categories' => BudgetCategory::all(),
             'departments' => Department::all(),
+            'accountTitles' => BudgetParticular::query()->orderBy('particular')->get(['id', 'particular']),
             'summaryCards' => $summaryCards,
             'responsibilityCenterSummary' => $responsibilityCenterSummary,
             'budgetCategorySummary' => $budgetCategorySummary,

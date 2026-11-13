@@ -12,6 +12,7 @@ const props = defineProps({
     budgets: Array,
     categories: Array,
     departments: Array,
+    accountTitles: Array,
     summaryCards: Object,
     receiptRows: Array,
     disbursementRows: Array,
@@ -308,6 +309,13 @@ const activeReportLabel = computed(() => {
                 <select v-model="filterCategory" @change="applyFilters" class="w-full rounded-md border-gray-300 text-xs py-1.5 bg-white">
                     <option value="">All Categories</option>
                     <option v-for="c in asArray(categories)" :key="c.id" :value="c.id">{{ c.name }}</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold text-gray-600 mb-1">Account Title</label>
+                <select v-model="filterAccountTitle" @change="applyFilters" class="w-full rounded-md border-gray-300 text-xs py-1.5 bg-white">
+                    <option value="">All Account Titles</option>
+                    <option v-for="title in asArray(accountTitles)" :key="title.id" :value="title.id">{{ title.particular }}</option>
                 </select>
             </div>
             <div>
