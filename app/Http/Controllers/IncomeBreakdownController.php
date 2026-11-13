@@ -65,16 +65,12 @@ class IncomeBreakdownController extends Controller
                 'collection_rate' => (float) $row->projected > 0 ? round((float) $row->actual / (float) $row->projected * 100, 2) : null]);
         $accountTitleRows = (clone $query)->leftJoin('budget_categories', 'incomes.budget_category_id', '=', 'budget_categories.id')
             ->leftJoin('departments', 'incomes.department_id', '=', 'departments.id')
-            ->selectRaw("incomes.budget_category_id as category_id,
-                COALESCE(budget_categories.name, 'Uncategorized') as category,
-                incomes.department_id as department_id,
-                COALESCE(departments.name, 'Unassigned') as department,
-                COALESCE(NULLIF(TRIM(incomes.source), ''), 'Unnamed Account Title') as account_title,
+            ->selectRaw("COALESCE(NULLIF(TRIM(incomes.source), ''), 'Unnamed Account Title') as account_title,
                 SUM(CASE WHEN incomes.receipt_no IS NULL OR incomes.receipt_no = '' THEN incomes.amount ELSE 0 END) as projected,
                 SUM(CASE WHEN incomes.receipt_no IS NOT NULL AND incomes.receipt_no <> '' THEN incomes.amount ELSE 0 END) as actual")
-            ->groupBy('incomes.budget_category_id', 'budget_categories.name', 'incomes.department_id', 'departments.name', 'incomes.source')
-            ->orderBy('budget_categories.name')->orderBy('departments.name')->orderBy('incomes.source')->toBase()->get()
-            ->map(fn ($row) => ['category' => $row->category, 'department' => $row->department, 'account_title' => $row->account_title,
+            ->groupBy('incomes.source')
+            ->orderBy('incomes.source')->toBase()->get()
+            ->map(fn ($row) => ['account_title' => $row->account_title,
                 'projected' => round((float) $row->projected, 2), 'actual' => round((float) $row->actual, 2),
                 'difference' => round((float) $row->projected - (float) $row->actual, 2),
                 'collection_rate' => (float) $row->projected > 0 ? round((float) $row->actual / (float) $row->projected * 100, 2) : null]);
