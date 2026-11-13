@@ -4,11 +4,11 @@
     <meta charset="utf-8">
     <title>{{ $reportLabel }}</title>
     <style>
-        /* Keep the server PDF on the same legal-landscape canvas as the browser print preview. */
-        @page { size: legal landscape; margin: 0; }
+        /* Keep the PDF flush to the selected paper edge; the controller selects the paper size. */
+        @page { margin: 0; }
         body { font-family: 'DejaVu Sans', sans-serif; font-size: 10px; color: #06122a; }
-        body { width: 356mm; margin: 0; }
-        .sheet { box-sizing: border-box; width: 356mm; min-height: 216mm; padding: 8mm; }
+        body { margin: 0; }
+        .sheet { box-sizing: border-box; width: 100%; padding: 8mm; }
         .school { width: 100%; border-bottom: 2px solid #111; padding-bottom: 8px; border-collapse: collapse; }
         .school td { vertical-align: middle; }
         .school .school-logo { width: 15%; text-align: left; }

@@ -228,7 +228,8 @@ const printReport = () => window.print()
 
 @media print {
     @page {
-        size: legal landscape;
+        /* Let the printer/browser selected paper size control the page. */
+        size: auto;
         margin: 0;
     }
 
@@ -236,15 +237,15 @@ const printReport = () => window.print()
     body {
         background: #fff !important;
         overflow: visible !important;
-        width: 356mm !important;
+        width: auto !important;
     }
 
     .report-sheet {
         box-sizing: border-box !important;
-        min-height: 216mm !important;
+        min-height: 0 !important;
         overflow: visible !important;
         padding: 8mm !important;
-        width: 356mm !important;
+        width: auto !important;
     }
 
     .report-table {
