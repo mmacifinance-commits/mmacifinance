@@ -139,6 +139,19 @@ class ReportController extends Controller
         $postedByBudgetItem = $postedDisbursements
             ->groupBy(fn ($item) => (int) ($item->expense?->budget_item_id ?? 0))
             ->map(fn ($rows) => (float) $rows->sum('amount'));
+        $responsibilityCenterSummary = $selectedItems
+            ->groupBy(fn (BudgetItem $item) => $item->particular?->department_id ?? 0)
+            ->map(function ($items) use ($postedByBudgetItem) {
+                $budget = (float) $items->sum('appropriation');
+                $expenditure = (float) $items->sum(fn ($item) => (float) ($postedByBudgetItem[$item->id] ?? 0));
+                return [
+                    'label' => $items->first()?->particular?->department?->name ?? 'Unassigned',
+                    'budget' => round($budget, 2),
+                    'expenditure' => round($expenditure, 2),
+                    'remaining' => round($budget - $expenditure, 2),
+                    'utilization' => $budget > 0 ? round($expenditure / $budget * 100, 2) : 0,
+                ];
+            })->sortBy('label')->values();
         $yearEndUnusedBalances = $selectedItems
             ->groupBy(fn (BudgetItem $item) => $item->allocation_month?->format('Y-m-d'))
             ->map(function ($items, $month) use ($postedByBudgetItem) {
@@ -192,6 +205,7 @@ class ReportController extends Controller
             'categories' => BudgetCategory::all(),
             'departments' => Department::all(),
             'summaryCards' => $summaryCards,
+            'responsibilityCenterSummary' => $responsibilityCenterSummary,
             'sections' => $report['sections'],
             'reportNotes' => $report['reportNotes'],
             'receiptRows' => $receiptRows,

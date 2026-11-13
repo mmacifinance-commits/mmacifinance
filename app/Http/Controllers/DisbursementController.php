@@ -37,19 +37,6 @@ class DisbursementController extends Controller
         ])->latest();
 
         $disbursements = $disbursementQuery->paginate(25)->withQueryString();
-        $summaryBase = Disbursement::query()
-            ->join('expenses', 'disbursements.expense_id', '=', 'expenses.id')
-            ->leftJoin('budget_categories', 'expenses.category_id', '=', 'budget_categories.id')
-            ->leftJoin('budget_particulars', 'expenses.particular_id', '=', 'budget_particulars.id')
-            ->leftJoin('departments', 'budget_particulars.department_id', '=', 'departments.id');
-        $disbursementCategorySummary = (clone $summaryBase)
-            ->selectRaw("COALESCE(budget_categories.name, 'Uncategorized') as category, SUM(disbursements.amount) as total")
-            ->groupBy('budget_categories.id', 'budget_categories.name')->orderBy('category')->get()
-            ->map(fn ($row) => ['label' => $row->category, 'total' => round((float) $row->total, 2)]);
-        $disbursementCenterSummary = (clone $summaryBase)
-            ->selectRaw("COALESCE(departments.name, 'Unassigned') as department, SUM(disbursements.amount) as total")
-            ->groupBy('budget_particulars.department_id', 'departments.name')->orderBy('department')->get()
-            ->map(fn ($row) => ['label' => $row->department, 'total' => round((float) $row->total, 2)]);
         $yearsFromDsb = Disbursement::query()
             ->selectRaw("{$yearExpression} as year")
             ->distinct()
@@ -83,8 +70,6 @@ class DisbursementController extends Controller
 
         return Inertia::render('Disbursements/Index', [
             'disbursements' => $disbursements,
-            'disbursementCategorySummary' => $disbursementCategorySummary,
-            'disbursementCenterSummary' => $disbursementCenterSummary,
             'expenses' => Expense::with('budgetItem.budget:id,year,start_date,end_date')
                 ->select(
                     'id',

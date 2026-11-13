@@ -31,8 +31,6 @@ const props = defineProps({
     bankNames: Array,
     userRole: String,
     userPermissions: Object,
-    disbursementCategorySummary: Array,
-    disbursementCenterSummary: Array,
 })
 
 const disbursementItems = computed(() => props.disbursements?.data || props.disbursements || [])
@@ -478,17 +476,6 @@ const methodLabels = { check: 'Check', cash: 'Cash', bank_transfer: 'Bank Transf
             <option value="rejected">Rejected</option>
             <option value="returned_for_revision">Returned for Revision</option>
         </select>
-    </div>
-
-    <div class="mb-6 grid gap-4 lg:grid-cols-2">
-        <section class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-            <div class="border-b border-gray-200 px-4 py-3"><h3 class="font-bold text-gray-900">Summary by Responsibility Center</h3></div>
-            <div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-navy-dark text-white"><tr><th class="p-3 text-left">Responsibility Center</th><th class="p-3 text-right">Disbursement Total</th></tr></thead><tbody><tr v-for="row in disbursementCenterSummary" :key="row.label" class="border-b"><td class="p-3">{{ row.label }}</td><td class="p-3 text-right font-semibold whitespace-nowrap">₱{{ Number(row.total).toLocaleString('en-PH', { minimumFractionDigits: 2 }) }}</td></tr><tr v-if="!disbursementCenterSummary?.length"><td colspan="2" class="p-4 text-center text-gray-500">No summary data.</td></tr></tbody></table></div>
-        </section>
-        <section class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-            <div class="border-b border-gray-200 px-4 py-3"><h3 class="font-bold text-gray-900">Summary by Budget Category</h3></div>
-            <div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-navy-dark text-white"><tr><th class="p-3 text-left">Budget Category</th><th class="p-3 text-right">Disbursement Total</th></tr></thead><tbody><tr v-for="row in disbursementCategorySummary" :key="row.label" class="border-b"><td class="p-3">{{ row.label }}</td><td class="p-3 text-right font-semibold whitespace-nowrap">₱{{ Number(row.total).toLocaleString('en-PH', { minimumFractionDigits: 2 }) }}</td></tr><tr v-if="!disbursementCategorySummary?.length"><td colspan="2" class="p-4 text-center text-gray-500">No summary data.</td></tr></tbody></table></div>
-        </section>
     </div>
 
     <!-- Table -->
