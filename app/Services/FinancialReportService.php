@@ -14,6 +14,7 @@ class FinancialReportService
         'cash_receipts' => 'Cash Receipts Report', 'disbursements' => 'Disbursement Report',
         'income_vs_receipts' => 'Income vs Receipts Report', 'fund_balance' => 'Fund Balance Report',
         'responsibility_center' => 'Responsibility Center Report', 'account_title_ledger' => 'Account Title Report',
+        'account_title_summary' => 'Account Title Summary Report',
         'closing_report' => 'Closing Report',
     ];
 
@@ -154,12 +155,16 @@ class FinancialReportService
         $categorySection = $this->section('Budget Category Summary', ['Budget Category', 'Total Budget', 'Total Expenditure', 'Total Remaining', '% Utilization'], $categories, [1,2,3], 4);
         $categorySection['balanceColumns'] = [1,2,3];
         $accountTitleSection = $this->accountSections($items, $posted, $detailPayments, $start)[0];
+        $accountTitleSummarySection = $this->section('Account Title Summary',
+            ['Account Title', 'Appropriation', 'Opening Budget Balance', 'Posted Payments in Range', 'Closing Budget Balance'],
+            array_map(fn ($row) => [$row[0], $row[3], $row[4], $row[5], $row[6]], $accountTitleSection['rows']), [1,2,3,4]);
         $sections = match ($type) {
             'cash_receipts' => [$receiptSection], 'disbursements' => [$paymentSection],
             'budget_utilization' => [$budgetSection], 'budget_category' => [$categorySection, $budgetSection], 'income_vs_receipts' => [$comparisonSection, $categoryComparison, $incomeSection, $receiptSection],
             'fund_balance' => [$fundSection, $receiptSection, $paymentSection],
             'responsibility_center' => [$centerSection, $budgetSection],
             'account_title_ledger' => $this->accountSections($items, $posted, $detailPayments, $start),
+            'account_title_summary' => [$accountTitleSummarySection],
             'closing_report' => [...$this->closingSections($period, $totals), $centerSection, $this->accountSections($items, $posted, $detailPayments, null)[0]],
             default => [$centerSection, $budgetSection, $receiptSection, $paymentSection],
         };
