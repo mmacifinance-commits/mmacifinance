@@ -324,6 +324,7 @@ class ReportController extends Controller
             ['value' => 'budget_category', 'label' => 'Budget Category Report'],
             ['value' => 'cash_receipts', 'label' => 'Cash Receipts Report'],
             ['value' => 'disbursements', 'label' => 'Disbursement Report'],
+            ['value' => 'projected_income', 'label' => 'Projected Income Report'],
             ['value' => 'income_vs_receipts', 'label' => 'Income vs Receipts Report'],
             ['value' => 'fund_balance', 'label' => 'Fund Balance Report'],
             ['value' => 'responsibility_center', 'label' => 'Responsibility Center Report'],

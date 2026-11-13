@@ -15,6 +15,7 @@ const department = ref('')
 const departments = ref([])
 const rows = ref([])
 const centerRows = ref([])
+const accountTitleRows = ref([])
 const selectedCategory = ref(null)
 const detailRows = ref([])
 const detailBusy = ref(false)
@@ -55,11 +56,11 @@ const money = value => new Intl.NumberFormat('en-PH', { style: 'currency', curre
 async function load() {
     closeCategory()
     const id = ++requestId
-    busy.value = true; error.value = ''; rows.value = []; centerRows.value = []; overall.value = {}
+    busy.value = true; error.value = ''; rows.value = []; centerRows.value = []; accountTitleRows.value = []; overall.value = {}
     try {
         const params = { department_id: department.value || undefined, fiscal_period_id: fiscal.value || undefined, allocation_month: month.value || undefined, start_date: start.value || undefined, end_date: end.value || undefined }
         const { data } = await axios.get('/income-breakdown', { params })
-        if (id === requestId) { appliedFilters.value = params; departments.value = data.departments; rows.value = data.rows; centerRows.value = data.center_rows || []; overall.value = data.overall; quotaAmount.value = data.overall.quota ?? '' }
+        if (id === requestId) { appliedFilters.value = params; departments.value = data.departments; rows.value = data.rows; centerRows.value = data.center_rows || []; accountTitleRows.value = data.account_title_rows || []; overall.value = data.overall; quotaAmount.value = data.overall.quota ?? '' }
     } catch (e) {
         if (id === requestId) error.value = Object.values(e.response?.data?.errors || {}).flat().join(' ') || 'Could not load the breakdown. Please try again.'
     } finally { if (id === requestId) busy.value = false }
@@ -108,6 +109,14 @@ function reset() { department.value = '';  month.value = ''; start.value = ''; e
             <h3 class="mb-2 text-base font-bold text-slate-800">Summary by Responsibility Center</h3>
             <div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-700 text-white"><tr><th class="p-3 text-left">Responsibility Center</th><th class="p-3 text-right">Projected Income</th><th class="p-3 text-right">Actual Receipts</th><th class="p-3 text-right">Difference</th><th class="p-3 text-right">Collection Rate</th></tr></thead>
                 <tbody><tr v-for="row in centerRows" :key="row.department_id ?? 'unassigned'" class="border-b"><td class="p-3">{{ row.department }}</td><td class="p-3 text-right whitespace-nowrap">{{ money(row.projected) }}</td><td class="p-3 text-right whitespace-nowrap">{{ money(row.actual) }}</td><td class="p-3 text-right whitespace-nowrap">{{ money(row.difference) }}</td><td class="p-3 text-right">{{ row.collection_rate === null ? '—' : row.collection_rate.toFixed(2) + '%' }}</td></tr><tr v-if="!centerRows.length"><td colspan="5" class="p-6 text-center">No responsibility center data.</td></tr></tbody>
+            </table></div>
+        </section>
+
+        <section v-if="!busy && !error" class="mt-5">
+            <h3 class="mb-2 text-base font-bold text-slate-800">Summary by Account Title</h3>
+            <p class="mb-2 text-xs text-slate-500">Account Title is represented by the income source, grouped under its budget category and responsibility center.</p>
+            <div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-700 text-white"><tr><th class="p-3 text-left">Budget Category</th><th class="p-3 text-left">Responsibility Center</th><th class="p-3 text-left">Account Title</th><th class="p-3 text-right">Projected Income</th><th class="p-3 text-right">Actual Receipts</th><th class="p-3 text-right">Difference</th><th class="p-3 text-right">Collection Rate</th></tr></thead>
+                <tbody><tr v-for="(row, index) in accountTitleRows" :key="`${row.category}-${row.department}-${row.account_title}-${index}`" class="border-b"><td class="p-3">{{ row.category }}</td><td class="p-3">{{ row.department }}</td><td class="p-3 font-semibold">{{ row.account_title }}</td><td class="p-3 text-right whitespace-nowrap">{{ money(row.projected) }}</td><td class="p-3 text-right whitespace-nowrap">{{ money(row.actual) }}</td><td class="p-3 text-right whitespace-nowrap">{{ money(row.difference) }}</td><td class="p-3 text-right">{{ row.collection_rate === null ? '—' : row.collection_rate.toFixed(2) + '%' }}</td></tr><tr v-if="!accountTitleRows.length"><td colspan="7" class="p-6 text-center">No account title data.</td></tr></tbody>
             </table></div>
         </section>
 

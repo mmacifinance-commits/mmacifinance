@@ -12,6 +12,7 @@ class FinancialReportService
     public const TYPES = [
         'overall_financial' => 'Overall Financial Report', 'budget_utilization' => 'Budget Utilization Report', 'budget_category' => 'Budget Category Report',
         'cash_receipts' => 'Cash Receipts Report', 'disbursements' => 'Disbursement Report',
+        'projected_income' => 'Projected Income Report',
         'income_vs_receipts' => 'Income vs Receipts Report', 'fund_balance' => 'Fund Balance Report',
         'responsibility_center' => 'Responsibility Center Report', 'account_title_ledger' => 'Account Title Report',
         'account_title_summary' => 'Account Title Summary Report',
@@ -164,6 +165,7 @@ class FinancialReportService
             ? round(($accountTitleSummarySection['totals'][3] ?? 0) / $accountTitleSummarySection['totals'][1] * 100, 2) : 0;
         $sections = match ($type) {
             'cash_receipts' => [$receiptSection], 'disbursements' => [$paymentSection],
+            'projected_income' => [$incomeSection],
             'budget_utilization' => [$budgetSection], 'budget_category' => [$categorySection, $budgetSection], 'income_vs_receipts' => [$comparisonSection, $categoryComparison, $incomeSection, $receiptSection],
             'fund_balance' => [$fundSection, $receiptSection, $paymentSection],
             'responsibility_center' => [$centerSection, $budgetSection],
