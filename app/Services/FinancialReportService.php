@@ -193,7 +193,7 @@ class FinancialReportService
         $paid = $posted->groupBy(fn ($r) => $r->expense->budget_item_id)->map(fn ($rows) => (float) $rows->sum('amount'));
         $summary = [];
         $details = [];
-        foreach ($items->groupBy('particular_id') as $allocations) {
+        foreach ($items->groupBy(fn ($item) => $this->accountTitleKey($item->particular?->particular)) as $allocations) {
             $first = $allocations->first();
             $title = $first->particular?->particular ?? 'Untitled';
             $center = $first->particular?->department?->name ?? 'Unassigned';
@@ -216,6 +216,13 @@ class FinancialReportService
         }
         return [$this->section('Account Title Summary',
             ['Account Title', 'Responsibility Center', 'Category', 'Appropriation', 'Opening Budget Balance', 'Posted Payments in Range', 'Closing Budget Balance'], $summary, [3,4,5,6]), ...$details];
+    }
+
+    private function accountTitleKey(?string $title): string
+    {
+        $title = strtolower(trim((string) $title));
+        $title = preg_replace('/\s+/', ' ', $title);
+        return preg_replace('/s$/', '', $title);
     }
 
     private function closingSections(?AnnualBudget $period, array $totals): array
