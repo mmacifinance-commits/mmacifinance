@@ -197,12 +197,17 @@ class FinancialReportService
             $title = $first->particular?->particular ?? 'Untitled';
             $center = $first->particular?->department?->name ?? 'Unassigned';
             $category = $first->category?->name ?? 'Uncategorized';
-            $rows = $allocations->map(function ($item) use ($prior, $paid) {
-                $opening = round((float) $item->appropriation - ($prior[$item->id] ?? 0), 2);
-                $payments = round($paid[$item->id] ?? 0, 2);
-                return [$item->particulars ?: 'Unspecified', $item->allocation_month?->format('F Y'), $item->ref_no,
-                    (float) $item->appropriation, $opening, $payments, round($opening - $payments, 2)];
-            })->values()->all();
+            $rows = $allocations->groupBy(fn ($item) => $item->particulars ?: 'Unspecified')
+                ->map(function ($particularAllocations) use ($prior, $paid) {
+                    $appropriation = (float) $particularAllocations->sum('appropriation');
+                    $opening = (float) $particularAllocations->sum(fn ($item) => (float) $item->appropriation - ($prior[$item->id] ?? 0));
+                    $payments = (float) $particularAllocations->sum(fn ($item) => $paid[$item->id] ?? 0);
+                    $singleAllocation = $particularAllocations->count() === 1 ? $particularAllocations->first() : null;
+                    return [$particularAllocations->first()->particulars ?: 'Unspecified',
+                        $singleAllocation?->allocation_month?->format('F Y') ?? 'All Fiscal Months',
+                        $singleAllocation?->ref_no ?? 'Multiple allocations',
+                        round($appropriation, 2), round($opening, 2), round($payments, 2), round($opening - $payments, 2)];
+                })->values()->all();
             $detail = $this->section($title.' — '.$center.' — '.$category,
                 ['Particulars', 'Allocation Month', 'Monthly Ref.', 'Appropriation', 'Opening Budget Balance', 'Posted Payments in Range', 'Closing Budget Balance'], $rows, [3,4,5,6]);
             $summary[] = [$title, $center, $category, $detail['totals'][3], $detail['totals'][4], $detail['totals'][5], $detail['totals'][6]];
