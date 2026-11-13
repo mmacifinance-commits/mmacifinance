@@ -126,6 +126,10 @@ class FinancialReportService
         $paymentSection['type'] = 'disbursements';
         $incomeSection = $this->section('Projected Income', ['Income No.', 'Date', 'Source', 'Description', 'Amount', 'Budget Category', 'Responsibility Center'],
             $incomes->map(fn ($r) => [$r->income_no, $r->date_encoded?->toDateString(), $r->source, $r->description, (float) $r->amount, $r->budgetCategory?->name ?? 'Uncategorized', $r->department?->name ?? 'Unassigned'])->values()->all(), [4]);
+        $incomeSummarySection = $this->section('Projected Income Summary', ['Account Title', 'Projected Income'],
+            $incomes->groupBy(fn ($r) => trim((string) $r->source) ?: 'Unnamed Account Title')
+                ->map(fn ($rows, $source) => [$source, round((float) $rows->sum('amount'), 2)])->values()->all(), [1]);
+        $incomeSummarySection['totalLabel'] = 'TOTAL PROJECTED INCOME';
         $comparisonSection = $this->section('Income vs Receipts', ['Description', 'Amount'], [
             ['Projected Income', $totals['income']], ['Actual Receipts', $cashReceipts],
             ['Difference (Projected Income less Receipts)', round($totals['income'] - $cashReceipts, 2)],
@@ -165,7 +169,7 @@ class FinancialReportService
             ? round(($accountTitleSummarySection['totals'][3] ?? 0) / $accountTitleSummarySection['totals'][1] * 100, 2) : 0;
         $sections = match ($type) {
             'cash_receipts' => [$receiptSection], 'disbursements' => [$paymentSection],
-            'projected_income' => [$incomeSection],
+            'projected_income' => [$incomeSummarySection, $incomeSection],
             'budget_utilization' => [$budgetSection], 'budget_category' => [$categorySection, $budgetSection], 'income_vs_receipts' => [$comparisonSection, $categoryComparison, $incomeSection, $receiptSection],
             'fund_balance' => [$fundSection, $receiptSection, $paymentSection],
             'responsibility_center' => [$centerSection, $budgetSection],
