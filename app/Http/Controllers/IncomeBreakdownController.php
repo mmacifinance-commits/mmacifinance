@@ -42,7 +42,7 @@ class IncomeBreakdownController extends Controller
                     'collection_rate' => $row->projected > 0 ? round($row->actual / $row->projected * 100, 2) : null]);
             return response()->json(['rows' => $detailRows]);
         }
-        $rows = $query->leftJoin('budget_categories', 'incomes.budget_category_id', '=', 'budget_categories.id')
+        $rows = (clone $query)->leftJoin('budget_categories', 'incomes.budget_category_id', '=', 'budget_categories.id')
             ->selectRaw("budget_categories.id as category_id, COALESCE(budget_categories.name, 'Uncategorized') as source,
             SUM(CASE WHEN receipt_no IS NULL OR receipt_no = '' THEN amount ELSE 0 END) as projected,
             SUM(CASE WHEN receipt_no IS NOT NULL AND receipt_no <> '' THEN amount ELSE 0 END) as actual")
@@ -54,7 +54,7 @@ class IncomeBreakdownController extends Controller
         $quota = $quota !== null ? (float) $quota : null;
         $rows = $rows->map(fn ($row) => $row + ['collection_rate' => $row['projected'] > 0
             ? round($row['actual'] / $row['projected'] * 100, 2) : null])->values();
-        $centerRows = $query->leftJoin('departments', 'incomes.department_id', '=', 'departments.id')
+        $centerRows = (clone $query)->leftJoin('departments', 'incomes.department_id', '=', 'departments.id')
             ->selectRaw("incomes.department_id as department_id, COALESCE(departments.name, 'Unassigned') as department,
                 SUM(CASE WHEN receipt_no IS NULL OR receipt_no = '' THEN amount ELSE 0 END) as projected,
                 SUM(CASE WHEN receipt_no IS NOT NULL AND receipt_no <> '' THEN amount ELSE 0 END) as actual")
@@ -63,7 +63,7 @@ class IncomeBreakdownController extends Controller
                 'projected' => round((float) $row->projected, 2), 'actual' => round((float) $row->actual, 2),
                 'difference' => round((float) $row->projected - (float) $row->actual, 2),
                 'collection_rate' => (float) $row->projected > 0 ? round((float) $row->actual / (float) $row->projected * 100, 2) : null]);
-        $accountTitleRows = $query->leftJoin('budget_categories', 'incomes.budget_category_id', '=', 'budget_categories.id')
+        $accountTitleRows = (clone $query)->leftJoin('budget_categories', 'incomes.budget_category_id', '=', 'budget_categories.id')
             ->leftJoin('departments', 'incomes.department_id', '=', 'departments.id')
             ->selectRaw("incomes.budget_category_id as category_id,
                 COALESCE(budget_categories.name, 'Uncategorized') as category,
