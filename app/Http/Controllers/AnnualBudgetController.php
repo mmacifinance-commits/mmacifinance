@@ -703,6 +703,57 @@ class AnnualBudgetController extends Controller
         return redirect()->route('annual-budgets.show', $annualBudget)->with('success', 'Monthly Budget Allocation added.');
     }
 
+    public function bulkAccountTitleBudgets(Request $request, AnnualBudget $annualBudget)
+    {
+        $this->ensureBudgetOpen($annualBudget, 'allocation_month');
+
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:0.01',
+        ]);
+
+        $this->ensureIncomeExistsForPeriod(
+            $annualBudget->fiscalStart()->toDateString(),
+            $annualBudget->fiscalEnd()->toDateString()
+        );
+
+        $amount = round((float) $validated['amount'], 2);
+        $allocationMonth = $annualBudget->fiscalStart()->startOfMonth();
+        $titles = BudgetParticular::query()->whereNotNull('category_id')->whereNotNull('department_id')->get();
+        $created = 0;
+        $skipped = 0;
+
+        DB::transaction(function () use ($annualBudget, $titles, $amount, $allocationMonth, &$created, &$skipped) {
+            foreach ($titles as $title) {
+                $exists = $annualBudget->items()
+                    ->where('particular_id', $title->id)
+                    ->exists();
+
+                if ($exists) {
+                    $skipped++;
+                    continue;
+                }
+
+                $item = $annualBudget->items()->create([
+                    'category_id' => $title->category_id,
+                    'particular_id' => $title->id,
+                    'particulars' => 'Annual account title budget',
+                    'allocation_month' => $allocationMonth->toDateString(),
+                    'month' => $allocationMonth->month,
+                    'appropriation' => $amount,
+                    'expenditure' => 0,
+                ]);
+
+                $this->allocateIncomeToBudget($annualBudget, $item, $amount);
+                $created++;
+            }
+        });
+
+        AuditTrail::log($annualBudget, 'modified', auth()->user(), "Added {$amount} budget to {$created} account title(s)");
+
+        return redirect()->route('annual-budgets.show', $annualBudget)
+            ->with('success', "Added ₱".number_format($amount, 2)." to {$created} account title(s). {$skipped} already had a budget and were skipped.");
+    }
+
     public function updateItem(Request $request, AnnualBudget $annualBudget, BudgetItem $item)
     {
         abort_unless((int) $item->budget_id === (int) $annualBudget->id, 404);

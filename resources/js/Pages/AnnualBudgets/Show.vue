@@ -35,6 +35,7 @@ const importForm = useForm({
 const closeForm = useForm({
     close_remarks: '',
 })
+const bulkBudgetForm = useForm({ amount: 50000 })
 
 const itemForm = useForm({
     category_id: '',
@@ -188,6 +189,17 @@ function saveItem() {
     }
 }
 
+function addBudgetToAllAccountTitles() {
+    const amount = Number(bulkBudgetForm.amount || 0)
+    if (amount <= 0) return
+    if (!confirm(`Add ₱${fmt(amount)} to every account title that does not yet have a budget in this fiscal period?`)) return
+
+    bulkBudgetForm.post(`/annual-budgets/${props.budget.id}/items/bulk-account-titles`, {
+        preserveScroll: true,
+        onError: () => {},
+    })
+}
+
 function removeItem(itemId) {
     if (confirm('Warning: this cannot be undone. Delete this monthly budget allocation item?')) router.delete(`/annual-budgets/${props.budget.id}/items/${itemId}`)
 }
@@ -303,6 +315,19 @@ function catBalancePercent(group) {
         <button v-if="perms.canManageBudget && !isClosed" @click="openAddItem" class="ml-auto rounded-lg bg-navy-dark px-4 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
             Add Monthly Allocation Item
         </button>
+    </div>
+
+    <div v-if="perms.canManageBudget && !isClosed" class="mb-6 flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 shadow-sm">
+        <div class="mr-auto">
+            <p class="text-sm font-bold text-blue-900">Budget all account titles</p>
+            <p class="text-xs text-blue-700">Add the same annual starting allocation to every account title without an existing budget.</p>
+        </div>
+        <label class="text-xs font-bold uppercase text-blue-800">Amount per title (₱)</label>
+        <input v-model.number="bulkBudgetForm.amount" type="number" min="0.01" step="0.01" class="w-36 rounded-md border border-blue-300 bg-white px-3 py-1.5 text-sm" />
+        <button @click="addBudgetToAllAccountTitles" :disabled="bulkBudgetForm.processing" class="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-60">
+            {{ bulkBudgetForm.processing ? 'Adding...' : 'Add to All Account Titles' }}
+        </button>
+        <p v-if="bulkBudgetForm.errors.amount" class="w-full text-xs text-red-600">{{ bulkBudgetForm.errors.amount }}</p>
     </div>
 
     <!-- Grouped by Category -->
