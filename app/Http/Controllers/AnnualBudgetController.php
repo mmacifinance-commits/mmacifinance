@@ -510,6 +510,7 @@ class AnnualBudgetController extends Controller
 
     public function show(Request $request, AnnualBudget $annualBudget)
     {
+        $this->fillUnusedAccountTitles($annualBudget);
         if (! $annualBudget->ref_no) {
             $annualBudget->update(['ref_no' => sprintf('AB-%d-%04d', $annualBudget->year, $annualBudget->id)]);
         }
@@ -566,6 +567,43 @@ class AnnualBudgetController extends Controller
             'availableYears' => AnnualBudget::distinct()->orderByDesc('year')->pluck('year'),
             'allBudgets' => AnnualBudget::select('id', 'year', 'start_date', 'end_date', 'ref_no', 'semester')->orderByDesc('start_date')->get(),
         ]);
+    }
+
+    protected function fillUnusedAccountTitles(AnnualBudget $annualBudget): void
+    {
+        if ($annualBudget->closed_at) {
+            return;
+        }
+
+        $titles = BudgetParticular::query()
+            ->whereDoesntHave('budgetItems', fn ($query) => $query->where('budget_id', $annualBudget->id))
+            ->get();
+
+        if ($titles->isEmpty()) {
+            return;
+        }
+
+        $amount = 50000.00;
+        $month = $annualBudget->fiscalStart()->startOfMonth();
+
+        try {
+            DB::transaction(function () use ($annualBudget, $titles, $amount, $month) {
+                foreach ($titles as $title) {
+                    $item = $annualBudget->items()->create([
+                        'category_id' => $title->category_id,
+                        'particular_id' => $title->id,
+                        'particulars' => 'Default account title appropriation',
+                        'month' => $month->month,
+                        'allocation_month' => $month->toDateString(),
+                        'appropriation' => $amount,
+                    ]);
+                    $this->allocateIncomeToBudget($annualBudget, $item, $amount);
+                }
+            });
+        } catch (ValidationException $exception) {
+            // Keep the Manage Items page available when the remaining income
+            // cannot fund every unused account title.
+        }
     }
 
     public function store(Request $request)
