@@ -510,12 +510,6 @@ class AnnualBudgetController extends Controller
 
     public function show(Request $request, AnnualBudget $annualBudget)
     {
-        if (! $annualBudget->closed_at && Income::projected()->whereBetween('date_encoded', [
-            $annualBudget->fiscalStart()->toDateString(),
-            $annualBudget->fiscalEnd()->toDateString(),
-        ])->exists()) {
-            $this->addMissingAccountTitleBudgets($annualBudget);
-        }
         if (! $annualBudget->ref_no) {
             $annualBudget->update(['ref_no' => sprintf('AB-%d-%04d', $annualBudget->year, $annualBudget->id)]);
         }
@@ -723,36 +717,6 @@ class AnnualBudgetController extends Controller
         }
 
         return redirect()->route('annual-budgets.show', $annualBudget)->with('success', 'Monthly Budget Allocation added.');
-    }
-
-    protected function addMissingAccountTitleBudgets(AnnualBudget $annualBudget)
-    {
-        $this->ensureBudgetOpen($annualBudget, 'appropriation');
-        $allocationMonth = $annualBudget->fiscalStart()->startOfMonth();
-        $accountTitles = BudgetParticular::query()
-            ->whereDoesntHave('budgetItems', fn ($query) => $query->where('budget_id', $annualBudget->id))
-            ->get();
-
-        if ($accountTitles->isEmpty()) {
-            return;
-        }
-
-        DB::transaction(function () use ($annualBudget, $accountTitles, $allocationMonth) {
-            foreach ($accountTitles as $accountTitle) {
-                $item = $annualBudget->items()->create([
-                    'category_id' => $accountTitle->category_id,
-                    'particular_id' => $accountTitle->id,
-                    'particulars' => '',
-                    'month' => $allocationMonth->month,
-                    'allocation_month' => $allocationMonth->toDateString(),
-                    'appropriation' => 50000.00,
-                ]);
-                $this->allocateIncomeToBudget($annualBudget, $item, 50000.00);
-                AuditTrail::log($item, 'created', auth()->user(), "Added default ₱50,000 budget for account title {$accountTitle->particular}");
-            }
-        });
-
-        return;
     }
 
     public function updateItem(Request $request, AnnualBudget $annualBudget, BudgetItem $item)
