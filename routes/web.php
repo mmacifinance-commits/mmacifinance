@@ -87,7 +87,6 @@ Route::middleware('auth')->group(function () {
         Route::post('/annual-budgets/{annual_budget}/reopen', [AnnualBudgetController::class, 'reopen'])->name('annual-budgets.reopen');
         Route::delete('/annual-budgets/{annual_budget}', [AnnualBudgetController::class, 'destroy'])->name('annual-budgets.destroy')->middleware('role:super_admin');
         Route::post('annual-budgets/{annual_budget}/items', [AnnualBudgetController::class, 'storeItem'])->name('annual-budgets.items.store');
-        Route::post('annual-budgets/{annual_budget}/items/bulk-account-titles', [AnnualBudgetController::class, 'bulkAccountTitleBudgets'])->name('annual-budgets.items.bulk-account-titles');
         Route::put('annual-budgets/{annual_budget}/items/{item}', [AnnualBudgetController::class, 'updateItem'])->name('annual-budgets.items.update');
         Route::delete('annual-budgets/{annual_budget}/items/{item}', [AnnualBudgetController::class, 'destroyItem'])->name('annual-budgets.items.destroy')->middleware('role:super_admin');
         Route::post('annual-budgets/{annual_budget}/import-csv', [AnnualBudgetController::class, 'importCsv'])->name('annual-budgets.import-csv');

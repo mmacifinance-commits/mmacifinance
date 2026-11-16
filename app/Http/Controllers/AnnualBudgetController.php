@@ -508,22 +508,38 @@ class AnnualBudgetController extends Controller
         ]);
     }
 
-    public function show(AnnualBudget $annualBudget)
+    public function show(Request $request, AnnualBudget $annualBudget)
     {
         if (! $annualBudget->ref_no) {
             $annualBudget->update(['ref_no' => sprintf('AB-%d-%04d', $annualBudget->year, $annualBudget->id)]);
         }
 
-        $budget = $annualBudget->load(['items.budget:id,year,start_date,end_date', 'items.category', 'items.particular.department']);
+        $itemQuery = $annualBudget->items()->with(['category', 'particular.department']);
+        if ($request->filled('month')) {
+            $itemQuery->whereDate('allocation_month', $request->query('month'));
+        }
+        if ($request->filled('search')) {
+            $term = trim((string) $request->query('search'));
+            $itemQuery->where(function ($query) use ($term) {
+                $query->where('ref_no', 'like', "%{$term}%")
+                    ->orWhere('particulars', 'like', "%{$term}%")
+                    ->orWhereHas('particular', fn ($q) => $q->where('particular', 'like', "%{$term}%")
+                        ->orWhere('account_name', 'like', "%{$term}%"))
+                    ->orWhereHas('particular.department', fn ($q) => $q->where('name', 'like', "%{$term}%"))
+                    ->orWhereHas('category', fn ($q) => $q->where('name', 'like', "%{$term}%"));
+            });
+        }
+        $budget = $annualBudget;
+        $budget->setRelation('items', $itemQuery->orderBy('allocation_month')->orderBy('id')->paginate(15)->withQueryString());
         foreach ($budget->items as $item) {
             if (! $item->ref_no) {
                 $item->update(['ref_no' => sprintf('MB-%d-%02d-%04d', $annualBudget->year, $item->month ?: 1, $item->id)]);
             }
         }
-        BudgetItem::hydrateDerivedTotals($budget->items);
+        BudgetItem::hydrateDerivedTotals($budget->items->getCollection());
         // Keep the parent available to accessors, but do not repeat its fiscal
         // calendar in every allocation serialized for the page.
-        $budget->items->each(fn ($item) => $item->makeHidden('budget'));
+        $budget->items->getCollection()->each(fn ($item) => $item->makeHidden('budget'));
 
         // Select only fields used by the account selector, without hydrating thousands
         // of Eloquent models and loading the same lookup collection twice.
@@ -701,57 +717,6 @@ class AnnualBudgetController extends Controller
         }
 
         return redirect()->route('annual-budgets.show', $annualBudget)->with('success', 'Monthly Budget Allocation added.');
-    }
-
-    public function bulkAccountTitleBudgets(Request $request, AnnualBudget $annualBudget)
-    {
-        $this->ensureBudgetOpen($annualBudget, 'allocation_month');
-
-        $validated = $request->validate([
-            'amount' => 'required|numeric|min:0.01',
-        ]);
-
-        $this->ensureIncomeExistsForPeriod(
-            $annualBudget->fiscalStart()->toDateString(),
-            $annualBudget->fiscalEnd()->toDateString()
-        );
-
-        $amount = round((float) $validated['amount'], 2);
-        $allocationMonth = $annualBudget->fiscalStart()->startOfMonth();
-        $titles = BudgetParticular::query()->whereNotNull('category_id')->whereNotNull('department_id')->get();
-        $created = 0;
-        $skipped = 0;
-
-        DB::transaction(function () use ($annualBudget, $titles, $amount, $allocationMonth, &$created, &$skipped) {
-            foreach ($titles as $title) {
-                $exists = $annualBudget->items()
-                    ->where('particular_id', $title->id)
-                    ->exists();
-
-                if ($exists) {
-                    $skipped++;
-                    continue;
-                }
-
-                $item = $annualBudget->items()->create([
-                    'category_id' => $title->category_id,
-                    'particular_id' => $title->id,
-                    'particulars' => 'Annual account title budget',
-                    'allocation_month' => $allocationMonth->toDateString(),
-                    'month' => $allocationMonth->month,
-                    'appropriation' => $amount,
-                    'expenditure' => 0,
-                ]);
-
-                $this->allocateIncomeToBudget($annualBudget, $item, $amount);
-                $created++;
-            }
-        });
-
-        AuditTrail::log($annualBudget, 'modified', auth()->user(), "Added {$amount} budget to {$created} account title(s)");
-
-        return redirect()->route('annual-budgets.show', $annualBudget)
-            ->with('success', "Added ₱".number_format($amount, 2)." to {$created} account title(s). {$skipped} already had a budget and were skipped.");
     }
 
     public function updateItem(Request $request, AnnualBudget $annualBudget, BudgetItem $item)

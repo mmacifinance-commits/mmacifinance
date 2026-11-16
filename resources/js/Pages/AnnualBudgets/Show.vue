@@ -35,7 +35,6 @@ const importForm = useForm({
 const closeForm = useForm({
     close_remarks: '',
 })
-const bulkBudgetForm = useForm({ amount: 50000 })
 
 const itemForm = useForm({
     category_id: '',
@@ -100,9 +99,8 @@ watch(() => props.budget, (newBudget) => {
 }, { immediate: true })
 
 function applyFilter() {
-    if (Number(selectedBudgetId.value) !== Number(props.budget.id)) {
-        router.get(`/annual-budgets/${selectedBudgetId.value}`)
-    }
+    const target = Number(selectedBudgetId.value) !== Number(props.budget.id) ? `/annual-budgets/${selectedBudgetId.value}` : `/annual-budgets/${props.budget.id}`
+    router.get(target, { month: selectedMonthFilter.value || undefined, search: searchTerm.value || undefined }, { preserveScroll: true, preserveState: true })
 }
 
 function fmt(v) { return new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0) }
@@ -187,17 +185,6 @@ function saveItem() {
     } else {
         itemForm.post(`/annual-budgets/${props.budget.id}/items`, options)
     }
-}
-
-function addBudgetToAllAccountTitles() {
-    const amount = Number(bulkBudgetForm.amount || 0)
-    if (amount <= 0) return
-    if (!confirm(`Add ₱${fmt(amount)} to every account title that does not yet have a budget in this fiscal period?`)) return
-
-    bulkBudgetForm.post(`/annual-budgets/${props.budget.id}/items/bulk-account-titles`, {
-        preserveScroll: true,
-        onError: () => {},
-    })
 }
 
 function removeItem(itemId) {
@@ -296,7 +283,7 @@ function catBalancePercent(group) {
 
         <div class="flex items-center gap-2">
             <label class="text-xs font-bold uppercase text-gray-500">Budget Month:</label>
-            <select v-model="selectedMonthFilter" class="rounded-md border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-[140px]">
+            <select v-model="selectedMonthFilter" @change="applyFilter" class="rounded-md border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-[140px]">
                 <option value="">All Fiscal Months</option>
                 <option v-for="month in fiscalMonths" :key="month.value" :value="month.value">{{ month.label }}</option>
             </select>
@@ -309,25 +296,13 @@ function catBalancePercent(group) {
                 type="text"
                 class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm bg-white"
                 placeholder="Search account title, particulars, responsibility center, or ref no..."
+                @keyup.enter="applyFilter"
             />
         </div>
 
         <button v-if="perms.canManageBudget && !isClosed" @click="openAddItem" class="ml-auto rounded-lg bg-navy-dark px-4 py-2 text-sm font-semibold text-white hover:bg-navy transition shadow-sm">
             Add Monthly Allocation Item
         </button>
-    </div>
-
-    <div v-if="perms.canManageBudget && !isClosed" class="mb-6 flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 shadow-sm">
-        <div class="mr-auto">
-            <p class="text-sm font-bold text-blue-900">Budget all account titles</p>
-            <p class="text-xs text-blue-700">Add the same annual starting allocation to every account title without an existing budget.</p>
-        </div>
-        <label class="text-xs font-bold uppercase text-blue-800">Amount per title (₱)</label>
-        <input v-model.number="bulkBudgetForm.amount" type="number" min="0.01" step="0.01" class="w-36 rounded-md border border-blue-300 bg-white px-3 py-1.5 text-sm" />
-        <button @click="addBudgetToAllAccountTitles" :disabled="bulkBudgetForm.processing" class="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-60">
-            {{ bulkBudgetForm.processing ? 'Adding...' : 'Add to All Account Titles' }}
-        </button>
-        <p v-if="bulkBudgetForm.errors.amount" class="w-full text-xs text-red-600">{{ bulkBudgetForm.errors.amount }}</p>
     </div>
 
     <!-- Grouped by Category -->
@@ -408,6 +383,14 @@ function catBalancePercent(group) {
     <!-- Empty state -->
     <div v-if="!groupedItems.length" class="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-400 shadow-sm">
         No budget allocation items found for this selection. Click "Add Monthly Allocation Item" to get started.
+    </div>
+
+    <div v-if="budget.items?.last_page > 1" class="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm">
+        <span class="text-gray-500">Showing {{ budget.items.from }}–{{ budget.items.to }} of {{ budget.items.total }} allocations</span>
+        <div class="flex gap-2">
+            <Link v-if="budget.items.prev_page_url" :href="budget.items.prev_page_url" preserve-scroll class="rounded border px-3 py-1.5 text-gray-700 hover:bg-gray-50">Previous</Link>
+            <Link v-if="budget.items.next_page_url" :href="budget.items.next_page_url" preserve-scroll class="rounded border px-3 py-1.5 text-gray-700 hover:bg-gray-50">Show more</Link>
+        </div>
     </div>
 
     <!-- Grand Total -->
