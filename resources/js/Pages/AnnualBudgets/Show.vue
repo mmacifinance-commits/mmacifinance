@@ -106,7 +106,7 @@ function applyFilter() {
 function fmt(v) { return new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0) }
 
 const filteredItems = computed(() => {
-    const items = props.budget.items || []
+    const items = props.budget.items?.data || props.budget.items || []
     return items.filter((item) => {
         const matchesMonth = !selectedMonthFilter.value || String(item.allocation_month || '').slice(0, 10) === selectedMonthFilter.value
         const term = searchTerm.value.trim().toLowerCase()
